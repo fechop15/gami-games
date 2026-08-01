@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <defs>
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a5b4fc"/>
+      <stop offset="45%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <radialGradient id="glowPortal" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#skyGrad)"/>
+  <circle cx="850" cy="320" r="360" fill="url(#glowPortal)"/>
+  <circle cx="150" cy="1600" r="420" fill="url(#glowCyan)"/>
+  <!-- maze-like lines -->
+  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.15">
+    <path d="M80 600 h260 v180 h-220"/>
+    <path d="M780 500 h-180 v260 h220"/>
+    <path d="M200 1200 h300 v-160"/>
+    <path d="M700 1400 h220 v180"/>
+  </g>
+  <circle cx="230" cy="900" r="60" fill="none" stroke="#a855f7" stroke-width="8" opacity="0.3"/>
+  <circle cx="900" cy="1100" r="50" fill="none" stroke="#22d3ee" stroke-width="8" opacity="0.3"/>
+</svg>

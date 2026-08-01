@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <defs>
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d9f99d"/>
+      <stop offset="45%" stop-color="#84cc16"/>
+      <stop offset="100%" stop-color="#1a2e05"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#skyGrad)"/>
+  <circle cx="850" cy="300" r="360" fill="url(#glow1)"/>
+  <circle cx="140" cy="1550" r="420" fill="url(#glow1)"/>
+  <!-- slash streaks -->
+  <g stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.2">
+    <line x1="80" y1="500" x2="380" y2="380"/>
+    <line x1="700" y1="700" x2="1000" y2="560"/>
+    <line x1="200" y1="1100" x2="520" y2="960"/>
+    <line x1="600" y1="1400" x2="920" y2="1260"/>
+  </g>
+  <g opacity="0.15">
+    <circle cx="200" cy="700" r="70" fill="#ef4444"/>
+    <circle cx="880" cy="450" r="60" fill="#fb923c"/>
+    <circle cx="760" cy="1200" r="90" fill="#facc15"/>
+    <circle cx="300" cy="1500" r="70" fill="#22c55e"/>
+  </g>
+</svg>

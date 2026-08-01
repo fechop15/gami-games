@@ -1,0 +1,239 @@
+/* ══════════════════════════════════════
+   INTRO SCREEN
+   ══════════════════════════════════════ */
+
+/* ── Contenedor raíz ── */
+.intro-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+      ellipse 80% 60% at 50% 20%,
+      rgba(100, 30, 180, 0.35) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 60% 80% at 20% 80%,
+      rgba(20, 60, 140, 0.3) 0%,
+      transparent 70%
+    ),
+    linear-gradient(160deg, #0a0118 0%, #160330 35%, #0a112a 100%);
+  overflow: hidden;
+  z-index: 100;
+}
+
+/* ── Burbujas de fondo ── */
+.intro-bubbles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.intro-bubble {
+  position: absolute;
+  border-radius: 50%;
+}
+
+/* ── Contenido central ── */
+.intro-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  z-index: 1;
+  padding: 2rem 1.5rem;
+  width: 100%;
+  max-width: 480px;
+}
+
+/* ── Ícono superior ── */
+.intro-icon {
+  font-size: 3.8rem;
+  filter: drop-shadow(0 0 24px rgba(255, 200, 0, 0.5));
+  line-height: 1;
+}
+
+/* ── Título ── */
+.intro-title-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  line-height: 1;
+}
+
+.intro-title-line {
+  display: flex;
+  gap: 0.04em;
+}
+
+.intro-letter {
+  display: inline-block;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+.intro-candy .intro-letter {
+  font-size: clamp(3.2rem, 14vw, 5.5rem);
+  background: linear-gradient(160deg, #ffffff 0%, #ffe680 50%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 18px rgba(255, 215, 0, 0.5));
+}
+
+.intro-fiesta .intro-letter {
+  font-size: clamp(2rem, 9vw, 3.6rem);
+  background: linear-gradient(160deg, #ff6b35 0%, #e74c3c 50%, #c0392b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 14px rgba(231, 76, 60, 0.45));
+}
+
+/* ── Línea decorativa ── */
+.intro-divider {
+  width: 60%;
+  height: 2px;
+  margin-top: 0.6rem;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 215, 0, 0.6) 30%,
+    rgba(255, 107, 53, 0.6) 70%,
+    transparent
+  );
+  transform-origin: center;
+  border-radius: 999px;
+}
+
+/* ── Tagline ── */
+.intro-tagline {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.88rem;
+  text-align: center;
+  max-width: 240px;
+  line-height: 1.5;
+}
+
+/* ── Paleta de colores ── */
+.intro-palette {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.palette-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+/* ── Speciales ── */
+.intro-specials {
+  display: flex;
+  gap: 1.75rem;
+  align-items: flex-end;
+}
+
+.intro-special-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.intro-special-orb {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.intro-special-icon {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  z-index: 1;
+  position: relative;
+}
+
+.intro-special-label {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Botón de jugar ── */
+.intro-play-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
+.play-ring {
+  position: absolute;
+  width: 160px;
+  height: 56px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 200, 0, 0.5);
+  pointer-events: none;
+}
+
+.play-ring-2 {
+  border-color: rgba(255, 107, 53, 0.35);
+}
+
+.btn-play {
+  position: relative;
+  padding: 1rem 3.5rem;
+  background: linear-gradient(135deg, #ff6b35 0%, #ffd700 100%);
+  border: none;
+  border-radius: 999px;
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #1a0533;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  box-shadow:
+    0 6px 0 rgba(0, 0, 0, 0.35),
+    0 10px 32px rgba(255, 107, 53, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+}
+
+/* Efecto de brillo que cruza el botón */
+.btn-play-shine {
+  position: absolute;
+  top: 0;
+  left: -75%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 70%
+  );
+  transform: skewX(-15deg);
+  animation: btn-shine 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes btn-shine {
+  0%   { left: -75%; }
+  40%  { left: 125%; }
+  100% { left: 125%; }
+}

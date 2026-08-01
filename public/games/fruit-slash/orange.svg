@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="orGrad" cx="35%" cy="28%" r="70%">
+      <stop offset="0%" stop-color="#fed7aa"/>
+      <stop offset="55%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#c2410c"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="132" r="96" fill="url(#orGrad)"/>
+  <ellipse cx="96" cy="90" rx="30" ry="18" fill="#ffffff" opacity="0.4"/>
+  <path d="M118 40 q10 -18 24 -14" fill="none" stroke="#65a30d" stroke-width="8" stroke-linecap="round"/>
+  <ellipse cx="150" cy="30" rx="18" ry="10" fill="#22c55e"/>
+</svg>

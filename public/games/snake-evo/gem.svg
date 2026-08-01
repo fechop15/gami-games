@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="gemGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <linearGradient id="gemTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.1"/>
+    </linearGradient>
+  </defs>
+  <polygon points="128,40 200,96 168,208 88,208 56,96" fill="url(#gemGrad)" stroke="#92400e" stroke-width="4" stroke-linejoin="round"/>
+  <polygon points="128,40 200,96 128,120 56,96" fill="url(#gemTop)"/>
+  <polygon points="128,120 168,208 128,208 88,208" fill="#d97706" opacity="0.5"/>
+  <polygon points="128,40 128,120 88,96" fill="#ffffff" opacity="0.25"/>
+</svg>

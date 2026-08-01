@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="bubbleGrad" cx="35%" cy="28%" r="65%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="30%" stop-color="#fb7185" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#e11d48" stop-opacity="0.95"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="104" fill="url(#bubbleGrad)"/>
+  <ellipse cx="92" cy="86" rx="34" ry="20" fill="#ffffff" opacity="0.6"/>
+  <ellipse cx="150" cy="180" rx="14" ry="8" fill="#ffffff" opacity="0.3"/>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="cloudGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0f2fe"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#cloudGrad)">
+    <ellipse cx="90" cy="140" rx="54" ry="40"/>
+    <ellipse cx="150" cy="120" rx="66" ry="50"/>
+    <ellipse cx="200" cy="145" rx="46" ry="34"/>
+    <rect x="70" y="140" width="160" height="40" rx="20"/>
+  </g>
+</svg>

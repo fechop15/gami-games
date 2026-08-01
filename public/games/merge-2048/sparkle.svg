@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="sparkGrad" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#fff7ed"/>
+      <stop offset="60%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </radialGradient>
+  </defs>
+  <path d="M128 30 L142 108 L220 128 L142 148 L128 226 L114 148 L36 128 L114 108 Z" fill="url(#sparkGrad)"/>
+  <path d="M200 40 L207 62 L228 68 L207 74 L200 96 L192 74 L172 68 L192 62 Z" fill="#fef9c3"/>
+  <path d="M56 170 L61 186 L76 190 L61 194 L56 210 L50 194 L34 190 L50 186 Z" fill="#fef9c3"/>
+</svg>

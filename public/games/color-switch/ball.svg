@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="ballGrad" cx="35%" cy="28%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#fef08a"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="72" fill="url(#ballGrad)"/>
+  <path d="M128 56 A72 72 0 0 1 200 128" fill="#ef4444"/>
+  <path d="M200 128 A72 72 0 0 1 128 200" fill="#38bdf8"/>
+  <path d="M128 200 A72 72 0 0 1 56 128" fill="#22c55e"/>
+  <path d="M56 128 A72 72 0 0 1 128 56" fill="#a855f7"/>
+  <circle cx="128" cy="128" r="30" fill="#ffffff"/>
+</svg>

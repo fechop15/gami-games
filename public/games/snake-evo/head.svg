@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="headGrad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="55%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#065f46"/>
+    </radialGradient>
+  </defs>
+  <rect x="48" y="70" width="160" height="120" rx="46" fill="url(#headGrad)"/>
+  <circle cx="188" cy="110" r="16" fill="#ffffff"/>
+  <circle cx="192" cy="110" r="7" fill="#022c22"/>
+  <circle cx="188" cy="150" r="16" fill="#ffffff"/>
+  <circle cx="192" cy="150" r="7" fill="#022c22"/>
+  <path d="M208 128 L246 118 L246 138 Z" fill="#ef4444"/>
+  <path d="M60 130 h30" stroke="#022c22" stroke-width="6" stroke-linecap="round" opacity="0.3"/>
+</svg>

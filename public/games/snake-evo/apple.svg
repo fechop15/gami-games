@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="appleGrad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#fca5a5"/>
+      <stop offset="55%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#991b1b"/>
+    </radialGradient>
+    <radialGradient id="appleShine" cx="32%" cy="24%" r="30%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M128 100 C170 80 210 110 210 155 C210 205 170 200 150 200 C130 200 106 200 86 200 C60 200 46 205 46 155 C46 108 88 80 128 100 Z" fill="url(#appleGrad)"/>
+  <circle cx="128" cy="140" r="80" fill="url(#appleShine)"/>
+  <path d="M132 100 C132 80 140 65 156 56" fill="none" stroke="#65a30d" stroke-width="10" stroke-linecap="round"/>
+  <path d="M140 70 C160 55 175 60 182 78 C165 90 148 84 140 70 Z" fill="#22c55e"/>
+</svg>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="crownGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <radialGradient id="crownShine" cx="35%" cy="20%" r="60%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M48 170 L38 90 L88 128 L128 62 L168 128 L218 90 L208 170 Z" fill="url(#crownGrad)" stroke="#b45309" stroke-width="6" stroke-linejoin="round"/>
+  <rect x="46" y="170" width="164" height="26" rx="10" fill="url(#crownGrad)" stroke="#b45309" stroke-width="6"/>
+  <path d="M48 170 L38 90 L88 128 L128 62 L168 128 L218 90 L208 170 Z" fill="url(#crownShine)"/>
+  <circle cx="128" cy="110" r="12" fill="#ef4444"/>
+  <circle cx="80" cy="140" r="9" fill="#22d3ee"/>
+  <circle cx="176" cy="140" r="9" fill="#22d3ee"/>
+</svg>

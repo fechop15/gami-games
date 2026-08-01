@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="bombGrad" cx="35%" cy="28%" r="70%">
+      <stop offset="0%" stop-color="#6b7280"/>
+      <stop offset="55%" stop-color="#374151"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </radialGradient>
+    <radialGradient id="bombShine" cx="32%" cy="24%" r="30%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="150" r="80" fill="url(#bombGrad)"/>
+  <circle cx="128" cy="150" r="80" fill="url(#bombShine)"/>
+  <rect x="118" y="52" width="20" height="34" rx="8" fill="#4b5563"/>
+  <path d="M128 52 C110 30 140 12 150 30" fill="none" stroke="#84cc16" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="150" cy="28" r="14" fill="#bef264"/>
+  <circle cx="150" cy="28" r="7" fill="#fef9c3"/>
+</svg>

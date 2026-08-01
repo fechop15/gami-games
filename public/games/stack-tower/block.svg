@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="blockGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="55%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#4c1d95"/>
+    </linearGradient>
+    <radialGradient id="blockShine" cx="30%" cy="20%" r="60%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="20" y="70" width="216" height="116" rx="28" fill="#2e1065" opacity="0.25"/>
+  <rect x="16" y="60" width="216" height="116" rx="28" fill="url(#blockGrad)"/>
+  <rect x="16" y="60" width="216" height="116" rx="28" fill="url(#blockShine)"/>
+  <rect x="36" y="76" width="176" height="20" rx="10" fill="#ffffff" opacity="0.4"/>
+  <rect x="16" y="150" width="216" height="26" rx="13" fill="#2e1065" opacity="0.2"/>
+</svg>

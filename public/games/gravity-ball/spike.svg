@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="spikeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fca5a5"/>
+      <stop offset="100%" stop-color="#7f1d1d"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#spikeGrad)" stroke="#450a0a" stroke-width="3" stroke-linejoin="round">
+    <polygon points="48,200 78,110 108,200"/>
+    <polygon points="98,200 128,90 158,200"/>
+    <polygon points="148,200 178,110 208,200"/>
+  </g>
+</svg>

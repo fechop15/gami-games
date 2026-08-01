@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <defs>
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fca5a5"/>
+      <stop offset="45%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#450a0a"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#skyGrad)"/>
+  <circle cx="840" cy="280" r="360" fill="url(#glow1)"/>
+  <circle cx="160" cy="1600" r="420" fill="url(#glow1)"/>
+  <!-- decorative brick rows -->
+  <g opacity="0.22">
+    <g fill="#fde047">
+      <rect x="60" y="260" width="120" height="46" rx="10"/>
+      <rect x="196" y="260" width="120" height="46" rx="10"/>
+      <rect x="332" y="260" width="120" height="46" rx="10"/>
+      <rect x="468" y="260" width="120" height="46" rx="10"/>
+      <rect x="604" y="260" width="120" height="46" rx="10"/>
+      <rect x="740" y="260" width="120" height="46" rx="10"/>
+      <rect x="876" y="260" width="120" height="46" rx="10"/>
+    </g>
+    <g fill="#38bdf8">
+      <rect x="128" y="316" width="120" height="46" rx="10"/>
+      <rect x="264" y="316" width="120" height="46" rx="10"/>
+      <rect x="400" y="316" width="120" height="46" rx="10"/>
+      <rect x="536" y="316" width="120" height="46" rx="10"/>
+      <rect x="672" y="316" width="120" height="46" rx="10"/>
+      <rect x="808" y="316" width="120" height="46" rx="10"/>
+    </g>
+    <g fill="#ffffff">
+      <rect x="60" y="372" width="120" height="46" rx="10"/>
+      <rect x="196" y="372" width="120" height="46" rx="10"/>
+      <rect x="332" y="372" width="120" height="46" rx="10"/>
+      <rect x="468" y="372" width="120" height="46" rx="10"/>
+      <rect x="604" y="372" width="120" height="46" rx="10"/>
+      <rect x="740" y="372" width="120" height="46" rx="10"/>
+      <rect x="876" y="372" width="120" height="46" rx="10"/>
+    </g>
+  </g>
+  <circle cx="960" cy="1750" r="140" fill="#ffffff" opacity="0.06"/>
+  <circle cx="90" cy="900" r="220" fill="#ffffff" opacity="0.05"/>
+</svg>

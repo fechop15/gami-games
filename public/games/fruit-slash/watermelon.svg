@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="wmSkin" cx="35%" cy="28%" r="70%">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="60%" stop-color="#16a34a"/>
+      <stop offset="100%" stop-color="#14532d"/>
+    </radialGradient>
+    <radialGradient id="wmShine" cx="30%" cy="22%" r="30%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="132" r="98" fill="url(#wmSkin)"/>
+  <circle cx="128" cy="132" r="98" fill="url(#wmShine)"/>
+  <path d="M40 100 q88 40 176 0" fill="none" stroke="#166534" stroke-width="8" opacity="0.5"/>
+  <path d="M40 165 q88 40 176 0" fill="none" stroke="#166534" stroke-width="8" opacity="0.5"/>
+</svg>
