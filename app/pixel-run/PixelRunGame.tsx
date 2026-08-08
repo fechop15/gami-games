@@ -57,7 +57,6 @@ interface GS {
   paused: boolean;                                       // pausa
   transT: number; transToLv: number;                   // transición entre mundos
   jumpStrength: number; jumpHeld: boolean; touchJump: boolean;  // salto variable
-  runBtnHeld: boolean;                                            // botón ⚡ TURBO mantenido
   btnFade: number;                                                // 1..0 — visibilidad de botones táctiles
   // Wallet persistente + progresión
   owned: number[]; skin: number; streak: number; lastDay: string;
@@ -254,7 +253,6 @@ function initGS(cw: number, ch: number): GS {
     paused: false,
     transT: 0, transToLv: 0,
     jumpStrength: 1, jumpHeld: false, touchJump: false,
-    runBtnHeld: false,
     btnFade: 1,
     owned: sv.owned, skin: sv.skin, streak: sv.streak, lastDay: sv.lastDay,
     shopMsg: '', shopMsgT: 0,
@@ -1634,10 +1632,9 @@ function drawTouchButtons(ctx: CanvasRenderingContext2D, cw: number, ch: number,
   // Fondo oscuro + glifo claro: visibles sobre mapas claros (nubes) y oscuros (cueva/lava)
   const dark = '#141414';
   const l = leftBtnRect(cw, ch), r = rightBtnRect(cw, ch);
-  const run = runBtnRect(cw, ch), j = jumpBtnRect(cw, ch);
+  const j = jumpBtnRect(cw, ch);
   drawTouchButton(ctx, l, '◄', gs.inp.L, dark, '#ffffff', fade);
   drawTouchButton(ctx, r, '►', gs.inp.R, dark, '#ffffff', fade);
-  drawTouchButton(ctx, run, '⚡', gs.runBtnHeld, dark, '#ffb300', fade);
   drawTouchButton(ctx, j, '▲', gs.touchJump, dark, '#ffd700', fade);
 
   if (fade > 0.05) {
@@ -1647,7 +1644,6 @@ function drawTouchButtons(ctx: CanvasRenderingContext2D, cw: number, ch: number,
     ctx.textAlign = 'center';
     const labels: [string, number, number][] = [
       ['MOVER', (l.x + r.x + r.w) / 2, l.y - 8],
-      ['CORRER', run.x + run.w / 2, run.y - 8],
       ['SALTAR', j.x + j.w / 2, j.y - 8],
     ];
     // Borde claro + texto oscuro para leerse sobre fondos claros y oscuros
@@ -1682,7 +1678,7 @@ function drawIntro(ctx: CanvasRenderingContext2D, cw: number, ch: number, gs: GS
     how: [
       '◄ ► botones para mover',
       '▲ SALTAR: mantené para saltar más alto',
-      '⚡ TURBO: mantené para correr',
+      'Doble tap en ◄ o ► = turbo ⚡',
       'Pisá enemigos para eliminarlos',
     ],
     scoring: '⭐ Recolectá monedas · Llegá a la bandera',
@@ -2561,8 +2557,12 @@ function btnSize(cw: number): number { return Math.max(58, Math.min(84, cw * 0.1
 function btnY(ch: number, s: number): number { return ch - s - 28; }
 function leftBtnRect(cw: number, ch: number): Rect { const s = btnSize(cw); return { x: 16, y: btnY(ch, s), w: s, h: s }; }
 function rightBtnRect(cw: number, ch: number): Rect { const s = btnSize(cw); return { x: 16 + s + 10, y: btnY(ch, s), w: s, h: s }; }
-function runBtnRect(cw: number, ch: number): Rect { const s = btnSize(cw); return { x: cw - s * 2 - 24, y: btnY(ch, s), w: s, h: s }; }
-function jumpBtnRect(cw: number, ch: number): Rect { const s = btnSize(cw); return { x: cw - s - 16, y: btnY(ch, s), w: s, h: s }; }
+// El botón de saltar ocupa el espacio que dejaba el botón de turbo
+function jumpBtnRect(cw: number, ch: number): Rect {
+  const s = btnSize(cw);
+  const js = Math.min(cw * 0.38, s * 1.8);
+  return { x: cw - js - 16, y: ch - js - 28, w: js, h: js };
+}
 
 // ── React component ────────────────────────────────────────────────────────────
 export default function PixelRunGame() {
@@ -2603,6 +2603,7 @@ export default function PixelRunGame() {
     let rafId = 0;
     let alive = true;
     let cleanupHandlers: (() => void) | null = null;
+    let lastTouchTap = 0;
 
     initWorldDefs().then(() => {
       if (!alive) return;
@@ -2675,15 +2676,10 @@ export default function PixelRunGame() {
         const td: TD = { sx: touch.clientX, sy: touch.clientY, cx: touch.clientX, cy: touch.clientY, t: Date.now() };
         gs.tMap.set(touch.identifier, td);
 
-        // Botones de acción (▲ saltar, ⚡ turbo)
+        // Botón de acción (▲ saltar)
         if (inRect(touch.clientX, touch.clientY, jumpBtnRect(cw, ch))) {
           td.btn = 'jump';
           gs.touchJump = true; gs.jumpStrength = 1; gs.inp.J = true;
-          continue;
-        }
-        if (inRect(touch.clientX, touch.clientY, runBtnRect(cw, ch))) {
-          td.btn = 'run';
-          gs.runBtnHeld = true;
           continue;
         }
 
@@ -2711,6 +2707,17 @@ export default function PixelRunGame() {
       }
     };
 
+    // Suelta el botón latcheado (▲) y quita el touch del mapa.
+    // Compartido por touchend y touchcancel para no dejar botones "pegados"
+    // cuando el navegador cancela el touch (girar el celular, gesto de sistema…).
+    const releaseTouch = (touch: Touch) => {
+      const td = gs.tMap.get(touch.identifier);
+      if (td) {
+        if (td.btn === 'jump') gs.touchJump = false;
+        gs.tMap.delete(touch.identifier);
+      }
+    };
+
     const onTouchEnd = (e: TouchEvent) => {
       e.preventDefault();
       for (const touch of Array.from(e.changedTouches)) {
@@ -2718,8 +2725,6 @@ export default function PixelRunGame() {
         if (td) {
           if (td.btn === 'jump') {
             gs.touchJump = false;                  // soltar ▲ recorta el salto (salto variable)
-          } else if (td.btn === 'run') {
-            gs.runBtnHeld = false;
           } else {
             const dx = td.cx - td.sx;
             const dy = td.cy - td.sy;
@@ -2734,6 +2739,7 @@ export default function PixelRunGame() {
             }
             // Tap = navegación de UI
             else if (Math.abs(dx) < 30 && Math.abs(dy) < 30 && elapsed < 350) {
+              lastTouchTap = Date.now();
               handleTap(td.sx, td.sy);
             }
           }
@@ -2743,12 +2749,21 @@ export default function PixelRunGame() {
       }
     };
 
+    const onTouchCancel = (e: TouchEvent) => {
+      e.preventDefault();
+      for (const touch of Array.from(e.changedTouches)) releaseTouch(touch);
+    };
+
     canvas.addEventListener('touchstart', onTouchStart, { passive: false });
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
     canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', onTouchCancel, { passive: false });
 
-    // Click para desktop → misma navegación que el tap
+    // Click para desktop → misma navegación que el tap.
+    // Ignora el click sintético que dispara el navegador tras un tap táctil,
+    // para que "toca para continuar" no avance dos veces.
     canvas.addEventListener('click', (e) => {
+      if (Date.now() - lastTouchTap < 400) return;
       const r = canvas.getBoundingClientRect();
       handleTap(e.clientX - r.left, e.clientY - r.top);
     });
@@ -2800,6 +2815,7 @@ export default function PixelRunGame() {
       canvas.removeEventListener('touchstart', onTouchStart);
       canvas.removeEventListener('touchmove', onTouchMove);
       canvas.removeEventListener('touchend', onTouchEnd);
+      canvas.removeEventListener('touchcancel', onTouchCancel);
     };
 
     // Sincroniza teclas sostenidas cada frame
@@ -2849,8 +2865,6 @@ export default function PixelRunGame() {
       gs.inp.L = false;
       gs.inp.R = false;
       syncKeyboard();
-      // Botón ⚡ TURBO (mantener) — igual que Shift en teclado
-      if (gs.runBtnHeld) gs.runT = Math.max(gs.runT, 0.15);
       update(gs, dt, cw, ch);
       render(ctx, gs, cw, ch);
       rafId = requestAnimationFrame(loop);

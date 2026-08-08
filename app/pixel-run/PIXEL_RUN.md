@@ -84,9 +84,8 @@ useEffect
 | `◄` abajo-izquierda (mantener) | Mover izquierda |
 | `►` abajo-izquierda (mantener) | Mover derecha |
 | `▲` SALTAR abajo-derecha (mantener) | Saltar — mantener = más alto (salto variable por duración) |
-| `⚡` TURBO (mantener) | Correr (RUN_V, igual que Shift en teclado) |
+| Doble toque en `◄` o `►` (< 300ms) | Turbo 1.5s |
 | Swipe ↑ en cualquier lado | Salto variable (bonus) |
-| Doble toque en `◄` o `►` (< 300ms) | Turbo 1.5s (bonus) |
 | Tap en overlay | Avanzar fase |
 
 **Detección:** cada touch se asigna a un botón en `touchstart` (`TD.btn = 'L' | 'R' | 'jump' | 'run'`). El movimiento queda *latch* al botón presionado (aunque el dedo se deslice fuera). `gs.tMap: Map<number, TD>` — cada touch por ID; input se resetea cada frame y touch/teclado hacen OR.
