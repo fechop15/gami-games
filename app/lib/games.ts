@@ -45,7 +45,7 @@ export const GAMES: Game[] = [
     id: "004",
     slug: "star-assault",
     title: "Star Assault",
-    description: "Shooter espacial vertical: conquista 5 mundos alienígenas con 4 tipos de munición y jefes épicos con mecánicas únicas.",
+    description: "Shooter espacial vertical: conquista 16 mundos alienígenas con 4 tipos de munición, tienda de naves y jefes épicos con mecánicas únicas.",
     route: "/star-assault",
     gradient: "linear-gradient(180deg, #000010 0%, #001040 50%, #000520 100%)",
     accentColor: "#00e5ff",
