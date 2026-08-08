@@ -1609,19 +1609,19 @@ function drawParticles(ctx: CanvasRenderingContext2D, parts: Particle[], camX: n
   ctx.shadowBlur = 0;
 }
 
-function drawTouchButton(ctx: CanvasRenderingContext2D, r: Rect, label: string, pressed: boolean, color: string, fade: number) {
+function drawTouchButton(ctx: CanvasRenderingContext2D, r: Rect, label: string, pressed: boolean, fill: string, fg: string, fade: number) {
   if (fade < 0.02 && !pressed) return;
   ctx.save();
-  ctx.globalAlpha = pressed ? 0.55 : 0.22 * fade;
-  ctx.fillStyle = color;
+  ctx.globalAlpha = pressed ? 0.72 : 0.32 * fade;
+  ctx.fillStyle = fill;
   rrect(ctx, r.x, r.y, r.w, r.h, r.w * 0.28);
-  ctx.globalAlpha = pressed ? 0.85 : 0.4 * fade;
-  ctx.strokeStyle = color;
+  ctx.globalAlpha = pressed ? 0.95 : 0.5 * fade;
+  ctx.strokeStyle = fg;
   ctx.lineWidth = 2;
   strokeRRect(ctx, r.x, r.y, r.w, r.h, r.w * 0.28);
   ctx.lineWidth = 1;
-  ctx.globalAlpha = pressed ? 1 : 0.85 * fade;
-  ctx.fillStyle = color;
+  ctx.globalAlpha = pressed ? 1 : 0.9 * fade;
+  ctx.fillStyle = fg;
   ctx.font = `bold ${Math.round(r.h * 0.48)}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -1631,23 +1631,32 @@ function drawTouchButton(ctx: CanvasRenderingContext2D, r: Rect, label: string, 
 
 function drawTouchButtons(ctx: CanvasRenderingContext2D, cw: number, ch: number, gs: GS) {
   const fade = gs.btnFade;
-  drawTouchButton(ctx, leftBtnRect(cw, ch), '◄', gs.inp.L, '#fff', fade);
-  drawTouchButton(ctx, rightBtnRect(cw, ch), '►', gs.inp.R, '#fff', fade);
-  drawTouchButton(ctx, runBtnRect(cw, ch), '⚡', gs.runBtnHeld, '#ffb300', fade);
-  drawTouchButton(ctx, jumpBtnRect(cw, ch), '▲', gs.touchJump, '#ffd700', fade);
+  // Fondo oscuro + glifo claro: visibles sobre mapas claros (nubes) y oscuros (cueva/lava)
+  const dark = '#141414';
+  const l = leftBtnRect(cw, ch), r = rightBtnRect(cw, ch);
+  const run = runBtnRect(cw, ch), j = jumpBtnRect(cw, ch);
+  drawTouchButton(ctx, l, '◄', gs.inp.L, dark, '#ffffff', fade);
+  drawTouchButton(ctx, r, '►', gs.inp.R, dark, '#ffffff', fade);
+  drawTouchButton(ctx, run, '⚡', gs.runBtnHeld, dark, '#ffb300', fade);
+  drawTouchButton(ctx, j, '▲', gs.touchJump, dark, '#ffd700', fade);
 
   if (fade > 0.05) {
-    ctx.globalAlpha = 0.5 * fade;
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.font = '10px monospace';
+    ctx.save();
+    ctx.globalAlpha = 0.7 * fade;
+    ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
-    const lr = leftBtnRect(cw, ch), rr = rightBtnRect(cw, ch);
-    ctx.fillText('MOVER', (lr.x + rr.x + rr.w) / 2, lr.y - 8);
-    const jr = jumpBtnRect(cw, ch), runr = runBtnRect(cw, ch);
-    ctx.fillText('CORRER', runr.x + runr.w / 2, runr.y - 8);
-    ctx.fillText('SALTAR', jr.x + jr.w / 2, jr.y - 8);
-    ctx.globalAlpha = 1;
-    ctx.textAlign = 'left';
+    const labels: [string, number, number][] = [
+      ['MOVER', (l.x + r.x + r.w) / 2, l.y - 8],
+      ['CORRER', run.x + run.w / 2, run.y - 8],
+      ['SALTAR', j.x + j.w / 2, j.y - 8],
+    ];
+    // Borde claro + texto oscuro para leerse sobre fondos claros y oscuros
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    for (const [txt, lx, ly] of labels) ctx.strokeText(txt, lx, ly);
+    ctx.fillStyle = '#111';
+    for (const [txt, lx, ly] of labels) ctx.fillText(txt, lx, ly);
+    ctx.restore();
   }
 }
 
@@ -2153,6 +2162,24 @@ function updateMovingPlatforms(gs: GS, dt: number) {
   }
 }
 
+// Reacomoda todo el mundo al cambiar el alto del canvas (rotación del celular).
+// Toda la geometría del nivel está relativa al suelo (gs.gY); se desplaza en Y
+// sin perder progreso (monedas, checkpoints, posición del jugador).
+function reflowWorld(gs: GS, newCh: number, newCw: number) {
+  const newG = newCh - 70;
+  const dy = newG - gs.gY;
+  if (dy === 0) return;
+  gs.gY = newG;
+  gs.py += dy;
+  gs.ckY += dy;
+  for (const p of gs.plats) p.y += dy;
+  for (const e of gs.ens) { e.y += dy; e.baseY += dy; }
+  for (const sp of gs.sps) sp.y += dy;
+  for (const c of gs.cns) c.y += dy;
+  if (gs.starCoin) gs.starCoin.y += dy;
+  gs.camX = Math.max(0, Math.min(gs.lW - newCw, gs.camX));
+}
+
 function updateEnemies(gs: GS, dt: number) {
   for (const e of gs.ens) {
     if (!e.alive) { e.stompT = Math.max(0, e.stompT - dt); continue; }
@@ -2545,11 +2572,17 @@ export default function PixelRunGame() {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
 
+    let gsRef: GS | null = null;
+
     const resize = () => {
       // Usa el tamaño visible real (el contenedor es 100dvh fijo y sin scroll).
       // window.innerHeight en móvil incluye la barra del navegador/notch y deja el mundo "arriba".
-      canvas.width = canvas.clientWidth || window.innerWidth;
-      canvas.height = canvas.clientHeight || window.innerHeight;
+      const newW = canvas.clientWidth || window.innerWidth;
+      const newH = canvas.clientHeight || window.innerHeight;
+      canvas.width = newW;
+      canvas.height = newH;
+      // Rotación portrait↔landscape: reacomoda el mundo al nuevo alto del canvas
+      if (gsRef) reflowWorld(gsRef, newH, newW);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -2575,6 +2608,7 @@ export default function PixelRunGame() {
       if (!alive) return;
 
     const gs = initGS(canvas.width, canvas.height);
+    gsRef = gs;
 
     // ── Helpers de navegación (compartidos por touch/click/teclado) ──────────
     const startLevel = (lv: number) => { loadLevel(gs, lv, canvas.height); gs.phase = 'playing'; gs.paused = false; };
