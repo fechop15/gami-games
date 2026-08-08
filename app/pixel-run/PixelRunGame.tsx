@@ -58,6 +58,7 @@ interface GS {
   transT: number; transToLv: number;                   // transición entre mundos
   jumpStrength: number; jumpHeld: boolean; touchJump: boolean;  // salto variable
   runBtnHeld: boolean;                                            // botón ⚡ TURBO mantenido
+  btnFade: number;                                                // 1..0 — visibilidad de botones táctiles
   // Wallet persistente + progresión
   owned: number[]; skin: number; streak: number; lastDay: string;
   shopMsg: string; shopMsgT: number;
@@ -254,6 +255,7 @@ function initGS(cw: number, ch: number): GS {
     transT: 0, transToLv: 0,
     jumpStrength: 1, jumpHeld: false, touchJump: false,
     runBtnHeld: false,
+    btnFade: 1,
     owned: sv.owned, skin: sv.skin, streak: sv.streak, lastDay: sv.lastDay,
     shopMsg: '', shopMsgT: 0,
   };
@@ -305,6 +307,7 @@ function loadLevel(gs: GS, lv: number, ch: number) {
   gs.py = g - PH - 260;
   gs.pvy = 0;
   gs.entryT = 1.4; gs.entryLock = true;
+  gs.btnFade = 1;   // botones táctiles visibles al empezar el nivel, luego se atenúan
   // Power-up estrella: la moneda más cercana al centro del nivel se vuelve especial
   gs.starCoin = null;
   if (data.cns.length > 0) {
@@ -1606,17 +1609,18 @@ function drawParticles(ctx: CanvasRenderingContext2D, parts: Particle[], camX: n
   ctx.shadowBlur = 0;
 }
 
-function drawTouchButton(ctx: CanvasRenderingContext2D, r: Rect, label: string, pressed: boolean, color: string) {
+function drawTouchButton(ctx: CanvasRenderingContext2D, r: Rect, label: string, pressed: boolean, color: string, fade: number) {
+  if (fade < 0.02 && !pressed) return;
   ctx.save();
-  ctx.globalAlpha = pressed ? 0.55 : 0.28;
+  ctx.globalAlpha = pressed ? 0.55 : 0.22 * fade;
   ctx.fillStyle = color;
   rrect(ctx, r.x, r.y, r.w, r.h, r.w * 0.28);
-  ctx.globalAlpha = 0.75;
+  ctx.globalAlpha = pressed ? 0.85 : 0.4 * fade;
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   strokeRRect(ctx, r.x, r.y, r.w, r.h, r.w * 0.28);
   ctx.lineWidth = 1;
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = pressed ? 1 : 0.85 * fade;
   ctx.fillStyle = color;
   ctx.font = `bold ${Math.round(r.h * 0.48)}px monospace`;
   ctx.textAlign = 'center';
@@ -1626,20 +1630,25 @@ function drawTouchButton(ctx: CanvasRenderingContext2D, r: Rect, label: string, 
 }
 
 function drawTouchButtons(ctx: CanvasRenderingContext2D, cw: number, ch: number, gs: GS) {
-  drawTouchButton(ctx, leftBtnRect(cw, ch), '◄', gs.inp.L, '#fff');
-  drawTouchButton(ctx, rightBtnRect(cw, ch), '►', gs.inp.R, '#fff');
-  drawTouchButton(ctx, runBtnRect(cw, ch), '⚡', gs.runBtnHeld, '#ffb300');
-  drawTouchButton(ctx, jumpBtnRect(cw, ch), '▲', gs.touchJump, '#ffd700');
+  const fade = gs.btnFade;
+  drawTouchButton(ctx, leftBtnRect(cw, ch), '◄', gs.inp.L, '#fff', fade);
+  drawTouchButton(ctx, rightBtnRect(cw, ch), '►', gs.inp.R, '#fff', fade);
+  drawTouchButton(ctx, runBtnRect(cw, ch), '⚡', gs.runBtnHeld, '#ffb300', fade);
+  drawTouchButton(ctx, jumpBtnRect(cw, ch), '▲', gs.touchJump, '#ffd700', fade);
 
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.font = '10px monospace';
-  ctx.textAlign = 'center';
-  const lr = leftBtnRect(cw, ch), rr = rightBtnRect(cw, ch);
-  ctx.fillText('MOVER', (lr.x + rr.x + rr.w) / 2, lr.y - 8);
-  const jr = jumpBtnRect(cw, ch), runr = runBtnRect(cw, ch);
-  ctx.fillText('CORRER', runr.x + runr.w / 2, runr.y - 8);
-  ctx.fillText('SALTAR', jr.x + jr.w / 2, jr.y - 8);
-  ctx.textAlign = 'left';
+  if (fade > 0.05) {
+    ctx.globalAlpha = 0.5 * fade;
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    const lr = leftBtnRect(cw, ch), rr = rightBtnRect(cw, ch);
+    ctx.fillText('MOVER', (lr.x + rr.x + rr.w) / 2, lr.y - 8);
+    const jr = jumpBtnRect(cw, ch), runr = runBtnRect(cw, ch);
+    ctx.fillText('CORRER', runr.x + runr.w / 2, runr.y - 8);
+    ctx.fillText('SALTAR', jr.x + jr.w / 2, jr.y - 8);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+  }
 }
 
 function drawMessage(ctx: CanvasRenderingContext2D, gs: GS, camX: number) {
@@ -2450,6 +2459,11 @@ function update(gs: GS, dt: number, cw: number, ch: number) {
       }
     }
   }
+  // Los botones táctiles se atenúan después de la entrada para no tapar la vista;
+  // las zonas de toque siguen activas y se iluminan solo al presionarlos
+  if (!gs.entryLock && gs.btnFade > 0) {
+    gs.btnFade = Math.max(0, gs.btnFade - dt * 0.5);
+  }
 
   // Entity checks
   checkEntities(gs, cw, ch);
@@ -2532,11 +2546,17 @@ export default function PixelRunGame() {
     const ctx = canvas.getContext('2d')!;
 
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      // Usa el tamaño visible real (el contenedor es 100dvh fijo y sin scroll).
+      // window.innerHeight en móvil incluye la barra del navegador/notch y deja el mundo "arriba".
+      canvas.width = canvas.clientWidth || window.innerWidth;
+      canvas.height = canvas.clientHeight || window.innerHeight;
     };
     resize();
     window.addEventListener('resize', resize);
+    // ResizeObserver mantiene la resolución al día cuando la barra del navegador
+    // se oculta/muestra (cambia 100dvh) sin que dispare un evento resize.
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
 
     // Pantalla de carga mientras se obtiene levels.json desde /public/
     ctx.fillStyle = '#111';
@@ -2808,14 +2828,27 @@ export default function PixelRunGame() {
       alive = false;
       cancelAnimationFrame(rafId);
       window.removeEventListener('resize', resize);
+      ro.disconnect();
       cleanupHandlers?.();
     };
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ display: 'block', touchAction: 'none', userSelect: 'none', background: '#000' }}
-    />
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        height: '100dvh',
+        overflow: 'hidden',
+        background: '#000',
+        overscrollBehavior: 'none',
+        touchAction: 'none',
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none', userSelect: 'none', background: '#000' }}
+      />
+    </div>
   );
 }

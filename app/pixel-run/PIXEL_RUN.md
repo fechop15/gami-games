@@ -91,6 +91,8 @@ useEffect
 
 **Detección:** cada touch se asigna a un botón en `touchstart` (`TD.btn = 'L' | 'R' | 'jump' | 'run'`). El movimiento queda *latch* al botón presionado (aunque el dedo se deslice fuera). `gs.tMap: Map<number, TD>` — cada touch por ID; input se resetea cada frame y touch/teclado hacen OR.
 
+**No tapan la vista:** los botones solo se muestran bien durante la animación de entrada (`btnFade`). Al aterrizar decaen ~2s hasta quedar casi invisibles — las zonas táctiles siguen activas y se iluminan únicamente al presionarlas.
+
 ### Teclado (opcional — desktop)
 | Tecla | Acción |
 |---|---|
