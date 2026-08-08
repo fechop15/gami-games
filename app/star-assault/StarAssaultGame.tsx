@@ -45,15 +45,80 @@ const OVERDRIVE_DURATION = 6   // segundos
 const MAGNET_DURATION    = 5   // segundos
 const OVERDRIVE_MULT     = 0.6 // cadencia ×0.6
 
+/* ════════════════════════════════════════════════════════════════════
+   NAVES — tienda y stats
+   ════════════════════════════════════════════════════════════════════ */
+type ShipShape = "delta" | "interceptor" | "tank" | "jet" | "phantom" | "omega"
+
+interface ShipDef {
+  id: string
+  name: string
+  desc: string
+  price: number
+  speedMult: number      // multiplicador de velocidad de movimiento
+  hpMult: number         // multiplicador de HP máximo
+  fireMult: number       // multiplicador de tiempo de disparo (< 1 = más rápido)
+  shape: ShipShape
+  hull: string; hull2: string; hull3: string   // gradiente del fuselaje
+  wing: string
+  accent: string
+  engine: string
+  passive?: { magnet?: boolean }   // imán permanente
+}
+
+const SHIP_DEFS: ShipDef[] = [
+  {
+    id: "aurora", name: "Aurora", desc: "Nave de combate equilibrada. Incluida por defecto.",
+    price: 0, speedMult: 1, hpMult: 1, fireMult: 1, shape: "delta",
+    hull: "#00e5ff", hull2: "#0088cc", hull3: "#004488",
+    wing: "#0088cc", accent: "#aaeeff", engine: "#00e5ff",
+  },
+  {
+    id: "vibora", name: "Víbora", desc: "Interceptora ultrarrápida, algo más frágil.",
+    price: 800, speedMult: 1.25, hpMult: 0.85, fireMult: 1, shape: "interceptor",
+    hull: "#44ff88", hull2: "#22aa55", hull3: "#114422",
+    wing: "#22aa55", accent: "#ccffdd", engine: "#44ff88",
+  },
+  {
+    id: "juggernaut", name: "Juggernaut", desc: "Blindaje pesado y cañones dobles.",
+    price: 1500, speedMult: 0.8, hpMult: 1.5, fireMult: 1, shape: "tank",
+    hull: "#ff8844", hull2: "#cc5511", hull3: "#662200",
+    wing: "#cc5511", accent: "#ffddbb", engine: "#ffaa44",
+  },
+  {
+    id: "fenix", name: "Fénix", desc: "Cadencia superior, casco ligero.",
+    price: 2500, speedMult: 1.1, hpMult: 0.8, fireMult: 0.85, shape: "jet",
+    hull: "#ff44aa", hull2: "#cc2277", hull3: "#660033",
+    wing: "#cc2277", accent: "#ffccee", engine: "#ff66cc",
+  },
+  {
+    id: "phantom", name: "Phantom", desc: "Sigilosa: imán de drops permanente.",
+    price: 3500, speedMult: 1.05, hpMult: 0.9, fireMult: 0.95, shape: "phantom",
+    hull: "#aa88ff", hull2: "#6633cc", hull3: "#220055",
+    wing: "#6633cc", accent: "#ddccff", engine: "#bb88ff",
+    passive: { magnet: true },
+  },
+  {
+    id: "omega", name: "Omega", desc: "La leyenda: todo lo anterior, mejorado.",
+    price: 6000, speedMult: 1.15, hpMult: 1.25, fireMult: 0.85, shape: "omega",
+    hull: "#ffdd44", hull2: "#ffaa00", hull3: "#885500",
+    wing: "#ffaa00", accent: "#fff3cc", engine: "#ffdd44",
+  },
+]
+
+function getShip(save: StarSave): ShipDef {
+  return SHIP_DEFS.find(s => s.id === save.shipId) ?? SHIP_DEFS[0]
+}
+
 // Multiplicador de daño del combo aplicado al score
 function comboMult(combo: number): number { return 1 + combo * 0.25 }
 
-// Mejoras permanentes de nave derivadas del save
-function upMaxHP(u: ShipUpgrades): number { return 100 + u.hp * 20 }
+// Mejoras permanentes de nave derivadas del save + nave equipada
+function upMaxHP(u: ShipUpgrades, ship: ShipDef): number { return Math.round((100 + u.hp * 20) * ship.hpMult) }
 function upShieldDur(u: ShipUpgrades): number { return SHIELD_DURATION + u.shieldDur }
 function upShieldCd(u: ShipUpgrades): number { return Math.max(3, SHIELD_COOLDOWN - u.shieldCd) }
 function upFireMult(u: ShipUpgrades): number { return 1 - u.fireRate * 0.08 }
-function upHasMagnet(u: ShipUpgrades): boolean { return u.magnet >= 1 }
+function upHasMagnet(u: ShipUpgrades, ship: ShipDef): boolean { return u.magnet >= 1 || ship.passive?.magnet === true }
 
 /* ════════════════════════════════════════════════════════════════════
    TIPOS
@@ -62,6 +127,7 @@ type Phase =
   | "intro"
   | "world-select"
   | "hangar"
+  | "ship-store"
   | "playing"
   | "boss-intro"
   | "boss"
@@ -146,9 +212,13 @@ interface GS {
   ammoBtns: Array<BtnArea & { ammo: AmmoType }>
   worldBtns: Array<BtnArea & { worldId: number }>
   hangarBtns: Array<BtnArea & { key: keyof ShipUpgrades }>
+  shipBtns: Array<BtnArea & { shipId: string }>
   introBtns: Array<BtnArea & { action: string }>
   save: StarSave
   flashMsg: string; flashT: number
+  worldScroll: number          // scroll del selector de mundos
+  worldDragStartY: number | null
+  worldDragBase: number
   bossLaserActive: boolean; bossLaserT: number; bossLaserX: number
   shieldActive: boolean; shieldHP: number; shieldMaxHP: number
   shieldDuration: number; shieldCooldown: number; shieldCdMax: number
@@ -226,6 +296,116 @@ const WORLDS: WorldDef[] = [
     ],
     bossName: "El Emperador", bossColor: "#664400", bossAccent: "#ffdd44", bossHp: 2000,
   },
+  {
+    id: 5, name: "Corona Helada", subtitle: "Los cristales del olvido",
+    bgColor: "#000d1a", nebula: "#00304a", accent: "#66ddff",
+    waves: [
+      { enemies: ["grunt","shooter","grunt","shooter","splitter","grunt","shooter"], delay: 900 },
+      { enemies: ["shooter","splitter","grunt","tank","shooter","grunt","splitter","shooter"], delay: 850 },
+      { enemies: ["tank","splitter","shooter","grunt","splitter","shooter","tank","shooter","splitter"], delay: 800 },
+    ],
+    bossName: "La Reina del Hielo", bossColor: "#003366", bossAccent: "#66ccff", bossHp: 2300,
+  },
+  {
+    id: 6, name: "Núcleo Ígneo", subtitle: "El corazón incandescente",
+    bgColor: "#0f0000", nebula: "#420000", accent: "#ff7733",
+    waves: [
+      { enemies: ["tank","kamikaze","tank","grunt","kamikaze","shooter","kamikaze"], delay: 800 },
+      { enemies: ["kamikaze","tank","kamikaze","splitter","tank","kamikaze","grunt","tank"], delay: 750 },
+      { enemies: ["tank","kamikaze","splitter","tank","kamikaze","tank","splitter","kamikaze","tank"], delay: 700 },
+    ],
+    bossName: "El Coloso de Magma", bossColor: "#661100", bossAccent: "#ff8844", bossHp: 2600,
+  },
+  {
+    id: 7, name: "El Vacío", subtitle: "Más allá del universo conocido",
+    bgColor: "#000008", nebula: "#150033", accent: "#dd66ff",
+    waves: [
+      { enemies: ["tank","stealth","shooter","splitter","kamikaze","tank","shooter","stealth","grunt"], delay: 800 },
+      { enemies: ["tank","shooter","stealth","kamikaze","splitter","tank","shooter","stealth","kamikaze","tank"], delay: 720 },
+      { enemies: ["tank","stealth","shooter","kamikaze","splitter","tank","shooter","stealth","kamikaze","splitter","tank","grunt"], delay: 640 },
+    ],
+    bossName: "Null, el Aniquilador", bossColor: "#220033", bossAccent: "#ff55ff", bossHp: 3200,
+  },
+  {
+    id: 8, name: "Bosque Nocturno", subtitle: "Donde crecen las pesadillas",
+    bgColor: "#021006", nebula: "#063a12", accent: "#66ff88",
+    waves: [
+      { enemies: ["grunt","splitter","grunt","shooter","scout","splitter","grunt"], delay: 850 },
+      { enemies: ["splitter","shooter","grunt","tank","splitter","shooter","grunt","splitter"], delay: 800 },
+      { enemies: ["tank","splitter","shooter","grunt","splitter","shooter","tank","splitter","shooter"], delay: 750 },
+    ],
+    bossName: "La Madre Maleza", bossColor: "#0a3a1a", bossAccent: "#88ff66", bossHp: 3600,
+  },
+  {
+    id: 9, name: "Mar de Mercurio", subtitle: "El océano de metal líquido",
+    bgColor: "#000b14", nebula: "#0a3a5a", accent: "#88ccff",
+    waves: [
+      { enemies: ["shooter","stealth","shooter","grunt","splitter","shooter","stealth"], delay: 850 },
+      { enemies: ["tank","shooter","stealth","splitter","shooter","tank","stealth","shooter"], delay: 780 },
+      { enemies: ["tank","shooter","stealth","splitter","shooter","tank","stealth","splitter","shooter","tank"], delay: 720 },
+    ],
+    bossName: "El Leviatán", bossColor: "#0a3050", bossAccent: "#66eeff", bossHp: 4000,
+  },
+  {
+    id: 10, name: "Purgatorio Dorado", subtitle: "Las puertas del juicio",
+    bgColor: "#140e00", nebula: "#4a3a00", accent: "#ffcc44",
+    waves: [
+      { enemies: ["grunt","shooter","tank","kamikaze","grunt","shooter","kamikaze"], delay: 800 },
+      { enemies: ["tank","shooter","kamikaze","grunt","shooter","tank","kamikaze","shooter"], delay: 740 },
+      { enemies: ["tank","shooter","kamikaze","splitter","tank","shooter","kamikaze","shooter","tank","kamikaze"], delay: 680 },
+    ],
+    bossName: "El Inquisidor", bossColor: "#4a3a00", bossAccent: "#ffdd66", bossHp: 4500,
+  },
+  {
+    id: 11, name: "Fragmentos Carmesí", subtitle: "El cielo desgarrado",
+    bgColor: "#140005", nebula: "#3a0010", accent: "#ff4466",
+    waves: [
+      { enemies: ["kamikaze","splitter","kamikaze","stealth","shooter","kamikaze","splitter"], delay: 780 },
+      { enemies: ["splitter","kamikaze","stealth","tank","splitter","kamikaze","shooter","splitter"], delay: 720 },
+      { enemies: ["tank","splitter","kamikaze","stealth","splitter","kamikaze","tank","splitter","kamikaze"], delay: 660 },
+    ],
+    bossName: "La Cosechadora", bossColor: "#3a0018", bossAccent: "#ff5577", bossHp: 5000,
+  },
+  {
+    id: 12, name: "Catedral Fantasma", subtitle: "Ecos del más allá",
+    bgColor: "#070b12", nebula: "#1a2a44", accent: "#aaccff",
+    waves: [
+      { enemies: ["stealth","grunt","stealth","shooter","grunt","splitter","stealth"], delay: 820 },
+      { enemies: ["stealth","shooter","tank","stealth","grunt","shooter","stealth","splitter"], delay: 760 },
+      { enemies: ["tank","stealth","shooter","stealth","splitter","grunt","tank","stealth","shooter","stealth"], delay: 700 },
+    ],
+    bossName: "El Obispo", bossColor: "#222a44", bossAccent: "#ddeeff", bossHp: 5500,
+  },
+  {
+    id: 13, name: "Abismo Esmeralda", subtitle: "La profundidad sin luz",
+    bgColor: "#001409", nebula: "#003a1a", accent: "#44ffaa",
+    waves: [
+      { enemies: ["tank","shooter","tank","grunt","kamikaze","tank","shooter"], delay: 780 },
+      { enemies: ["tank","kamikaze","tank","shooter","grunt","tank","kamikaze","shooter"], delay: 720 },
+      { enemies: ["tank","tank","shooter","kamikaze","splitter","tank","shooter","kamikaze","tank"], delay: 660 },
+    ],
+    bossName: "El Titán Verde", bossColor: "#003322", bossAccent: "#55ff88", bossHp: 6200,
+  },
+  {
+    id: 14, name: "Torre del Atardecer", subtitle: "El último bastión",
+    bgColor: "#14050a", nebula: "#3a1a2a", accent: "#ff8844",
+    waves: [
+      { enemies: ["tank","stealth","shooter","kamikaze","splitter","tank","stealth"], delay: 760 },
+      { enemies: ["tank","shooter","stealth","splitter","kamikaze","tank","shooter","stealth"], delay: 700 },
+      { enemies: ["tank","shooter","stealth","kamikaze","splitter","tank","shooter","stealth","kamikaze","splitter"], delay: 640 },
+    ],
+    bossName: "La Vanguardia", bossColor: "#3a1020", bossAccent: "#ffaa66", bossHp: 7000,
+  },
+  {
+    id: 15, name: "Infinito", subtitle: "Más allá del todo",
+    bgColor: "#050010", nebula: "#1a0040", accent: "#ffdd55",
+    waves: [
+      { enemies: ["tank","shooter","stealth","kamikaze","splitter","grunt","tank","shooter"], delay: 720 },
+      { enemies: ["tank","shooter","stealth","kamikaze","splitter","tank","shooter","stealth","kamikaze","splitter"], delay: 660 },
+      { enemies: ["tank","shooter","stealth","kamikaze","splitter","tank","shooter","stealth","kamikaze","splitter","tank","shooter"], delay: 600 },
+    ],
+    bossName: "Amarok, el Último", bossColor: "#2a0044", bossAccent: "#ffee66", bossHp: 8000,
+  },
 ]
 
 /* ════════════════════════════════════════════════════════════════════
@@ -253,6 +433,18 @@ function makeEnemy(type: EnemyType, worldId: number, id: number, diffMult = 1): 
                 worldId === 1 ? (type === "stealth" ? "#9933ee" : cfg.color!) :
                 worldId === 2 ? "#226622" :
                 worldId === 3 ? "#224466" :
+                worldId === 4 ? cfg.color! :
+                worldId === 5 ? "#336688" :
+                worldId === 6 ? "#993322" :
+                worldId === 7 ? "#5a44aa" :
+                worldId === 8 ? "#2a6a2a" :
+                worldId === 9 ? "#5a7a9a" :
+                worldId === 10 ? "#996622" :
+                worldId === 11 ? "#aa2244" :
+                worldId === 12 ? "#5566aa" :
+                worldId === 13 ? "#1a7a3a" :
+                worldId === 14 ? "#994466" :
+                worldId === 15 ? "#4a3a8a" :
                 cfg.color!
   const hp = Math.round(cfg.hp! * diffMult)
   return {
@@ -298,7 +490,7 @@ function makeStar(): Star {
 function makeGS(): GS {
   const save = loadStarSave()
   const stars: Star[] = Array.from({ length: 120 }, makeStar)
-  const maxHP = upMaxHP(save.upgrades)
+  const maxHP = upMaxHP(save.upgrades, getShip(save))
   return {
     phase: "intro",
     playerX: W / 2, playerHP: maxHP, playerMaxHP: maxHP, invTimer: 0,
@@ -312,8 +504,9 @@ function makeGS(): GS {
     floaters: [], shockwaves: [], trail: [],
     stars, lastTime: 0, phaseTimer: 0, nextId: 0,
     touchX: null, isTouching: false,
-    ammoBtns: [], worldBtns: [], hangarBtns: [], introBtns: [],
+    ammoBtns: [], worldBtns: [], hangarBtns: [], shipBtns: [], introBtns: [],
     save, flashMsg: "", flashT: 0,
+    worldScroll: 0, worldDragStartY: null, worldDragBase: 0,
     bossLaserActive: false, bossLaserT: 0, bossLaserX: W / 2,
     shieldActive: false, shieldHP: SHIELD_MAX_HP, shieldMaxHP: SHIELD_MAX_HP,
     shieldDuration: 0, shieldCooldown: 0, shieldCdMax: SHIELD_COOLDOWN,
@@ -393,7 +586,10 @@ function spawnDrop(gs: GS, x: number, y: number) {
   // Weight by world (later worlds = better drops)
   const weights = [
     [6, 2, 1], [5, 3, 2], [4, 3, 3], [3, 4, 3], [2, 4, 4],
-  ][Math.min(gs.worldId, 4)] ?? [5, 3, 2]
+    [2, 4, 5], [2, 5, 5], [1, 5, 6],
+    [2, 4, 6], [2, 4, 7], [1, 4, 7], [1, 4, 8],
+    [1, 3, 8], [1, 3, 9], [0, 3, 9], [0, 3, 10],
+  ][Math.min(gs.worldId, 15)] ?? [5, 3, 2]
   const total = weights.reduce((a, b) => a + b, 0)
   let r = Math.random() * total
   let kind: DropKind = "laser"
@@ -476,7 +672,7 @@ function registerKill(gs: GS, e: Enemy) {
 function updatePlayer(gs: GS, dt: number) {
   if (gs.touchX !== null) {
     const dx = gs.touchX - gs.playerX
-    const maxStep = PLAYER_SPEED * dt
+    const maxStep = PLAYER_SPEED * getShip(gs.save).speedMult * dt
     gs.playerX += Math.sign(dx) * Math.min(Math.abs(dx), maxStep)
     gs.playerX = Math.max(PLAYER_W / 2 + 4, Math.min(W - PLAYER_W / 2 - 4, gs.playerX))
   }
@@ -529,6 +725,7 @@ function activateShield(gs: GS) {
 function effectiveFireRate(gs: GS, ammo: AmmoType): number {
   let rate = FIRE_RATES[ammo] / 1000
   rate *= upFireMult(gs.save.upgrades)
+  rate *= getShip(gs.save).fireMult
   if (gs.overdriveT > 0) rate *= OVERDRIVE_MULT
   return rate
 }
@@ -832,6 +1029,286 @@ function executeBossAttack(gs: GS, b: Boss) {
         gs.enemies.push(e)
       }
     }
+  } else if (gs.worldId === 5) {
+    // Reina del Hielo: ráfagas apuntadas + anillos de cristal
+    b.attackIdx++
+    const dx = px - bx, dy = py - by
+    const mag = Math.hypot(dx, dy) || 1
+    const spd = 250
+    if (b.phase === 1) {
+      // Trío apuntado + anillo lento ocasional
+      for (let i = 0; i < 3; i++) {
+        const spread = (i - 1) * 0.28
+        const ang = Math.atan2(dy, dx) + spread
+        spawnEnemyBullet(gs, bx, by, Math.cos(ang) * spd, Math.sin(ang) * spd, 20)
+      }
+      if (Math.random() < 0.35) {
+        for (let i = 0; i < 8; i++) {
+          const ang = (i / 8) * Math.PI * 2
+          spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 120, Math.sin(ang) * 120, 12)
+        }
+      }
+    } else {
+      // Fase 2: doble anillo giratorio + disparo grande
+      for (let r = 0; r < 2; r++) {
+        const off = b.attackIdx * 0.3 + r * Math.PI
+        for (let i = 0; i < 8; i++) {
+          const ang = (i / 8) * Math.PI * 2 + off
+          spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 165, Math.sin(ang) * 165, 13)
+        }
+      }
+      spawnEnemyBullet(gs, bx, by, dx / mag * 280, dy / mag * 280, 24)
+      if (Math.random() < 0.45) {
+        gs.bossLaserActive = true
+        gs.bossLaserT = 1.5
+        gs.bossLaserX = bx
+      }
+    }
+  } else if (gs.worldId === 6) {
+    // Coloso de Magma: ráfaga radial + bola de magma apuntada
+    b.attackIdx++
+    const dx = px - bx, dy = py - by
+    const mag = Math.hypot(dx, dy) || 1
+    const ways = b.phase === 1 ? 10 : 14
+    for (let i = 0; i < ways; i++) {
+      const ang = (i / ways) * Math.PI * 2 + b.attackIdx * 0.15
+      spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 175, Math.sin(ang) * 175, 14)
+    }
+    // Bola de magma lenta y potente
+    spawnEnemyBullet(gs, bx, by, dx / mag * 180, dy / mag * 180, 30)
+    if (b.phase === 2 && Math.random() < 0.45) {
+      // Invoca kamikazes
+      for (let i = 0; i < 3; i++) {
+        const e = makeEnemy("kamikaze", gs.worldId, nextId(gs))
+        e.x = bx + (Math.random() - 0.5) * 120; e.y = by + 30
+        gs.enemies.push(e)
+      }
+      gs.flashMsg = "¡Magma vivo!"
+      gs.flashT = 1.2
+    }
+  } else if (gs.worldId === 7) {
+    // Null, el Aniquilador: repertorio combinado de los jefes previos
+    b.attackIdx++
+    if (b.phase === 1) {
+      // Cono 5 vías + espiral ocasional
+      for (let i = 0; i < 5; i++) {
+        const ang = -Math.PI / 2 + (i - 2) * 0.35
+        spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 255, Math.sin(ang) * 255, 22)
+      }
+      if (Math.random() < 0.4) {
+        for (let i = 0; i < 10; i++) {
+          const ang = (i / 10) * Math.PI * 2 + b.attackIdx * 0.3
+          spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 190, Math.sin(ang) * 190, 15)
+        }
+      }
+    } else {
+      // Fase 2: cono 7 vías + láser + élites + teleport
+      for (let i = 0; i < 7; i++) {
+        const ang = -Math.PI / 2 + (i - 3) * 0.28
+        spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 270, Math.sin(ang) * 270, 24)
+      }
+      gs.bossLaserActive = true
+      gs.bossLaserT = 1.7
+      gs.bossLaserX = bx
+      if (Math.random() < 0.55) {
+        const e = makeEnemy(Math.random() < 0.5 ? "tank" : "stealth", gs.worldId, nextId(gs))
+        e.x = bx + (Math.random() - 0.5) * 120; e.y = by + 40
+        gs.enemies.push(e)
+      }
+      if (Math.random() < 0.3) {
+        spawnParticles(gs, b.x, b.y, b.accent, 20, 250)
+        b.x = 80 + Math.random() * (W - 160)
+        b.y = 80 + Math.random() * (H * 0.3)
+        spawnParticles(gs, b.x, b.y, b.accent, 20, 250)
+      }
+    }
+  } else if (gs.worldId === 8) {
+    // Madre Maleza: enredaderas apuntadas + siembra de minions
+    b.attackIdx++
+    const dx = px - bx, dy = py - by
+    const volley = b.phase === 1 ? 3 : 5
+    for (let i = 0; i < volley; i++) {
+      const spread = (i - (volley - 1) / 2) * 0.26
+      const ang = Math.atan2(dy, dx) + spread
+      spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 250, Math.sin(ang) * 250, 20)
+    }
+    if (Math.random() < (b.phase === 1 ? 0.35 : 0.6)) {
+      const n = b.phase === 1 ? 2 : 3
+      for (let i = 0; i < n; i++) {
+        const e = makeEnemy(Math.random() < 0.5 ? "scout" : "grunt", gs.worldId, nextId(gs))
+        e.x = bx + (Math.random() - 0.5) * 110; e.y = by + 30
+        gs.enemies.push(e)
+      }
+      gs.flashMsg = "¡Maleza crece!"
+      gs.flashT = 1.2
+    }
+    if (b.phase === 2) {
+      // Anillo vegetal lento
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2 + b.attackIdx * 0.2
+        spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 130, Math.sin(ang) * 130, 13)
+      }
+    }
+  } else if (gs.worldId === 9) {
+    // Leviatán: ráfagas + barrido de láser amplio
+    b.attackIdx++
+    const dx = px - bx, dy = py - by
+    const ways = b.phase === 1 ? 4 : 6
+    for (let i = 0; i < ways; i++) {
+      const spread = (i - (ways - 1) / 2) * 0.22
+      const ang = Math.atan2(dy, dx) + spread
+      spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 260, Math.sin(ang) * 260, 20)
+    }
+    if (Math.random() < (b.phase === 1 ? 0.35 : 0.55)) {
+      gs.bossLaserActive = true
+      gs.bossLaserT = b.phase === 1 ? 1.1 : 1.6
+      gs.bossLaserX = bx
+    }
+  } else if (gs.worldId === 10) {
+    // Inquisidor: cono severo + teleport judicial
+    b.attackIdx++
+    const dx = px - bx, dy = py - by
+    const mag = Math.hypot(dx, dy) || 1
+    const ways = b.phase === 1 ? 5 : 7
+    for (let i = 0; i < ways; i++) {
+      const ang = -Math.PI / 2 + (i - (ways - 1) / 2) * 0.3
+      spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 250, Math.sin(ang) * 250, 22)
+    }
+    if (Math.random() < (b.phase === 1 ? 0.25 : 0.5)) {
+      spawnParticles(gs, b.x, b.y, b.accent, 20, 250)
+      b.x = 80 + Math.random() * (W - 160)
+      b.y = 80 + Math.random() * (H * 0.3)
+      spawnParticles(gs, b.x, b.y, b.accent, 20, 250)
+    }
+    if (b.phase === 2 && Math.random() < 0.35) {
+      // Bola de juicio apuntada
+      spawnEnemyBullet(gs, bx, by, dx / mag * 260, dy / mag * 260, 26)
+    }
+  } else if (gs.worldId === 11) {
+    // Cosechadora: ráfagas radiales + siega con splitters
+    b.attackIdx++
+    const ways = b.phase === 1 ? 12 : 16
+    for (let i = 0; i < ways; i++) {
+      const ang = (i / ways) * Math.PI * 2 + b.attackIdx * 0.12
+      spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 180, Math.sin(ang) * 180, 14)
+    }
+    if (Math.random() < (b.phase === 1 ? 0.3 : 0.55)) {
+      const n = b.phase === 1 ? 1 : 2
+      for (let i = 0; i < n; i++) {
+        const e = makeEnemy("splitter", gs.worldId, nextId(gs))
+        e.x = bx + (Math.random() - 0.5) * 100; e.y = by + 30
+        gs.enemies.push(e)
+      }
+      gs.flashMsg = "¡Segadores liberados!"
+      gs.flashT = 1.2
+    }
+  } else if (gs.worldId === 12) {
+    // Obispo: anillos litúrgicos + teleport + láser
+    b.attackIdx++
+    const dx = px - bx, dy = py - by
+    const mag = Math.hypot(dx, dy) || 1
+    const rings = b.phase === 1 ? 1 : 2
+    for (let r = 0; r < rings; r++) {
+      const off = b.attackIdx * 0.25 + r * (Math.PI / 2)
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2 + off
+        spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 150, Math.sin(ang) * 150, 14)
+      }
+    }
+    spawnEnemyBullet(gs, bx, by, dx / mag * 260, dy / mag * 260, 22)
+    if (b.phase === 2) {
+      if (Math.random() < 0.45) {
+        gs.bossLaserActive = true
+        gs.bossLaserT = 1.5
+        gs.bossLaserX = bx
+      }
+      if (Math.random() < 0.3) {
+        spawnParticles(gs, b.x, b.y, b.accent, 18, 220)
+        b.x = 80 + Math.random() * (W - 160)
+        b.y = 80 + Math.random() * (H * 0.3)
+        spawnParticles(gs, b.x, b.y, b.accent, 18, 220)
+      }
+    }
+  } else if (gs.worldId === 13) {
+    // Titán Verde: placaje radial + onda expansiva lenta + refuerzos
+    b.attackIdx++
+    const ways = b.phase === 1 ? 10 : 14
+    for (let i = 0; i < ways; i++) {
+      const ang = (i / ways) * Math.PI * 2 + b.attackIdx * 0.1
+      spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 190, Math.sin(ang) * 190, 15)
+    }
+    // Onda lenta y grande
+    for (let i = 0; i < 6; i++) {
+      const ang = (i / 6) * Math.PI * 2 + b.attackIdx * 0.3
+      spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 105, Math.sin(ang) * 105, 20)
+    }
+    if (b.phase === 2 && Math.random() < 0.4) {
+      const e = makeEnemy("tank", gs.worldId, nextId(gs))
+      e.x = bx + (Math.random() - 0.5) * 120; e.y = by + 30
+      gs.enemies.push(e)
+      gs.flashMsg = "¡Refuerzos de titanio!"
+      gs.flashT = 1.2
+    }
+  } else if (gs.worldId === 14) {
+    // Vanguardia: alterna cono / espiral según el ataque
+    b.attackIdx++
+    const dx = px - bx, dy = py - by
+    const mag = Math.hypot(dx, dy) || 1
+    if (b.attackIdx % 2 === 0) {
+      const ways = b.phase === 1 ? 5 : 7
+      for (let i = 0; i < ways; i++) {
+        const ang = -Math.PI / 2 + (i - (ways - 1) / 2) * 0.32
+        spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 255, Math.sin(ang) * 255, 21)
+      }
+    } else {
+      const ways = b.phase === 1 ? 8 : 12
+      for (let i = 0; i < ways; i++) {
+        const ang = (i / ways) * Math.PI * 2 + b.attackIdx * 0.2
+        spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 180, Math.sin(ang) * 180, 14)
+      }
+    }
+    if (b.phase === 2) {
+      spawnEnemyBullet(gs, bx, by, dx / mag * 270, dy / mag * 270, 24)
+      if (Math.random() < 0.3) {
+        gs.bossLaserActive = true
+        gs.bossLaserT = 1.4
+        gs.bossLaserX = bx
+      }
+    }
+  } else if (gs.worldId === 15) {
+    // Amarok: el repertorio completo, potenciado
+    b.attackIdx++
+    const dx = px - bx, dy = py - by
+    const mag = Math.hypot(dx, dy) || 1
+    // Espiral doble giratoria
+    const spiralWays = b.phase === 1 ? 8 : 12
+    for (let r = 0; r < 2; r++) {
+      const off = r * Math.PI
+      for (let i = 0; i < spiralWays; i++) {
+        const ang = (i / spiralWays) * Math.PI * 2 + b.attackIdx * 0.18 + off
+        spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 185, Math.sin(ang) * 185, 15)
+      }
+    }
+    // Cono principal
+    const ways = b.phase === 1 ? 7 : 9
+    for (let i = 0; i < ways; i++) {
+      const ang = -Math.PI / 2 + (i - (ways - 1) / 2) * 0.26
+      spawnEnemyBullet(gs, bx, by, Math.cos(ang) * 270, Math.sin(ang) * 270, 24)
+    }
+    // Bola apuntada letal
+    spawnEnemyBullet(gs, bx, by, dx / mag * 290, dy / mag * 290, 30)
+    if (b.phase === 2) {
+      gs.bossLaserActive = true
+      gs.bossLaserT = 1.8
+      gs.bossLaserX = bx
+      for (let i = 0; i < 2; i++) {
+        const e = makeEnemy(Math.random() < 0.5 ? "tank" : "stealth", gs.worldId, nextId(gs))
+        e.x = bx + (Math.random() - 0.5) * 130; e.y = by + 40
+        gs.enemies.push(e)
+      }
+      gs.flashMsg = "¡FURIA DE AMAROK!"
+      gs.flashT = 1.3
+    }
   }
 }
 
@@ -874,7 +1351,7 @@ function collectDrop(gs: GS, d: Drop) {
 }
 
 function updateDrops(gs: GS, dt: number) {
-  const magnetOn = gs.magnetT > 0 || upHasMagnet(gs.save.upgrades)
+  const magnetOn = gs.magnetT > 0 || upHasMagnet(gs.save.upgrades, getShip(gs.save))
   gs.drops = gs.drops.filter(d => {
     d.bobT += dt * 2
     if (magnetOn) {
@@ -1078,7 +1555,7 @@ function genEndlessWave(gs: GS): EnemyType[] {
   const list: EnemyType[] = []
   for (let i = 0; i < count; i++) list.push(pool[Math.floor(Math.random() * pool.length)])
   // Cicla el worldId por estética de fondo
-  gs.worldId = wave % 5
+  gs.worldId = wave % WORLDS.length
   return list.concat(new Array(diff).fill("scout"))  // relleno extra a mayor dificultad
 }
 
@@ -1087,7 +1564,7 @@ function startNextEndlessWave(gs: GS) {
   if (gs.endlessWave > gs.save.endlessBest) gs.save.endlessBest = gs.endlessWave
   // Mini-jefe cada 5 oleadas
   if (gs.endlessWave % 5 === 0) {
-    gs.boss = makeBoss((gs.endlessWave / 5 - 1) % 5, 0.6 + gs.endlessWave * 0.04)
+    gs.boss = makeBoss((gs.endlessWave / 5 - 1) % WORLDS.length, 0.6 + gs.endlessWave * 0.04)
     gs.phase = "boss"
     gs.waveState = "done"
     gs.flashMsg = `¡MINI-JEFE! Oleada ${gs.endlessWave}`
@@ -1156,7 +1633,7 @@ function updateWaveProgression(gs: GS, dt: number) {
 
 // Resetea todo lo común al arrancar una partida (campaña o endless)
 function resetRunState(gs: GS) {
-  const maxHP = upMaxHP(gs.save.upgrades)
+  const maxHP = upMaxHP(gs.save.upgrades, getShip(gs.save))
   gs.playerMaxHP = maxHP; gs.playerHP = maxHP; gs.invTimer = 0
   gs.enemies = []; gs.bullets = []; gs.enemyBullets = []; gs.drops = []
   gs.boss = null; gs.bossLaserActive = false
@@ -1236,8 +1713,116 @@ function transitionTo(gs: GS, phase: Phase) {
 /* ════════════════════════════════════════════════════════════════════
    DRAW HELPERS
    ════════════════════════════════════════════════════════════════════ */
+function drawShipShape(ctx: CanvasRenderingContext2D, ship: ShipDef) {
+  const { shape, hull, hull2, hull3, wing, accent, engine } = ship
+  const eng = (gx: number, gy: number, rx: number, ry: number) => {
+    const glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, rx)
+    glow.addColorStop(0, engine + "cc")
+    glow.addColorStop(1, engine + "00")
+    ctx.fillStyle = glow
+    ctx.beginPath(); ctx.ellipse(gx, gy, rx, ry, 0, 0, Math.PI * 2); ctx.fill()
+  }
+  const hullGrad = () => {
+    const hg = ctx.createLinearGradient(-14, -24, 14, 24)
+    hg.addColorStop(0, hull); hg.addColorStop(0.5, hull2); hg.addColorStop(1, hull3)
+    ctx.fillStyle = hg
+  }
+
+  if (shape === "interceptor") {
+    eng(0, 16, 14, 10)
+    // Alas barridas
+    ctx.fillStyle = wing
+    ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-27, 10); ctx.lineTo(-23, 19); ctx.lineTo(-6, 11); ctx.closePath(); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(27, 10); ctx.lineTo(23, 19); ctx.lineTo(6, 11); ctx.closePath(); ctx.fill()
+    // Aletas de cola
+    ctx.fillStyle = hull2
+    ctx.beginPath(); ctx.moveTo(-6, 8); ctx.lineTo(-13, 22); ctx.lineTo(-5, 21); ctx.closePath(); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(6, 8); ctx.lineTo(13, 22); ctx.lineTo(5, 21); ctx.closePath(); ctx.fill()
+    // Fuselaje afilado
+    hullGrad()
+    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(12, -10); ctx.lineTo(8, 20); ctx.lineTo(-8, 20); ctx.lineTo(-12, -10)
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = accent
+    ctx.beginPath(); ctx.ellipse(0, -10, 4, 8, 0, 0, Math.PI * 2); ctx.fill()
+  } else if (shape === "tank") {
+    eng(0, 18, 26, 15)
+    // Cuerpo ancho
+    hullGrad()
+    ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(20, -8); ctx.lineTo(22, 18); ctx.lineTo(-22, 18); ctx.lineTo(-20, -8)
+    ctx.closePath(); ctx.fill()
+    // Cañones dobles
+    ctx.fillStyle = wing
+    ctx.fillRect(-15, -22, 7, 12); ctx.fillRect(8, -22, 7, 12)
+    // Placas de blindaje laterales
+    ctx.fillStyle = hull3
+    ctx.fillRect(-21, -6, 4, 22); ctx.fillRect(17, -6, 4, 22)
+    // Cockpit blindado
+    ctx.fillStyle = accent
+    ctx.beginPath(); ctx.roundRect(-8, -8, 16, 12, 4); ctx.fill()
+  } else if (shape === "jet") {
+    // Doble motor
+    eng(-8, 18, 11, 12); eng(8, 18, 11, 12)
+    // Alas en flecha
+    ctx.fillStyle = wing
+    ctx.beginPath(); ctx.moveTo(-4, -6); ctx.lineTo(-25, 8); ctx.lineTo(-18, 17); ctx.lineTo(-4, 8); ctx.closePath(); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(4, -6); ctx.lineTo(25, 8); ctx.lineTo(18, 17); ctx.lineTo(4, 8); ctx.closePath(); ctx.fill()
+    // Fuselaje redondeado
+    hullGrad()
+    ctx.beginPath(); ctx.moveTo(0, -26); ctx.quadraticCurveTo(13, -12, 11, 16)
+    ctx.lineTo(-11, 16); ctx.quadraticCurveTo(-13, -12, 0, -26)
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = accent
+    ctx.beginPath(); ctx.ellipse(0, -9, 5, 9, 0, 0, Math.PI * 2); ctx.fill()
+  } else if (shape === "phantom") {
+    eng(0, 16, 16, 11)
+    // Alas angulares
+    ctx.fillStyle = wing
+    ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-23, -8); ctx.lineTo(-25, 16); ctx.lineTo(-6, 12); ctx.closePath(); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(23, -8); ctx.lineTo(25, 16); ctx.lineTo(6, 12); ctx.closePath(); ctx.fill()
+    // Fuselaje de sigilo (cortante)
+    hullGrad()
+    ctx.beginPath(); ctx.moveTo(0, -28); ctx.lineTo(16, -2); ctx.lineTo(10, 20); ctx.lineTo(-10, 20); ctx.lineTo(-16, -2)
+    ctx.closePath(); ctx.fill()
+    // Cabina en diamante
+    ctx.fillStyle = accent
+    ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(4, -6); ctx.lineTo(0, 2); ctx.lineTo(-4, -6)
+    ctx.closePath(); ctx.fill()
+  } else if (shape === "omega") {
+    // Doble motor superior
+    eng(-7, 20, 12, 13); eng(7, 20, 12, 13)
+    // Alas grandes
+    ctx.fillStyle = wing
+    ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(-28, 16); ctx.lineTo(-24, 24); ctx.lineTo(-8, 14); ctx.closePath(); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(28, 16); ctx.lineTo(24, 24); ctx.lineTo(8, 14); ctx.closePath(); ctx.fill()
+    // Winglets
+    ctx.beginPath(); ctx.moveTo(-24, 2); ctx.lineTo(-31, 6); ctx.lineTo(-26, 12); ctx.closePath(); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(24, 2); ctx.lineTo(31, 6); ctx.lineTo(26, 12); ctx.closePath(); ctx.fill()
+    // Fuselaje alargado
+    hullGrad()
+    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(16, -6); ctx.lineTo(14, 24); ctx.lineTo(-14, 24); ctx.lineTo(-16, -6)
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = accent
+    ctx.beginPath(); ctx.ellipse(0, -10, 7, 11, 0, 0, Math.PI * 2); ctx.fill()
+  } else {
+    // delta (Aurora) — forma clásica
+    eng(0, 18, 22, 16)
+    // Alas
+    ctx.fillStyle = wing
+    ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(-24, 16); ctx.lineTo(-20, 22); ctx.lineTo(-8, 12)
+    ctx.closePath(); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(24, 16); ctx.lineTo(20, 22); ctx.lineTo(8, 12)
+    ctx.closePath(); ctx.fill()
+    // Fuselaje
+    hullGrad()
+    ctx.beginPath(); ctx.moveTo(0, -26); ctx.lineTo(14, -6); ctx.lineTo(12, 22); ctx.lineTo(-12, 22); ctx.lineTo(-14, -6)
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = accent
+    ctx.beginPath(); ctx.ellipse(0, -8, 6, 10, 0, 0, Math.PI * 2); ctx.fill()
+  }
+}
+
 function drawPlayerShip(
-  ctx: CanvasRenderingContext2D, x: number, y: number,
+  ctx: CanvasRenderingContext2D, x: number, y: number, ship: ShipDef,
   invTimer: number, shieldActive: boolean, shieldHP: number, shieldMaxHP: number,
   shieldCooldown: number, shieldCdMax: number, time: number,
 ) {
@@ -1273,33 +1858,7 @@ function drawPlayerShip(
     ctx.shadowBlur = 0
   }
 
-  // Engine glow
-  const glow = ctx.createRadialGradient(0, 18, 0, 0, 18, 22)
-  glow.addColorStop(0, "rgba(0,200,255,0.7)")
-  glow.addColorStop(1, "rgba(0,100,255,0)")
-  ctx.fillStyle = glow
-  ctx.beginPath(); ctx.ellipse(0, 18, 22, 16, 0, 0, Math.PI * 2); ctx.fill()
-  // Left wing
-  ctx.fillStyle = "#0088cc"
-  ctx.beginPath()
-  ctx.moveTo(-8, 0); ctx.lineTo(-24, 16); ctx.lineTo(-20, 22); ctx.lineTo(-8, 12)
-  ctx.closePath(); ctx.fill()
-  // Right wing
-  ctx.beginPath()
-  ctx.moveTo(8, 0); ctx.lineTo(24, 16); ctx.lineTo(20, 22); ctx.lineTo(8, 12)
-  ctx.closePath(); ctx.fill()
-  // Main hull
-  const hullGrad = ctx.createLinearGradient(-14, -24, 14, 24)
-  hullGrad.addColorStop(0, "#00e5ff")
-  hullGrad.addColorStop(0.5, "#0088cc")
-  hullGrad.addColorStop(1, "#004488")
-  ctx.fillStyle = hullGrad
-  ctx.beginPath()
-  ctx.moveTo(0, -26); ctx.lineTo(14, -6); ctx.lineTo(12, 22); ctx.lineTo(-12, 22); ctx.lineTo(-14, -6)
-  ctx.closePath(); ctx.fill()
-  // Cockpit
-  ctx.fillStyle = "#aaeeff"
-  ctx.beginPath(); ctx.ellipse(0, -8, 6, 10, 0, 0, Math.PI * 2); ctx.fill()
+    drawShipShape(ctx, ship)
 
   // Indicador de recarga sobre la nave
   if (!shieldActive && shieldCooldown > 0) {
@@ -1479,7 +2038,7 @@ function drawBossShip(ctx: CanvasRenderingContext2D, boss: Boss, time: number) {
     for (let i = 1; i <= 3; i++) {
       ctx.beginPath(); ctx.arc(0, 0, i * 14, 0, Math.PI * 2); ctx.stroke()
     }
-  } else {
+  } else if (boss.worldId === 4) {
     // Emperador: ornate crown shape
     ctx.save(); ctx.scale(pulse, pulse)
     ctx.beginPath()
@@ -1495,6 +2054,231 @@ function drawBossShip(ctx: CanvasRenderingContext2D, boss: Boss, time: number) {
     for (let i = -2; i <= 2; i++) {
       ctx.beginPath(); ctx.moveTo(i * 14, -42); ctx.lineTo(i * 10, -62); ctx.stroke()
     }
+  } else if (boss.worldId === 5) {
+    // Reina del Hielo: cristal hexagonal
+    ctx.save(); ctx.scale(pulse, pulse)
+    ctx.beginPath()
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 6
+      if (i === 0) ctx.moveTo(Math.cos(a) * 42, Math.sin(a) * 42)
+      else ctx.lineTo(Math.cos(a) * 42, Math.sin(a) * 42)
+    }
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 3; ctx.stroke()
+    // Copos: líneas radiales
+    ctx.strokeStyle = boss.accent; ctx.globalAlpha = 0.7; ctx.lineWidth = 1.5
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2
+      ctx.beginPath()
+      ctx.moveTo(Math.cos(a) * 20, Math.sin(a) * 20)
+      ctx.lineTo(Math.cos(a) * 42, Math.sin(a) * 42)
+      ctx.stroke()
+    }
+    ctx.globalAlpha = 1
+    // Cristal interior
+    ctx.fillStyle = boss.color
+    ctx.beginPath()
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 6
+      if (i === 0) ctx.moveTo(Math.cos(a) * 26, Math.sin(a) * 26)
+      else ctx.lineTo(Math.cos(a) * 26, Math.sin(a) * 26)
+    }
+    ctx.closePath(); ctx.fill()
+    ctx.restore()
+  } else if (boss.worldId === 6) {
+    // Coloso de Magma: núcleo envuelto en placas
+    ctx.save(); ctx.scale(pulse, pulse)
+    for (let i = 0; i < 8; i++) {
+      ctx.save(); ctx.rotate((i / 8) * Math.PI * 2 + boss.attackIdx)
+      ctx.fillStyle = i % 2 === 0 ? boss.color : "#330a00"
+      ctx.beginPath(); ctx.ellipse(30, 0, 16, 9, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = boss.accent; ctx.lineWidth = 1.5; ctx.stroke()
+      ctx.restore()
+    }
+    // Núcleo en fusión
+    const lava = ctx.createRadialGradient(0, 0, 0, 0, 0, 22)
+    lava.addColorStop(0, "#fff2cc")
+    lava.addColorStop(0.5, "#ffaa00")
+    lava.addColorStop(1, boss.color)
+    ctx.fillStyle = lava
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 3; ctx.stroke()
+    ctx.restore()
+  } else if (boss.worldId === 7) {
+    // Null: obsidiana con púas angulares
+    ctx.save(); ctx.scale(pulse, pulse)
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      ctx.strokeStyle = boss.accent; ctx.lineWidth = 2.5
+      ctx.beginPath()
+      ctx.moveTo(Math.cos(a) * 30, Math.sin(a) * 30)
+      ctx.lineTo(Math.cos(a) * 52, Math.sin(a) * 52)
+      ctx.stroke()
+    }
+    ctx.fillStyle = boss.color
+    ctx.beginPath()
+    ctx.moveTo(0, -38); ctx.lineTo(20, -22); ctx.lineTo(38, -8); ctx.lineTo(28, 16)
+    ctx.lineTo(16, 38); ctx.lineTo(0, 26); ctx.lineTo(-16, 38); ctx.lineTo(-28, 16)
+    ctx.lineTo(-38, -8); ctx.lineTo(-20, -22)
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2; ctx.stroke()
+    ctx.restore()
+  } else if (boss.worldId === 8) {
+    // Madre Maleza: flor carnívora orgánica
+    ctx.save(); ctx.scale(pulse, pulse)
+    for (let i = 0; i < 8; i++) {
+      ctx.save(); ctx.rotate((i / 8) * Math.PI * 2)
+      ctx.fillStyle = boss.color
+      ctx.beginPath(); ctx.ellipse(30, 0, 15, 8, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = boss.accent; ctx.lineWidth = 1.5; ctx.stroke()
+      ctx.restore()
+    }
+    // Pedúnculo y boca
+    ctx.strokeStyle = "#3a6a2a"; ctx.lineWidth = 4
+    ctx.beginPath(); ctx.moveTo(0, 44); ctx.lineTo(0, -10); ctx.stroke()
+    ctx.fillStyle = "#66ff88"
+    ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(20, -8); ctx.lineTo(14, 10); ctx.lineTo(-14, 10); ctx.lineTo(-20, -8)
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2; ctx.stroke()
+    ctx.restore()
+  } else if (boss.worldId === 9) {
+    // Leviatán: serpiente acorazada
+    ctx.save(); ctx.scale(pulse, pulse)
+    for (let i = 0; i < 4; i++) {
+      ctx.save(); ctx.translate(0, 16 + i * 8)
+      ctx.fillStyle = boss.color
+      ctx.beginPath(); ctx.ellipse(0, 0, 34 - i * 6, 12 - i * 2, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = boss.accent; ctx.lineWidth = 1.5; ctx.stroke()
+      ctx.restore()
+    }
+    // Cabeza y aletas
+    ctx.fillStyle = boss.color
+    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(16, -8); ctx.lineTo(0, 14); ctx.lineTo(-16, -8)
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2; ctx.stroke()
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.fillStyle = boss.accent
+      ctx.beginPath(); ctx.moveTo(s * 12, -6); ctx.lineTo(s * 30, 6); ctx.lineTo(s * 12, 18); ctx.closePath(); ctx.fill()
+    }
+    ctx.restore()
+  } else if (boss.worldId === 10) {
+    // Inquisidor: arco gótico de juicio
+    ctx.save(); ctx.scale(pulse, pulse)
+    ctx.fillStyle = boss.color
+    ctx.beginPath()
+    ctx.moveTo(-30, 40); ctx.lineTo(-30, 0); ctx.lineTo(-42, -18)
+    ctx.lineTo(-30, -22); ctx.lineTo(-16, -40); ctx.lineTo(0, -48)
+    ctx.lineTo(16, -40); ctx.lineTo(30, -22); ctx.lineTo(42, -18)
+    ctx.lineTo(30, 0); ctx.lineTo(30, 40)
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 3; ctx.stroke()
+    // Vidrieras
+    ctx.fillStyle = boss.accent
+    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(10, -16); ctx.lineTo(0, 0); ctx.lineTo(-10, -16); ctx.closePath(); ctx.fill()
+    // Campanas
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.fillStyle = "#ffcc44"
+      ctx.beginPath(); ctx.arc(s * 22, 26, 7, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.restore()
+  } else if (boss.worldId === 11) {
+    // Cosechadora: estrella giratoria de cuchillas
+    ctx.save(); ctx.scale(pulse, pulse)
+    ctx.rotate(boss.attackIdx * 0.3)
+    for (let i = 0; i < 6; i++) {
+      ctx.save(); ctx.rotate((i / 6) * Math.PI * 2)
+      ctx.fillStyle = boss.color
+      ctx.beginPath(); ctx.moveTo(0, -44); ctx.lineTo(14, -10); ctx.lineTo(0, 8); ctx.lineTo(-14, -10)
+      ctx.closePath(); ctx.fill()
+      ctx.strokeStyle = boss.accent; ctx.lineWidth = 2; ctx.stroke()
+      ctx.restore()
+    }
+    ctx.fillStyle = boss.accent
+    ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill()
+    ctx.restore()
+  } else if (boss.worldId === 12) {
+    // Obispo: cúpula de catedral con halo
+    ctx.save(); ctx.scale(pulse, pulse)
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2
+    ctx.beginPath(); ctx.arc(0, 0, 52, 0, Math.PI * 2); ctx.stroke()
+    ctx.beginPath(); ctx.arc(0, 0, 44, 0, Math.PI * 2); ctx.stroke()
+    ctx.fillStyle = boss.color
+    ctx.beginPath(); ctx.arc(0, 0, 38, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(-38, -4); ctx.lineTo(-20, -30); ctx.lineTo(-20, -44)
+    ctx.lineTo(-8, -34); ctx.lineTo(0, -52); ctx.lineTo(8, -34); ctx.lineTo(20, -44)
+    ctx.lineTo(20, -30); ctx.lineTo(38, -4); ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2; ctx.stroke()
+    // Ventanas del rosetón
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      ctx.fillStyle = boss.accent
+      ctx.beginPath(); ctx.arc(Math.cos(a) * 24, Math.sin(a) * 24, 3.5, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.restore()
+  } else if (boss.worldId === 13) {
+    // Titán Verde: golem apilado angular
+    ctx.save(); ctx.scale(pulse, pulse)
+    // Hombros
+    ctx.fillStyle = boss.color
+    ctx.beginPath(); ctx.roundRect(-44, -18, 30, 30, 6); ctx.fill()
+    ctx.beginPath(); ctx.roundRect(14, -18, 30, 30, 6); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2; ctx.stroke()
+    // Torso
+    ctx.beginPath(); ctx.roundRect(-20, -34, 40, 48, 6); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2; ctx.stroke()
+    // Cabeza
+    ctx.beginPath(); ctx.roundRect(-14, -52, 28, 22, 5); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2; ctx.stroke()
+    // Ojos de núcleo
+    ctx.fillStyle = "#55ff88"
+    ctx.beginPath(); ctx.arc(-6, -42, 3.5, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(6, -42, 3.5, 0, Math.PI * 2); ctx.fill()
+    // Brazos cañón
+    ctx.fillStyle = boss.color
+    ctx.fillRect(-40, -14, 8, 30); ctx.fillRect(32, -14, 8, 30)
+    ctx.restore()
+  } else if (boss.worldId === 14) {
+    // Vanguardia: plataforma de batalla en punta de flecha
+    ctx.save(); ctx.scale(pulse, pulse)
+    ctx.fillStyle = boss.color
+    ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(40, -14); ctx.lineTo(46, 26)
+    ctx.lineTo(26, 42); ctx.lineTo(0, 30); ctx.lineTo(-26, 42); ctx.lineTo(-46, 26)
+    ctx.lineTo(-40, -14)
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2.5; ctx.stroke()
+    // Torretas
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.fillStyle = boss.accent
+      ctx.beginPath(); ctx.roundRect(s * 26 - 6, 10, 12, 22, 4); ctx.fill()
+    }
+    ctx.fillStyle = "#ffffff"
+    ctx.beginPath(); ctx.ellipse(0, 8, 8, 14, 0, 0, Math.PI * 2); ctx.fill()
+    ctx.restore()
+  } else {
+    // Amarok: núcleo final con anillos orbitales
+    ctx.save(); ctx.scale(pulse, pulse)
+    ctx.rotate(boss.attackIdx * 0.15)
+    // Anillos orbitales
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 2
+    ctx.beginPath(); ctx.arc(0, 0, 50, 0, Math.PI * 2); ctx.stroke()
+    ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI * 2); ctx.stroke()
+    for (let i = 0; i < 6; i++) {
+      ctx.save(); ctx.rotate((i / 6) * Math.PI * 2)
+      ctx.fillStyle = boss.color
+      ctx.beginPath(); ctx.arc(44, 0, 5, 0, Math.PI * 2); ctx.fill()
+      ctx.restore()
+    }
+    // Núcleo facetado
+    ctx.fillStyle = boss.color
+    ctx.beginPath()
+    ctx.moveTo(0, -32); ctx.lineTo(22, -20); ctx.lineTo(32, 0); ctx.lineTo(22, 20)
+    ctx.lineTo(0, 32); ctx.lineTo(-22, 20); ctx.lineTo(-32, 0); ctx.lineTo(-22, -20)
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = boss.accent; ctx.lineWidth = 3; ctx.stroke()
+    // Corazón de oro
+    ctx.fillStyle = "#ffee66"
+    ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill()
+    ctx.restore()
   }
 
   // Core glow
@@ -1601,7 +2385,7 @@ function drawStars(ctx: CanvasRenderingContext2D, gs: GS) {
   for (const s of gs.stars) {
     if (s.layer === 2) {
       // Capa cercana: leve tinte del mundo y posible streak
-      const world = WORLDS[Math.min(gs.worldId, 4)]
+      const world = WORLDS[Math.min(gs.worldId, WORLDS.length - 1)]
       ctx.strokeStyle = `rgba(255,255,255,${s.bright})`
       if (streak) {
         ctx.lineWidth = s.r
@@ -1814,7 +2598,7 @@ function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   ctx.fillText("ASSAULT", W / 2, H / 2 - 92)
   ctx.shadowBlur = 0
   ctx.fillStyle = "#aaaaaa"; ctx.font = "13px monospace"
-  ctx.fillText("5 mundos · combos · power-ups · jefes épicos", W / 2, H / 2 - 44)
+  ctx.fillText(`${WORLDS.length} mundos · combos · power-ups · jefes épicos`, W / 2, H / 2 - 44)
 
   // Monedas
   ctx.fillStyle = "#ffcc44"; ctx.font = "bold 16px monospace"
@@ -1832,14 +2616,15 @@ function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     ctx.fillText(label, 0, 0)
     ctx.restore()
   }
-  mkBtn("▶  CAMPAÑA", "campaign", H / 2 + 30, "#00e5ff", "#001020")
-  mkBtn("♾  ENDLESS", "endless", H / 2 + 90, "#ff44aa", "#20000f")
-  mkBtn("🔧  HANGAR", "hangar", H / 2 + 150, "#ffcc44", "#201400")
+  mkBtn("▶  CAMPAÑA", "campaign", H / 2 + 20, "#00e5ff", "#001020")
+  mkBtn("♾  ENDLESS", "endless", H / 2 + 78, "#ff44aa", "#20000f")
+  mkBtn("🔧  HANGAR", "hangar", H / 2 + 136, "#ffcc44", "#201400")
+  mkBtn("🚀  NAVES", "ships", H / 2 + 194, "#44ff88", "#001405")
 
   // Récord endless
   if (gs.save.endlessBest > 0) {
     ctx.fillStyle = "#ff88bb"; ctx.font = "11px monospace"; ctx.textAlign = "center"
-    ctx.fillText(`Mejor oleada endless: ${gs.save.endlessBest}`, W / 2, H / 2 + 190)
+    ctx.fillText(`Mejor oleada endless: ${gs.save.endlessBest}`, W / 2, H / 2 + 250)
   }
 
   // Credits
@@ -1915,18 +2700,108 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   ctx.fillText("← Volver al menú", W / 2, H - 18)
 }
 
+/* Pantalla de TIENDA DE NAVES — comprar y equipar naves */
+function drawShipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
+  ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillRect(0, 0, W, H)
+  ctx.fillStyle = "#44ff88"; ctx.font = "bold 26px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+  ctx.fillText("🚀 TIENDA DE NAVES", W / 2, 26)
+  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 16px monospace"
+  ctx.fillText(`🪙 ${gs.save.coins.toLocaleString()} monedas`, W / 2, 60)
+
+  gs.shipBtns = []
+  const cardH = 100, cardW = W - 40, cx = 20
+  for (let i = 0; i < SHIP_DEFS.length; i++) {
+    const ship = SHIP_DEFS[i]
+    const owned = gs.save.shipsOwned.includes(ship.id)
+    const equipped = gs.save.shipId === ship.id
+    const afford = gs.save.coins >= ship.price
+    const cy = 92 + i * (cardH + 6)
+    gs.shipBtns.push({ shipId: ship.id, x: cx, y: cy, w: cardW, h: cardH })
+
+    // Card
+    ctx.fillStyle = equipped ? "#22ff8833" : owned ? "#222a22" : afford ? "#44ff8833" : "#1a1a22"
+    ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.fill()
+    ctx.strokeStyle = equipped ? "#44ff88" : owned ? "#2a5a3a" : afford ? "#44ff8866" : "#333"; ctx.lineWidth = equipped ? 2.5 : 1.5
+    ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.stroke()
+
+    // Vista previa de la nave
+    ctx.save()
+    ctx.translate(cx + 52, cy + cardH / 2)
+    ctx.scale(1.5, 1.5)
+    ctx.globalAlpha = owned ? 1 : 0.35
+  drawShipShape(ctx, ship)
+    ctx.restore()
+
+    // Nombre + desc
+    ctx.textAlign = "left"; ctx.textBaseline = "top"
+    ctx.fillStyle = owned ? "#ffffff" : "#cccccc"; ctx.font = "bold 16px monospace"
+    ctx.fillText(ship.name, cx + 92, cy + 12)
+    ctx.fillStyle = "#999999"; ctx.font = "11px monospace"
+    ctx.fillText(ship.desc, cx + 92, cy + 32)
+    // Stats
+    ctx.fillStyle = "#88cc88"; ctx.font = "bold 10px monospace"
+    const parts: string[] = []
+    if (ship.speedMult !== 1) parts.push(`VEL ${ship.speedMult.toFixed(2)}x`)
+    if (ship.hpMult !== 1) parts.push(`HP ${ship.hpMult.toFixed(2)}x`)
+    if (ship.fireMult !== 1) parts.push(`CAD ${ship.fireMult.toFixed(2)}x`)
+    if (ship.passive?.magnet) parts.push("🧲 IMÁN")
+    ctx.fillText(parts.join("  "), cx + 92, cy + 52)
+
+    // Botón derecho: comprar / equipar / equipada
+    const btnW = 92, btnH = 40
+    const btnX = cx + cardW - btnW - 12, btnY = cy + cardH - btnH - 10
+    ctx.save()
+    if (equipped) {
+      ctx.fillStyle = "#44ff88"
+      ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText("✓ EQUIPADA", btnX + btnW / 2, btnY + btnH / 2)
+    } else if (owned) {
+      const pulse = 0.92 + Math.sin(time * 4 + i) * 0.08
+      ctx.translate(btnX + btnW / 2, btnY + btnH / 2); ctx.scale(pulse, pulse)
+      ctx.fillStyle = "#44ff88"
+      ctx.beginPath(); ctx.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 8); ctx.fill()
+      ctx.fillStyle = "#001405"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText("EQUIPAR", 0, 0)
+    } else {
+      const pulse = afford ? 0.92 + Math.sin(time * 4 + i) * 0.08 : 1
+      ctx.translate(btnX + btnW / 2, btnY + btnH / 2); ctx.scale(pulse, pulse)
+      ctx.fillStyle = afford ? "#44ff88" : "#223322"
+      ctx.beginPath(); ctx.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 8); ctx.fill()
+      ctx.fillStyle = afford ? "#001405" : "#667766"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText(`🪙 ${ship.price}`, 0, 0)
+    }
+    ctx.restore()
+  }
+  // Volver
+  ctx.fillStyle = "#888"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "bottom"
+  ctx.fillText("← Volver al menú", W / 2, H - 18)
+}
+
+function worldMaxScroll(): number {
+  const bh = 96, gap = 10
+  const listTop = 88, listBottom = H - 40
+  const totalH = WORLDS.length * (bh + gap) - gap
+  return Math.max(0, listTop + totalH - listBottom)
+}
+
 function drawWorldSelect(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   ctx.fillStyle = "rgba(0,0,0,0.85)"; ctx.fillRect(0, 0, W, H)
   ctx.fillStyle = "#ffffff"; ctx.font = "bold 26px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
   ctx.fillText("SELECCIONAR MUNDO", W / 2, 30)
   ctx.fillStyle = "#555"; ctx.font = "12px monospace"
-  ctx.fillText(`Mundos conquistados: ${gs.save.worldsCleared}/5`, W / 2, 66)
+  ctx.fillText(`Mundos conquistados: ${gs.save.worldsCleared}/${WORLDS.length}`, W / 2, 66)
 
+  // Lista desplazable
   gs.worldBtns = []
-  for (let i = 0; i < 5; i++) {
+  const bh = 96, bw = W - 40, bx = 20
+  const listTop = 88, listBottom = H - 40
+  const maxScroll = worldMaxScroll()
+  gs.worldScroll = Math.max(0, Math.min(gs.worldScroll, maxScroll))
+
+  for (let i = 0; i < WORLDS.length; i++) {
     const world = WORLDS[i]
     const unlocked = i === 0 || i <= gs.save.worldsCleared
-    const bh = 100, bw = W - 40, bx = 20, by = 100 + i * (bh + 10)
+    const by = listTop + i * (bh + 10) - gs.worldScroll
     gs.worldBtns.push({ worldId: i, x: bx, y: by, w: bw, h: bh })
 
     // Card bg
@@ -1968,6 +2843,11 @@ function drawWorldSelect(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     const pulse = 0.9 + Math.sin(time * 3 + i) * 0.1
     ctx.fillStyle = world.accent + "cc"; ctx.textAlign = "right"; ctx.font = `bold ${20 * pulse}px monospace`; ctx.textBaseline = "middle"
     ctx.fillText("▶", bx + bw - 12, by + bh / 2)
+  }
+  // Indicador de scroll
+  if (maxScroll > 0) {
+    ctx.fillStyle = "#666"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText("⌄ Desliza para ver más ⌄", W / 2, listBottom + 9)
   }
   // Back
   ctx.fillStyle = "#555555"; ctx.font = "13px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "bottom"
@@ -2028,7 +2908,7 @@ function drawWorldClear(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   }
 
   if (t > 2) {
-    const isLast = gs.worldId >= 4
+    const isLast = gs.worldId >= WORLDS.length - 1
     const pulse = 0.92 + Math.sin(time * 3) * 0.08
     ctx.save(); ctx.translate(W / 2, H / 2 + 130); ctx.scale(pulse, pulse)
     ctx.fillStyle = isLast ? "#ffcc44" : world.accent
@@ -2129,6 +3009,9 @@ function draw(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   if (gs.phase === "hangar") {
     drawHangar(ctx, gs, time); ctx.restore(); drawMuteBtn(ctx); return
   }
+  if (gs.phase === "ship-store") {
+    drawShipStore(ctx, gs, time); ctx.restore(); drawMuteBtn(ctx); return
+  }
   if (gs.phase === "gameover") {
     for (const p of gs.particles) drawParticle(ctx, p)
     drawShockwaves(ctx, gs); drawFloaters(ctx, gs)
@@ -2167,7 +3050,7 @@ function draw(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   }
 
   drawPlayerShip(
-    ctx, gs.playerX, PLAYER_Y, gs.invTimer,
+    ctx, gs.playerX, PLAYER_Y, getShip(gs.save), gs.invTimer,
     gs.shieldActive, gs.shieldHP, gs.shieldMaxHP,
     gs.shieldCooldown, gs.shieldCdMax, time,
   )
@@ -2279,6 +3162,42 @@ function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: 
         if (btn.action === "campaign") transitionTo(gs, "world-select")
         else if (btn.action === "endless") startEndless(gs)
         else if (btn.action === "hangar") { gs.phase = "hangar"; gs.phaseTimer = 0 }
+        else if (btn.action === "ships") { gs.phase = "ship-store"; gs.phaseTimer = 0 }
+        return
+      }
+    }
+    return
+  }
+
+  if (gs.phase === "ship-store") {
+    if (y > H - 42) { gs.phase = "intro"; gs.phaseTimer = 0; return }
+    for (const btn of gs.shipBtns) {
+      if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+        const ship = SHIP_DEFS.find(s => s.id === btn.shipId)!
+        const owned = gs.save.shipsOwned.includes(ship.id)
+        if (owned) {
+          if (gs.save.shipId !== ship.id) {
+            gs.save.shipId = ship.id
+            writeStarSave(gs.save)
+            gs.flashMsg = `${ship.name} equipada`
+            gs.flashT = 1.2
+            SFX.pickup()
+          }
+        } else {
+          if (gs.save.coins >= ship.price) {
+            gs.save.coins -= ship.price
+            gs.save.shipsOwned.push(ship.id)
+            gs.save.shipId = ship.id
+            writeStarSave(gs.save)
+            gs.flashMsg = `¡${ship.name} comprada!`
+            gs.flashT = 1.5
+            SFX.worldClear()
+          } else {
+            gs.flashMsg = "Monedas insuficientes"
+            gs.flashT = 1
+            SFX.shieldOff()
+          }
+        }
         return
       }
     }
@@ -2355,7 +3274,7 @@ function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: 
 
   if (gs.phase === "world-clear") {
     if (gs.phaseTimer > 2) {
-      if (gs.worldId >= 4) {
+      if (gs.worldId >= WORLDS.length - 1) {
         transitionTo(gs, "victory")
       } else {
         gs.worldId++
@@ -2526,7 +3445,7 @@ export default function StarAssaultGame() {
 
     // Game loop
     let rafId = 0
-    let startTime = performance.now()
+    const startTime = performance.now()
     const loop = (now: number) => {
       const rawDt = (now - gs.lastTime) / 1000
       gs.lastTime = now
@@ -2545,6 +3464,10 @@ export default function StarAssaultGame() {
       return { sx: W / rect.width, sy: H / rect.height, rect }
     }
 
+    // Estado de arrastre del selector de mundos (tap diferido hasta soltar)
+    let tapPending: { x: number; y: number; cx: number; cy: number } | null = null
+    let tapStartX = 0, tapStartY = 0
+
     const onTouchStart = (e: TouchEvent) => {
       e.preventDefault()
       const { sx, rect } = getScale()
@@ -2552,6 +3475,14 @@ export default function StarAssaultGame() {
       const tx = (t.clientX - rect.left) * sx
       const ty = (t.clientY - rect.top) * sx  // sx == sy (escala uniforme)
       gs.isTouching = true
+      if (gs.phase === "world-select") {
+        // Arrastre para scroll: el tap se resuelve al soltar
+        tapPending = { x: tx, y: ty, cx: t.clientX, cy: t.clientY }
+        tapStartX = tx; tapStartY = ty
+        gs.worldDragStartY = ty
+        gs.worldDragBase = gs.worldScroll
+        return
+      }
       // Solo mueve la nave si el toque está ENCIMA del HUD
       if (ty < H - HUD_H) gs.touchX = tx
       handleTap(gs, t.clientX, t.clientY, rect, sx, sx)
@@ -2561,29 +3492,71 @@ export default function StarAssaultGame() {
       e.preventDefault()
       const { sx, rect } = getScale()
       const t = e.touches[0]
+      const tx = (t.clientX - rect.left) * sx
       const ty = (t.clientY - rect.top) * sx
+      if (gs.phase === "world-select" && gs.worldDragStartY !== null) {
+        gs.worldScroll = Math.max(0, Math.min(gs.worldDragBase + (gs.worldDragStartY - ty), worldMaxScroll()))
+        if (Math.abs(tx - tapStartX) > 8 || Math.abs(ty - tapStartY) > 8) tapPending = null
+        return
+      }
       // Solo rastrea la nave encima del HUD para evitar que salte al dedo que toca botones
-      if (ty < H - HUD_H) gs.touchX = (t.clientX - rect.left) * sx
+      if (ty < H - HUD_H) gs.touchX = tx
     }
 
     const onTouchEnd = (e: TouchEvent) => {
       e.preventDefault()
+      if (gs.phase === "world-select") {
+        gs.worldDragStartY = null
+        const { sx, rect } = getScale()
+        if (tapPending) {
+          handleTap(gs, tapPending.cx, tapPending.cy, rect, sx, sx)
+          tapPending = null
+        }
+        return
+      }
       gs.isTouching = false
       if (e.touches.length === 0) gs.touchX = null
     }
 
     const onMouseMove = (e: MouseEvent) => {
-      const { sx, rect } = getScale()
-      gs.touchX = (e.clientX - rect.left) * sx
+      const { sx, sy, rect } = getScale()
+      const mx = (e.clientX - rect.left) * sx
+      const my = (e.clientY - rect.top) * sy
+      if (gs.phase === "world-select" && gs.worldDragStartY !== null) {
+        gs.worldScroll = Math.max(0, Math.min(gs.worldDragBase + (gs.worldDragStartY - my), worldMaxScroll()))
+        if (Math.abs(mx - tapStartX) > 8 || Math.abs(my - tapStartY) > 8) tapPending = null
+        return
+      }
+      gs.touchX = mx
     }
 
     const onMouseDown = (e: MouseEvent) => {
+      const { sx, sy, rect } = getScale()
+      const mx = (e.clientX - rect.left) * sx
+      const my = (e.clientY - rect.top) * sy
       gs.isTouching = true
-      const { sx, rect } = getScale()
+      if (gs.phase === "world-select") {
+        tapPending = { x: mx, y: my, cx: e.clientX, cy: e.clientY }
+        tapStartX = mx; tapStartY = my
+        gs.worldDragStartY = my
+        gs.worldDragBase = gs.worldScroll
+        return
+      }
       handleTap(gs, e.clientX, e.clientY, rect, sx, sx)
     }
 
-    const onMouseUp = () => { gs.isTouching = false }
+    const onMouseUp = () => {
+      if (gs.phase === "world-select") {
+        gs.worldDragStartY = null
+        const { sx, rect } = getScale()
+        if (tapPending) {
+          handleTap(gs, tapPending.cx, tapPending.cy, rect, sx, sx)
+          tapPending = null
+        }
+        return
+      }
+      gs.isTouching = false
+    }
 
     const onKeyDown = (e: KeyboardEvent) => {
       const ammos: AmmoType[] = ["basic", "laser", "spread", "missile"]

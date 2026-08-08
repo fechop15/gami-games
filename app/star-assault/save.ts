@@ -8,11 +8,13 @@ export interface ShipUpgrades {
 
 export interface StarSave {
   worldsCleared: number      // 0 = ninguno, 1 = mundo 1 limpio, etc.
-  highScores: number[]       // índice 0-4 por mundo
+  highScores: number[]       // índice por mundo
   coins: number              // moneda para el hangar
   bestCombo: number          // mejor racha alcanzada
   endlessBest: number        // mejor oleada en modo Endless
   upgrades: ShipUpgrades     // mejoras permanentes de nave
+  shipId: string             // id de la nave equipada
+  shipsOwned: string[]       // ids de naves compradas
 }
 
 const KEY = "star-assault-save"
@@ -21,13 +23,18 @@ const DEFAULT_UPGRADES: ShipUpgrades = {
   hp: 0, shieldDur: 0, shieldCd: 0, fireRate: 0, magnet: 0,
 }
 
+export const DEFAULT_SHIP_ID = "aurora"
+export const TOTAL_WORLDS = 16
+
 const DEFAULTS: StarSave = {
   worldsCleared: 0,
-  highScores: [0, 0, 0, 0, 0],
+  highScores: new Array(TOTAL_WORLDS).fill(0),
   coins: 0,
   bestCombo: 0,
   endlessBest: 0,
   upgrades: { ...DEFAULT_UPGRADES },
+  shipId: DEFAULT_SHIP_ID,
+  shipsOwned: [DEFAULT_SHIP_ID],
 }
 
 export function loadStarSave(): StarSave {
@@ -36,13 +43,17 @@ export function loadStarSave(): StarSave {
     const raw = localStorage.getItem(KEY)
     if (!raw) return { ...DEFAULTS, upgrades: { ...DEFAULT_UPGRADES } }
     const p = JSON.parse(raw) as Partial<StarSave>
+    const highScores = p.highScores ?? []
+    while (highScores.length < TOTAL_WORLDS) highScores.push(0)
     return {
       worldsCleared: p.worldsCleared ?? 0,
-      highScores: p.highScores ?? [0, 0, 0, 0, 0],
+      highScores: highScores.slice(0, TOTAL_WORLDS),
       coins: p.coins ?? 0,
       bestCombo: p.bestCombo ?? 0,
       endlessBest: p.endlessBest ?? 0,
       upgrades: { ...DEFAULT_UPGRADES, ...(p.upgrades ?? {}) },
+      shipId: p.shipId ?? DEFAULT_SHIP_ID,
+      shipsOwned: Array.isArray(p.shipsOwned) && p.shipsOwned.length > 0 ? p.shipsOwned : [DEFAULT_SHIP_ID],
     }
   } catch {
     return { ...DEFAULTS, upgrades: { ...DEFAULT_UPGRADES } }

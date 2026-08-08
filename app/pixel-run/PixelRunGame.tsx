@@ -28,7 +28,7 @@ interface Coin { x: number; y: number; got: boolean; }
 interface Spike { x: number; y: number; w: number; }
 interface Projectile { x: number; y: number; vx: number; vy: number; life: number; }
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; ml: number; col: string; r: number; }
-interface TD { sx: number; sy: number; cx: number; cy: number; t: number; }
+interface TD { sx: number; sy: number; cx: number; cy: number; t: number; btn?: 'L' | 'R' | 'jump' | 'run'; }
 
 interface GS {
   phase: Phase; lv: number; lives: number; score: number; coins: number; elapsed: number;
@@ -57,6 +57,7 @@ interface GS {
   paused: boolean;                                       // pausa
   transT: number; transToLv: number;                   // transición entre mundos
   jumpStrength: number; jumpHeld: boolean; touchJump: boolean;  // salto variable
+  runBtnHeld: boolean;                                            // botón ⚡ TURBO mantenido
   // Wallet persistente + progresión
   owned: number[]; skin: number; streak: number; lastDay: string;
   shopMsg: string; shopMsgT: number;
@@ -252,6 +253,7 @@ function initGS(cw: number, ch: number): GS {
     paused: false,
     transT: 0, transToLv: 0,
     jumpStrength: 1, jumpHeld: false, touchJump: false,
+    runBtnHeld: false,
     owned: sv.owned, skin: sv.skin, streak: sv.streak, lastDay: sv.lastDay,
     shopMsg: '', shopMsgT: 0,
   };
@@ -1604,23 +1606,39 @@ function drawParticles(ctx: CanvasRenderingContext2D, parts: Particle[], camX: n
   ctx.shadowBlur = 0;
 }
 
-function drawTouchHints(ctx: CanvasRenderingContext2D, cw: number, ch: number) {
-  ctx.globalAlpha = 0.18;
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 36px monospace';
-  ctx.textAlign = 'center';
-
-  // Left arrow
-  ctx.fillText('◄', 60, ch - 40);
-
-  // Right arrow
-  ctx.fillText('►', cw - 60, ch - 40);
-
-  ctx.font = '13px monospace';
-  ctx.fillText('↑ salta', cw / 2, ch - 60);
-  ctx.fillText('×2 corre', cw / 2, ch - 42);
-
+function drawTouchButton(ctx: CanvasRenderingContext2D, r: Rect, label: string, pressed: boolean, color: string) {
+  ctx.save();
+  ctx.globalAlpha = pressed ? 0.55 : 0.28;
+  ctx.fillStyle = color;
+  rrect(ctx, r.x, r.y, r.w, r.h, r.w * 0.28);
+  ctx.globalAlpha = 0.75;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  strokeRRect(ctx, r.x, r.y, r.w, r.h, r.w * 0.28);
+  ctx.lineWidth = 1;
   ctx.globalAlpha = 1;
+  ctx.fillStyle = color;
+  ctx.font = `bold ${Math.round(r.h * 0.48)}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 2);
+  ctx.restore();
+}
+
+function drawTouchButtons(ctx: CanvasRenderingContext2D, cw: number, ch: number, gs: GS) {
+  drawTouchButton(ctx, leftBtnRect(cw, ch), '◄', gs.inp.L, '#fff');
+  drawTouchButton(ctx, rightBtnRect(cw, ch), '►', gs.inp.R, '#fff');
+  drawTouchButton(ctx, runBtnRect(cw, ch), '⚡', gs.runBtnHeld, '#ffb300');
+  drawTouchButton(ctx, jumpBtnRect(cw, ch), '▲', gs.touchJump, '#ffd700');
+
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  const lr = leftBtnRect(cw, ch), rr = rightBtnRect(cw, ch);
+  ctx.fillText('MOVER', (lr.x + rr.x + rr.w) / 2, lr.y - 8);
+  const jr = jumpBtnRect(cw, ch), runr = runBtnRect(cw, ch);
+  ctx.fillText('CORRER', runr.x + runr.w / 2, runr.y - 8);
+  ctx.fillText('SALTAR', jr.x + jr.w / 2, jr.y - 8);
   ctx.textAlign = 'left';
 }
 
@@ -1644,9 +1662,9 @@ function drawIntro(ctx: CanvasRenderingContext2D, cw: number, ch: number, gs: GS
     title: 'PIXEL RUN',
     subtitle: walletLine,
     how: [
-      '◄ ► mantené presionado para mover',
-      'Doble tap en el mismo lado = turbo ⚡',
-      'Deslizá ↑ para saltar (más fuerza = más alto)',
+      '◄ ► botones para mover',
+      '▲ SALTAR: mantené para saltar más alto',
+      '⚡ TURBO: mantené para correr',
       'Pisá enemigos para eliminarlos',
     ],
     scoring: '⭐ Recolectá monedas · Llegá a la bandera',
@@ -2047,7 +2065,7 @@ function render(ctx: CanvasRenderingContext2D, gs: GS, cw: number, ch: number) {
 
   // HUD
   drawHUD(ctx, gs, cw);
-  if (gs.entryLock || gs.phase === 'playing') drawTouchHints(ctx, cw, ch);
+  if (gs.entryLock || gs.phase === 'playing') drawTouchButtons(ctx, cw, ch, gs);
 
   // Overlays
   if (gs.phase === 'lvlDone') drawLvlDone(ctx, cw, ch, gs, gs.elapsed);
@@ -2314,11 +2332,12 @@ function checkEntities(gs: GS, cw: number, ch: number) {
 }
 
 // ── Main update ────────────────────────────────────────────────────────────────
-function deriveInput(gs: GS, cw: number) {
+function deriveInput(gs: GS) {
   // inp.L/R already reset by the game loop before this call — just OR in touch state
+  // El movimiento usa los botones ◄ ► (latch: sigue aunque el dedo se deslice fuera)
   for (const [, td] of gs.tMap) {
-    if (td.cx < cw * 0.42) gs.inp.L = true;
-    else if (td.cx > cw * 0.58) gs.inp.R = true;
+    if (td.btn === 'L') gs.inp.L = true;
+    else if (td.btn === 'R') gs.inp.R = true;
   }
 }
 
@@ -2353,7 +2372,7 @@ function update(gs: GS, dt: number, cw: number, ch: number) {
   }
 
   // === PLAYING ===
-  deriveInput(gs, cw);
+  deriveInput(gs);
 
   // Animación de entrada: ignora input hasta aterrizar
   if (gs.entryLock) {
@@ -2496,6 +2515,14 @@ function skinCardRect(cw: number, ch: number, i: number): Rect {
 function resumeBtnRect(cw: number, ch: number): Rect { return { x: cw / 2 - 110, y: ch * 0.46, w: 220, h: 52 }; }
 function menuBtnRect(cw: number, ch: number): Rect { return { x: cw / 2 - 110, y: ch * 0.58, w: 220, h: 52 }; }
 
+// ── Botones de control táctil (móvil) ─────────────────────────────────────────
+function btnSize(cw: number): number { return Math.max(58, Math.min(84, cw * 0.17)); }
+function btnY(ch: number, s: number): number { return ch - s - 28; }
+function leftBtnRect(cw: number, ch: number): Rect { const s = btnSize(cw); return { x: 16, y: btnY(ch, s), w: s, h: s }; }
+function rightBtnRect(cw: number, ch: number): Rect { const s = btnSize(cw); return { x: 16 + s + 10, y: btnY(ch, s), w: s, h: s }; }
+function runBtnRect(cw: number, ch: number): Rect { const s = btnSize(cw); return { x: cw - s * 2 - 24, y: btnY(ch, s), w: s, h: s }; }
+function jumpBtnRect(cw: number, ch: number): Rect { const s = btnSize(cw); return { x: cw - s - 16, y: btnY(ch, s), w: s, h: s }; }
+
 // ── React component ────────────────────────────────────────────────────────────
 export default function PixelRunGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2589,13 +2616,29 @@ export default function PixelRunGame() {
     // Touch handlers
     const onTouchStart = (e: TouchEvent) => {
       e.preventDefault();
-      const cw = canvas.width;
+      const cw = canvas.width, ch = canvas.height;
       for (const touch of Array.from(e.changedTouches)) {
         const td: TD = { sx: touch.clientX, sy: touch.clientY, cx: touch.clientX, cy: touch.clientY, t: Date.now() };
         gs.tMap.set(touch.identifier, td);
 
-        // Double tap detection
-        const side = touch.clientX < cw * 0.42 ? 'L' : touch.clientX > cw * 0.58 ? 'R' : null;
+        // Botones de acción (▲ saltar, ⚡ turbo)
+        if (inRect(touch.clientX, touch.clientY, jumpBtnRect(cw, ch))) {
+          td.btn = 'jump';
+          gs.touchJump = true; gs.jumpStrength = 1; gs.inp.J = true;
+          continue;
+        }
+        if (inRect(touch.clientX, touch.clientY, runBtnRect(cw, ch))) {
+          td.btn = 'run';
+          gs.runBtnHeld = true;
+          continue;
+        }
+
+        // Botones de movimiento ◄ ►
+        if (inRect(touch.clientX, touch.clientY, leftBtnRect(cw, ch))) td.btn = 'L';
+        else if (inRect(touch.clientX, touch.clientY, rightBtnRect(cw, ch))) td.btn = 'R';
+
+        // Double tap detection (turbo) en botones de movimiento
+        const side = td.btn === 'L' ? 'L' : td.btn === 'R' ? 'R' : null;
         if (side) {
           const now = Date.now();
           if (now - gs.ltap[side] < DBL_MS) {
@@ -2619,20 +2662,26 @@ export default function PixelRunGame() {
       for (const touch of Array.from(e.changedTouches)) {
         const td = gs.tMap.get(touch.identifier);
         if (td) {
-          const dx = td.cx - td.sx;
-          const dy = td.cy - td.sy;
-          const elapsed = Date.now() - td.t;
+          if (td.btn === 'jump') {
+            gs.touchJump = false;                  // soltar ▲ recorta el salto (salto variable)
+          } else if (td.btn === 'run') {
+            gs.runBtnHeld = false;
+          } else {
+            const dx = td.cx - td.sx;
+            const dy = td.cy - td.sy;
+            const elapsed = Date.now() - td.t;
 
-          // Swipe up = salto variable (fuerza según magnitud del swipe)
-          if (dy < -55 && Math.abs(dx) < 90 && elapsed < 400) {
-            const mag = Math.min(1, (-dy) / 150);        // 55..150px → 0..1
-            gs.jumpStrength = 0.62 + mag * 0.38;          // 0.62..1.0
-            gs.inp.J = true;
-            gs.touchJump = true;                          // exime del recorte por teclado
-          }
-          // Tap = navegación de UI
-          else if (Math.abs(dx) < 30 && Math.abs(dy) < 30 && elapsed < 350) {
-            handleTap(td.sx, td.sy);
+            // Swipe up = salto variable (bonus; el botón ▲ es la vía principal)
+            if (dy < -55 && Math.abs(dx) < 90 && elapsed < 400) {
+              const mag = Math.min(1, (-dy) / 150);        // 55..150px → 0..1
+              gs.jumpStrength = 0.62 + mag * 0.38;          // 0.62..1.0
+              gs.inp.J = true;
+              gs.touchJump = true;                          // exime del recorte por teclado
+            }
+            // Tap = navegación de UI
+            else if (Math.abs(dx) < 30 && Math.abs(dy) < 30 && elapsed < 350) {
+              handleTap(td.sx, td.sy);
+            }
           }
 
           gs.tMap.delete(touch.identifier);
@@ -2746,6 +2795,8 @@ export default function PixelRunGame() {
       gs.inp.L = false;
       gs.inp.R = false;
       syncKeyboard();
+      // Botón ⚡ TURBO (mantener) — igual que Shift en teclado
+      if (gs.runBtnHeld) gs.runT = Math.max(gs.runT, 0.15);
       update(gs, dt, cw, ch);
       render(ctx, gs, cw, ch);
       rafId = requestAnimationFrame(loop);

@@ -3,7 +3,7 @@
 > Juego 004 del catálogo Gami Game
 > Ruta: `/star-assault`
 > Tecnología: Canvas 2D puro (sin dependencias externas), Next.js App Router, TypeScript
-> Estado: **v2** (combos, power-ups, meta-progresión, modo Endless)
+> Estado: **v4** (16 mundos, tienda de naves, combos, power-ups, meta-progresión, modo Endless)
 
 ---
 
@@ -12,8 +12,8 @@
 ```
 app/star-assault/
 ├── page.tsx              ← Wrapper de Next.js (metadata + export)
-├── StarAssaultGame.tsx   ← Todo el juego (~2400 líneas)
-├── save.ts               ← Persistencia en localStorage (monedas, mejoras, récords)
+├── StarAssaultGame.tsx   ← Todo el juego (~3600 líneas)
+├── save.ts               ← Persistencia en localStorage (monedas, mejoras, naves, récords)
 └── STAR_ASSAULT.md       ← Este documento
 ```
 
@@ -60,7 +60,7 @@ El estado del juego vive en `useRef<GS>` (no en `useState`) para evitar re-rende
      "gameover" ◄── muerte del jugador     "victory" ◄── jefe 5 derrotado
 ```
 
-El menú principal (`intro`) ofrece tres entradas: **CAMPAÑA**, **ENDLESS** y **HANGAR**.
+El menú principal (`intro`) ofrece cuatro entradas: **CAMPAÑA**, **ENDLESS**, **HANGAR** y **NAVES** (tienda de naves).
 
 ---
 
@@ -89,8 +89,22 @@ Además de los campos base (posición, HP, munición, oleadas, jefe, escudo…):
 | 2 | Enjambre Verde | scout (masa), tank | Reina del Enjambre | 1300 |
 | 3 | Singularidad Azul | grunt, tank, shooter | El Devorador | 1500 |
 | 4 | Trono Estelar | mezcla élite | El Emperador | 2000 |
+| 5 | Corona Helada | grunt, shooter, splitter | La Reina del Hielo | 2300 |
+| 6 | Núcleo Ígneo | tank, kamikaze, splitter | El Coloso de Magma | 2600 |
+| 7 | El Vacío | mezcla élite | Null, el Aniquilador | 3200 |
+| 8 | Bosque Nocturno ⭐ | grunt, splitter, shooter | La Madre Maleza | 3600 |
+| 9 | Mar de Mercurio ⭐ | shooter, stealth, splitter | El Leviatán | 4000 |
+| 10 | Purgatorio Dorado ⭐ | grunt, shooter, kamikaze | El Inquisidor | 4500 |
+| 11 | Fragmentos Carmesí ⭐ | kamikaze, splitter, stealth | La Cosechadora | 5000 |
+| 12 | Catedral Fantasma ⭐ | stealth, shooter, splitter | El Obispo | 5500 |
+| 13 | Abismo Esmeralda ⭐ | tank, shooter, kamikaze | El Titán Verde | 6200 |
+| 14 | Torre del Atardecer ⭐ | mezcla élite | La Vanguardia | 7000 |
+| 15 | Infinito ⭐ | mezcla élite final | Amarok, el Último | 8000 |
+
+⭐ = nuevos en la expansión de 16 mundos.
 
 3 oleadas por mundo. La velocidad de los enemigos escala: `vy_base * (1 + worldId * 0.15)`.
+El selector de mundos es **desplazable** (arriba/abajo) para acomodar los 16 mundos.
 
 ---
 
@@ -181,6 +195,17 @@ Todos tienen 2 fases (fase 2 al 50% HP: mayor cadencia, ataques mejorados, scree
 - **Reina del Enjambre** (M3): invoca scouts + ataque en espiral rotatoria
 - **El Devorador** (M4): pulso gravitacional que curva las balas del jugador hacia abajo + anillo de 12 balas
 - **El Emperador** (M5): cono 3→5 vías + láser + invoca élites en fase 2
+- **La Reina del Hielo** (M6): trío apuntado + anillos de cristal; fase 2 con doble anillo giratorio + láser
+- **El Coloso de Magma** (M7): ráfaga radial + bola de magma apuntada; fase 2 invoca kamikazes
+- **Null, el Aniquilador** (M8): repertorio combinado (cono 5→7 vías, espiral, láser, élites y teleport)
+- **La Madre Maleza** (M9) ⭐: enredaderas apuntadas + siembra de minions + anillo vegetal en fase 2
+- **El Leviatán** (M10) ⭐: ráfagas 4→6 vías + barridos de láser frecuentes
+- **El Inquisidor** (M11) ⭐: cono 5→7 vías + teleport judicial + bola de juicio en fase 2
+- **La Cosechadora** (M12) ⭐: ráfagas radiales 12→16 + libera splitters
+- **El Obispo** (M13) ⭐: anillos litúrgicos 1→2 + disparo apuntado + láser y teleport en fase 2
+- **El Titán Verde** (M14) ⭐: ráfaga radial + onda expansiva lenta + refuerzos tank en fase 2
+- **La Vanguardia** (M15) ⭐: alterna cono / espiral por ataque + láser en fase 2
+- **Amarok, el Último** (M16) ⭐: espiral doble + cono 7→9 vías + bola apuntada + láser y élites en fase 2
 
 ---
 
@@ -214,6 +239,22 @@ Pantalla en canvas con 5 mejoras permanentes de nave:
 | Imán perm. (`magnet`) | Atrae drops siempre | 1 | 600 |
 
 Las mejoras se aplican vía los helpers `up*()` al iniciar cada corrida (`resetRunState`).
+
+### Tienda de naves (`SHIP_DEFS`)
+Pantalla accesible desde el intro (botón **🚀 NAVES**). Comprar una nave la equipa automáticamente.
+
+| Nave | Forma | Stats | Precio |
+|---|---|---|---|
+| Aurora | delta | Equilibrada (base) | Gratis |
+| Víbora | interceptor | VEL ×1.25, HP ×0.85 | 800 |
+| Juggernaut | tank | VEL ×0.80, HP ×1.50 | 1500 |
+| Fénix | jet | VEL ×1.10, HP ×0.80, CAD ×0.85 | 2500 |
+| Phantom | phantom | VEL ×1.05, HP ×0.90, CAD ×0.95 + 🧲 imán permanente | 3500 |
+| Omega | omega | VEL ×1.15, HP ×1.25, CAD ×0.85 | 6000 |
+
+- Cada nave tiene su propio sprite (`drawShipShape`) y paleta de colores.
+- Stats aplicados: velocidad de movimiento (`updatePlayer`), HP máximo (`upMaxHP`), tiempo de disparo (`effectiveFireRate`) y pasivo de imán (`upHasMagnet`).
+- `save.shipId` = nave equipada; `save.shipsOwned` = ids compradas.
 
 ---
 
@@ -260,11 +301,13 @@ Clave `"star-assault-save"`. Retrocompatible con saves de v1 (campos nuevos con 
 ```typescript
 interface StarSave {
   worldsCleared: number
-  highScores: number[]      // por mundo (0-4)
-  coins: number             // moneda del hangar
+  highScores: number[]      // por mundo (0-15)
+  coins: number             // moneda del hangar / tienda
   bestCombo: number
   endlessBest: number       // mejor oleada endless
   upgrades: ShipUpgrades    // { hp, shieldDur, shieldCd, fireRate, magnet }
+  shipId: string            // nave equipada
+  shipsOwned: string[]      // naves compradas
 }
 ```
 
@@ -283,7 +326,7 @@ FIRE_RATES = { basic: 200, laser: 460, spread: 340, missile: 640 }
 
 ---
 
-## Ideas para iteraciones futuras (v3)
+## Ideas para iteraciones futuras (v5)
 
 ### Gameplay
 - [ ] **Perks por corrida** — elegir 1-2 pasivas antes de empezar (combo que decae más lento, revive único)

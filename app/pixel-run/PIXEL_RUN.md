@@ -79,15 +79,17 @@ useEffect
 ## Controles
 
 ### Touch (principal — mobile)
-| Gesto | Acción |
+| Botón | Acción |
 |---|---|
-| Hold zona izquierda (< 42% pantalla) | Mover izquierda |
-| Hold zona derecha (> 58% pantalla) | Mover derecha |
-| Swipe arriba (dy < -55, dt < 400ms) | Saltar |
-| Doble toque misma zona (< 300ms) | Turbo 1.5s |
+| `◄` abajo-izquierda (mantener) | Mover izquierda |
+| `►` abajo-izquierda (mantener) | Mover derecha |
+| `▲` SALTAR abajo-derecha (mantener) | Saltar — mantener = más alto (salto variable por duración) |
+| `⚡` TURBO (mantener) | Correr (RUN_V, igual que Shift en teclado) |
+| Swipe ↑ en cualquier lado | Salto variable (bonus) |
+| Doble toque en `◄` o `►` (< 300ms) | Turbo 1.5s (bonus) |
 | Tap en overlay | Avanzar fase |
 
-**Detección:** `gs.tMap: Map<number, {sx,sy,cx,cy,t}>` — cada touch por ID. Input se resetea cada frame y touch/teclado hacen OR.
+**Detección:** cada touch se asigna a un botón en `touchstart` (`TD.btn = 'L' | 'R' | 'jump' | 'run'`). El movimiento queda *latch* al botón presionado (aunque el dedo se deslice fuera). `gs.tMap: Map<number, TD>` — cada touch por ID; input se resetea cada frame y touch/teclado hacen OR.
 
 ### Teclado (opcional — desktop)
 | Tecla | Acción |
