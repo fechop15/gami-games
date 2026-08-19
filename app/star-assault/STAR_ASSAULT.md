@@ -3,7 +3,7 @@
 > Juego 004 del catálogo Gami Game
 > Ruta: `/star-assault`
 > Tecnología: Canvas 2D puro (sin dependencias externas), Next.js App Router, TypeScript
-> Estado: **v4** (16 mundos, tienda de naves, combos, power-ups, meta-progresión, modo Endless)
+> Estado: **v5** (16 mundos, tienda de naves, combos, power-ups, meta-progresión, modo Endless, equipamiento: láseres/escudos/robots, munición guardada, láseres perfectos)
 
 ---
 
@@ -60,7 +60,7 @@ El estado del juego vive en `useRef<GS>` (no en `useState`) para evitar re-rende
      "gameover" ◄── muerte del jugador     "victory" ◄── jefe 5 derrotado
 ```
 
-El menú principal (`intro`) ofrece cuatro entradas: **CAMPAÑA**, **ENDLESS**, **HANGAR** y **NAVES** (tienda de naves).
+El menú principal (`intro`) ofrece cinco entradas: **CAMPAÑA**, **ENDLESS**, **HANGAR**, **EQUIPAMIENTO** (tienda de equipo) y **NAVES** (tienda de naves).
 
 ---
 
@@ -258,6 +258,50 @@ Pantalla accesible desde el intro (botón **🚀 NAVES**). Comprar una nave la e
 
 ---
 
+## Equipamiento (`equip-store`) — láseres, escudos y robots (v5)
+
+Pantalla accesible desde el intro (botón **🛠 EQUIPAMIENTO**) con 4 pestañas: **LÁSER**, **ESCUDO**, **ROBOTS** y **MUNICIÓN**. El equipamiento aplica a cualquier nave.
+
+### Láseres (`LASER_DEFS`) — aumentan el daño
+
+| Láser | Nivel | Daño | Precio |
+|---|---|---|---|
+| Láser Estándar | 1 | ×1.00 | Gratis |
+| Láser de Plasma | 2 | ×1.15 | 350 |
+| Láser Fotónico | 3 | ×1.32 | 700 |
+| Láser de Iones | 4 | ×1.50 | 1200 |
+| Láser Taquiónico | 5 | ×1.70 | 2000 |
+
+El daño de **todas las municiones** (`basic`, `laser`, `spread`, `missile`) se multiplica por `laserDmgMult()`.
+
+**Perfección (0-100%)**: cada láser tiene un % de perfección que multiplica aún más el daño (`+0.6%` por punto). Al llegar a **100% el láser es PERFECTO** (bonus extra `+25%`). Se aumenta de dos formas:
+- **Drops de jefes**: al derrotar un jefe siempre suelta **núcleos** (2 en campaña, 1 en endless) que dan `+12%` de perfección al láser equipado. Los enemigos también pueden soltar núcleos raramente (`CORE_DROP_CHANCE = 6%`).
+- **Tienda**: botón `PERF +10%` en el láser equipado (costo creciente `60 + pct×3`).
+
+### Escudos (`SHIELD_DEFS`) — aumentan el escudo
+
+| Escudo | Nivel | HP absorbible | Duración | Precio |
+|---|---|---|---|---|
+| Escudo Estándar | 1 | ×1.00 | +0% | Gratis |
+| Escudo de Energía | 2 | ×1.25 | +10% | 350 |
+| Escudo de Plasma | 3 | ×1.50 | +20% | 800 |
+| Escudo Prisma | 4 | ×1.80 | +35% | 1400 |
+| Escudo Aegis | 5 | ×2.20 | +50% | 2200 |
+
+Se aplican sobre las mejoras permanentes del Hangar (`upShieldDur`) vía `effShieldMaxHP`/`effShieldDur`.
+
+### Robots de reparación (un solo uso)
+
+- Comprables en la pestaña **ROBOTS** (`🪙 150` cada uno).
+- Se activan con el botón **🤖 REPARAR** (esquina superior izquierda del HUD) o la tecla `R` durante la partida.
+- Reparan `40%` del HP máximo y se consumen al usarlos.
+
+### Munición guardada
+
+La munición recolectada en las partidas (`laser`, `spread`, `missile`) se **guarda entre partidas** (`save.bankedAmmo`). Al iniciar una corrida se carga el stock bancado (`loadBankedAmmo`) y al terminar (mundo conquistado o game over) el sobrante se guarda (`saveBankedAmmo`). La pestaña **MUNICIÓN** muestra el stock guardado.
+
+---
+
 ## Efectos visuales (v2)
 
 | Efecto | Implementación |
@@ -282,15 +326,18 @@ Síntesis procedural sin archivos externos. `_soundMuted` controla el mute globa
 
 | Acción | Gesto |
 |---|---|
-| Mover nave | Deslizar dedo (zona de juego, encima del HUD) |
+| Mover nave | Deslizar dedo (zona de juego, encima del HUD) — horizontal y **vertical** |
 | Disparar | Automático |
 | Escudo | Botón 🛡 |
+| Robot de reparación | Botón 🤖 REPARAR (o tecla `R`) |
 | Cambiar munición | Tocar ícono de munición |
 | Power-up | Automático al recoger el drop |
 | Silenciar | Botón ♫ SFX (esquina superior derecha) |
 | Menús | Tocar botones |
 
 El touch en el HUD (últimos 100px) no mueve la nave. Áreas de botón con padding extra para dedos.
+
+**Movimiento vertical**: la nave puede moverse hacia **adelante (arriba)** hasta `PLAYER_MIN_Y = H × 0.38` y hacia **atrás (abajo)** hasta justo encima del HUD (`PLAYER_MAX_Y`), para esquivar balas. El dedo controla ambas coordenadas; las balas del jugador y las colisiones usan `gs.playerY`. La velocidad vertical es `×0.9` de la horizontal para mejor control.
 
 ---
 
@@ -308,6 +355,8 @@ interface StarSave {
   upgrades: ShipUpgrades    // { hp, shieldDur, shieldCd, fireRate, magnet }
   shipId: string            // nave equipada
   shipsOwned: string[]      // naves compradas
+  equipment: EquipmentState // { laserId, shieldId, ownedLasers, ownedShields, laserPerfection, repairBots }
+  bankedAmmo: Record<AmmoType, number>   // munición guardada entre partidas
 }
 ```
 

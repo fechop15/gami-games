@@ -1,17 +1,19 @@
 "use client"
 import { useEffect, useRef } from "react"
-import { loadStarSave, writeStarSave, StarSave, ShipUpgrades } from "./save"
+import { loadStarSave, writeStarSave, StarSave, ShipUpgrades, EquipmentState } from "./save"
 
 /* ════════════════════════════════════════════════════════════════════
    CONSTANTES
    ════════════════════════════════════════════════════════════════════ */
 const W = 480
 const H = 854
+const HUD_H = 100
 const PLAYER_W = 44
 const PLAYER_H = 52
-const PLAYER_Y = H - 130
+const PLAYER_Y = H - 130                       // posición base (centro de la franja de juego)
 const PLAYER_SPEED = 360   // px/s horizontal
-const HUD_H = 100
+const PLAYER_MIN_Y = H * 0.38                  // límite hacia adelante (arriba) para esquivar
+const PLAYER_MAX_Y = H - HUD_H - PLAYER_H / 2 - 8  // límite hacia atrás (abajo, encima del HUD)
 
 const SHIELD_DURATION    = 4    // segundos base que dura el escudo activo
 const SHIELD_MAX_HP      = 60   // daño que puede absorber (rebalanceado 100→60)
@@ -44,6 +46,10 @@ const POWERUP_ICONS: Record<PowerupKind, string> = {
 const OVERDRIVE_DURATION = 6   // segundos
 const MAGNET_DURATION    = 5   // segundos
 const OVERDRIVE_MULT     = 0.6 // cadencia ×0.6
+
+// Núcleo de perfección: drop que mejora el láser equipado
+const CORE_PERF_GAIN = 12       // +12% de perfección al recoger
+const CORE_DROP_CHANCE = 0.06   // probabilidad de que un drop normal sea un núcleo
 
 /* ════════════════════════════════════════════════════════════════════
    NAVES — tienda y stats
@@ -121,6 +127,69 @@ function upFireMult(u: ShipUpgrades): number { return 1 - u.fireRate * 0.08 }
 function upHasMagnet(u: ShipUpgrades, ship: ShipDef): boolean { return u.magnet >= 1 || ship.passive?.magnet === true }
 
 /* ════════════════════════════════════════════════════════════════════
+   EQUIPAMIENTO — láseres, escudos y robots de reparación
+   ════════════════════════════════════════════════════════════════════ */
+interface LaserDef {
+  id: string; name: string; tier: number; price: number
+  dmgMult: number        // multiplicador de daño base
+  desc: string
+  color: string
+}
+const LASER_DEFS: LaserDef[] = [
+  { id: "laser_std",    name: "Láser Estándar",  tier: 1, price: 0,    dmgMult: 1.0,  desc: "Núcleo básico sin mejoras.",        color: "#ffee00" },
+  { id: "laser_plasma", name: "Láser de Plasma", tier: 2, price: 350,  dmgMult: 1.15, desc: "Núcleo ardiente, +15% de daño.",     color: "#ff8844" },
+  { id: "laser_photon", name: "Láser Fotónico",  tier: 3, price: 700,  dmgMult: 1.32, desc: "Luz condensada, +32% de daño.",      color: "#44ccff" },
+  { id: "laser_ion",    name: "Láser de Iones",  tier: 4, price: 1200, dmgMult: 1.5,  desc: "Partículas cargadas, +50% de daño.",  color: "#aa66ff" },
+  { id: "laser_tachyon",name: "Láser Taquiónico",tier: 5, price: 2000, dmgMult: 1.7,  desc: "Velocidad superlumínica, +70%.",       color: "#ff55dd" },
+]
+
+interface ShieldDef {
+  id: string; name: string; tier: number; price: number
+  hpMult: number; durMult: number
+  desc: string
+  color: string
+}
+const SHIELD_DEFS: ShieldDef[] = [
+  { id: "shield_std",    name: "Escudo Estándar",    tier: 1, price: 0,    hpMult: 1,    durMult: 1,    desc: "Burbuja de defensa básica.",        color: "#4488ff" },
+  { id: "shield_energy", name: "Escudo de Energía",  tier: 2, price: 350,  hpMult: 1.25, durMult: 1.1,  desc: "+25% HP absorbible y +10% duración.", color: "#44ffcc" },
+  { id: "shield_plasma", name: "Escudo de Plasma",   tier: 3, price: 800,  hpMult: 1.5,  durMult: 1.2,  desc: "+50% HP absorbible y +20% duración.", color: "#ffaa44" },
+  { id: "shield_prism",  name: "Escudo Prisma",      tier: 4, price: 1400, hpMult: 1.8,  durMult: 1.35, desc: "Reflejos potentes, +80% y +35%.",      color: "#ff88ff" },
+  { id: "shield_aegis",  name: "Escudo Aegis",       tier: 5, price: 2200, hpMult: 2.2,  durMult: 1.5,  desc: "La cúpula definitiva, +120% y +50%.",   color: "#ffee55" },
+]
+
+const REPAIR_BOT_PRICE = 150      // monedas por robot
+const REPAIR_BOT_HEAL = 0.4       // repara 40% del HP máximo
+
+// Perfección del láser: 0-100. Al 100% el láser es "perfecto" (bonus extra).
+const PERFECT_BONUS = 0.25        // bonus de daño extra al alcanzar 100%
+const PERFECT_BONUS_PER_STEP = 0.006  // bonus de daño por punto de perfección
+
+function laserPerfectPct(eq: EquipmentState, laserId: string): number {
+  return Math.min(100, eq.laserPerfection[laserId] ?? 0)
+}
+// Multiplicador de daño total del láser (tier + perfección)
+function laserDmgMult(eq: EquipmentState, laserId: string): number {
+  const def = LASER_DEFS.find(l => l.id === laserId) ?? LASER_DEFS[0]
+  const pct = laserPerfectPct(eq, laserId)
+  let mult = def.dmgMult * (1 + pct * PERFECT_BONUS_PER_STEP)
+  if (pct >= 100) mult *= (1 + PERFECT_BONUS)
+  return mult
+}
+function equippedLaser(eq: EquipmentState): LaserDef {
+  return LASER_DEFS.find(l => l.id === eq.laserId) ?? LASER_DEFS[0]
+}
+function equippedShield(eq: EquipmentState): ShieldDef {
+  return SHIELD_DEFS.find(s => s.id === eq.shieldId) ?? SHIELD_DEFS[0]
+}
+// Stats del escudo equipado aplicadas sobre las mejoras permanentes
+function effShieldMaxHP(gs: GS): number {
+  return Math.round(SHIELD_MAX_HP * equippedShield(gs.save.equipment).hpMult)
+}
+function effShieldDur(gs: GS): number {
+  return upShieldDur(gs.save.upgrades) * equippedShield(gs.save.equipment).durMult
+}
+
+/* ════════════════════════════════════════════════════════════════════
    TIPOS
    ════════════════════════════════════════════════════════════════════ */
 type Phase =
@@ -128,6 +197,7 @@ type Phase =
   | "world-select"
   | "hangar"
   | "ship-store"
+  | "equip-store"
   | "playing"
   | "boss-intro"
   | "boss"
@@ -138,7 +208,7 @@ type Phase =
 type AmmoType = "basic" | "laser" | "spread" | "missile"
 type EnemyType = "scout" | "grunt" | "tank" | "stealth" | "shooter" | "kamikaze" | "splitter" | "mini"
 type PowerupKind = "magnet" | "overdrive" | "bomb"
-type DropKind = AmmoType | PowerupKind
+type DropKind = AmmoType | PowerupKind | "core"
 
 interface Bullet {
   id: number; x: number; y: number; vx: number; vy: number
@@ -196,7 +266,7 @@ interface BtnArea { x: number; y: number; w: number; h: number }
 
 interface GS {
   phase: Phase
-  playerX: number; playerHP: number; playerMaxHP: number; invTimer: number
+  playerX: number; playerY: number; playerHP: number; playerMaxHP: number; invTimer: number
   activeAmmo: AmmoType; ammo: Record<AmmoType, number>; fireTimer: number
   worldId: number; wave: number
   waveState: "spawning" | "clearing" | "boss-wait" | "done"
@@ -208,11 +278,14 @@ interface GS {
   trail: Array<{ x: number; y: number }>
   stars: Star[]
   lastTime: number; phaseTimer: number; nextId: number
-  touchX: number | null; isTouching: boolean
+  touchX: number | null; touchY: number | null; isTouching: boolean
   ammoBtns: Array<BtnArea & { ammo: AmmoType }>
   worldBtns: Array<BtnArea & { worldId: number }>
   hangarBtns: Array<BtnArea & { key: keyof ShipUpgrades }>
   shipBtns: Array<BtnArea & { shipId: string }>
+  equipBtns: Array<BtnArea & { action: string }>
+  equipTab: "lasers" | "shields" | "bots" | "ammo"
+  repairBtn: BtnArea | null
   introBtns: Array<BtnArea & { action: string }>
   save: StarSave
   flashMsg: string; flashT: number
@@ -493,7 +566,7 @@ function makeGS(): GS {
   const maxHP = upMaxHP(save.upgrades, getShip(save))
   return {
     phase: "intro",
-    playerX: W / 2, playerHP: maxHP, playerMaxHP: maxHP, invTimer: 0,
+    playerX: W / 2, playerY: PLAYER_Y, playerHP: maxHP, playerMaxHP: maxHP, invTimer: 0,
     activeAmmo: "basic",
     ammo: { basic: -1, laser: 0, spread: 0, missile: 0 },
     fireTimer: 0,
@@ -502,9 +575,10 @@ function makeGS(): GS {
     score: 0,
     bullets: [], enemyBullets: [], enemies: [], boss: null, drops: [], particles: [],
     floaters: [], shockwaves: [], trail: [],
-    stars, lastTime: 0, phaseTimer: 0, nextId: 0,
-    touchX: null, isTouching: false,
-    ammoBtns: [], worldBtns: [], hangarBtns: [], shipBtns: [], introBtns: [],
+    stars,     lastTime: 0, phaseTimer: 0, nextId: 0,
+    touchX: null, touchY: null, isTouching: false,
+    ammoBtns: [], worldBtns: [], hangarBtns: [], shipBtns: [], equipBtns: [], introBtns: [],
+    equipTab: "lasers", repairBtn: null,
     save, flashMsg: "", flashT: 0,
     worldScroll: 0, worldDragStartY: null, worldDragBase: 0,
     bossLaserActive: false, bossLaserT: 0, bossLaserX: W / 2,
@@ -531,24 +605,25 @@ function spawnShockwave(gs: GS, x: number, y: number, maxR: number, color: strin
    SPAWN BULLETS / PARTICLES
    ════════════════════════════════════════════════════════════════════ */
 function spawnPlayerBullets(gs: GS) {
-  const x = gs.playerX, y = PLAYER_Y - PLAYER_H / 2 - 4
+  const x = gs.playerX, y = gs.playerY - PLAYER_H / 2 - 4
   const ammo = gs.activeAmmo
+  const dmg = (base: number) => Math.round(base * laserDmgMult(gs.save.equipment, gs.save.equipment.laserId))
   const configs: Record<AmmoType, () => Bullet[]> = {
     basic: () => [{
-      id: nextId(gs), x, y, vx: 0, vy: -540, damage: 26,   // buff 22→26
+      id: nextId(gs), x, y, vx: 0, vy: -540, damage: dmg(26),   // buff 22→26
       ammo, fromPlayer: true, radius: 6, lifetime: 3,
     }],
     laser: () => [{
-      id: nextId(gs), x, y, vx: 0, vy: -720, damage: 65,
+      id: nextId(gs), x, y, vx: 0, vy: -720, damage: dmg(65),
       ammo, fromPlayer: true, radius: 5, penetrate: true, lifetime: 3,
     }],
     spread: () => [
-      { id: nextId(gs), x, y, vx: -130, vy: -520, damage: 22, ammo, fromPlayer: true, radius: 7, lifetime: 3 },
-      { id: nextId(gs), x, y, vx:    0, vy: -560, damage: 22, ammo, fromPlayer: true, radius: 7, lifetime: 3 },
-      { id: nextId(gs), x, y, vx:  130, vy: -520, damage: 22, ammo, fromPlayer: true, radius: 7, lifetime: 3 },
+      { id: nextId(gs), x, y, vx: -130, vy: -520, damage: dmg(22), ammo, fromPlayer: true, radius: 7, lifetime: 3 },
+      { id: nextId(gs), x, y, vx:    0, vy: -560, damage: dmg(22), ammo, fromPlayer: true, radius: 7, lifetime: 3 },
+      { id: nextId(gs), x, y, vx:  130, vy: -520, damage: dmg(22), ammo, fromPlayer: true, radius: 7, lifetime: 3 },
     ],
     missile: () => [{
-      id: nextId(gs), x, y, vx: 0, vy: -380, damage: 90,
+      id: nextId(gs), x, y, vx: 0, vy: -380, damage: dmg(90),
       ammo, fromPlayer: true, radius: 8, lifetime: 4, trackTimer: 0,
     }],
   }
@@ -575,6 +650,11 @@ function spawnParticles(gs: GS, x: number, y: number, color: string, count: numb
 }
 
 function spawnDrop(gs: GS, x: number, y: number) {
+  // Pequeña probabilidad de núcleo de perfección (mejora el láser equipado)
+  if (Math.random() < CORE_DROP_CHANCE) {
+    gs.drops.push({ id: nextId(gs), x, y, vx: 0, vy: 55, kind: "core", bobT: Math.random() * Math.PI * 2 })
+    return
+  }
   // 22% de probabilidad de que el drop sea un power-up de campo en vez de munición
   if (Math.random() < 0.22) {
     const pu: PowerupKind[] = ["magnet", "overdrive", "bomb"]
@@ -670,16 +750,22 @@ function registerKill(gs: GS, e: Enemy) {
 }
 
 function updatePlayer(gs: GS, dt: number) {
-  if (gs.touchX !== null) {
+  if (gs.touchX !== null && gs.touchY !== null) {
+    // Movimiento horizontal
     const dx = gs.touchX - gs.playerX
     const maxStep = PLAYER_SPEED * getShip(gs.save).speedMult * dt
     gs.playerX += Math.sign(dx) * Math.min(Math.abs(dx), maxStep)
     gs.playerX = Math.max(PLAYER_W / 2 + 4, Math.min(W - PLAYER_W / 2 - 4, gs.playerX))
+    // Movimiento vertical (adelante/arriba y atrás/abajo) con límite para esquivar
+    const vyStep = PLAYER_SPEED * 0.9 * getShip(gs.save).speedMult * dt
+    const dy = gs.touchY - gs.playerY
+    gs.playerY += Math.sign(dy) * Math.min(Math.abs(dy), vyStep)
+    gs.playerY = Math.max(PLAYER_MIN_Y, Math.min(PLAYER_MAX_Y, gs.playerY))
   }
   if (gs.invTimer > 0) gs.invTimer -= dt
 
   // Estela de la nave (últimas 8 posiciones)
-  gs.trail.push({ x: gs.playerX, y: PLAYER_Y })
+  gs.trail.push({ x: gs.playerX, y: gs.playerY })
   if (gs.trail.length > 8) gs.trail.shift()
 
   // Escudo activo: consume duración y HP
@@ -689,7 +775,7 @@ function updatePlayer(gs: GS, dt: number) {
       gs.shieldActive = false
       gs.shieldCdMax = upShieldCd(gs.save.upgrades)
       gs.shieldCooldown = gs.shieldCdMax
-      spawnParticles(gs, gs.playerX, PLAYER_Y, "#4488ff", 14, 160)
+      spawnParticles(gs, gs.playerX, gs.playerY, "#4488ff", 14, 160)
       if (gs.shieldHP <= 0) {
         gs.flashMsg = "¡Escudo destruido!"
         gs.flashT = 1.8
@@ -714,12 +800,36 @@ function activateShield(gs: GS) {
     return
   }
   gs.shieldActive = true
+  gs.shieldMaxHP = effShieldMaxHP(gs)
   gs.shieldHP = gs.shieldMaxHP
-  gs.shieldDuration = upShieldDur(gs.save.upgrades)
-  spawnParticles(gs, gs.playerX, PLAYER_Y, "#4488ff", 18, 140)
+  gs.shieldDuration = effShieldDur(gs)
+  spawnParticles(gs, gs.playerX, gs.playerY, equippedShield(gs.save.equipment).color, 18, 140)
   gs.flashMsg = "¡Escudo activado!"
   gs.flashT = 1
   SFX.shieldOn()
+}
+
+// Usa un robot de reparación (un solo uso): repara % del HP máximo
+function repairShip(gs: GS) {
+  if (gs.phase !== "playing" && gs.phase !== "boss") return
+  if (gs.save.equipment.repairBots <= 0) {
+    gs.flashMsg = "Sin robots de reparación"
+    gs.flashT = 1
+    SFX.shieldOff()
+    return
+  }
+  if (gs.playerHP >= gs.playerMaxHP) {
+    gs.flashMsg = "Vida al máximo"
+    gs.flashT = 1
+    return
+  }
+  gs.save.equipment.repairBots -= 1
+  writeStarSave(gs.save)
+  gs.playerHP = Math.min(gs.playerMaxHP, gs.playerHP + Math.round(gs.playerMaxHP * REPAIR_BOT_HEAL))
+  gs.flashMsg = `🤖 Reparado +${Math.round(REPAIR_BOT_HEAL * 100)}%`
+  gs.flashT = 1.6
+  spawnParticles(gs, gs.playerX, gs.playerY, "#44ff88", 22, 160)
+  SFX.pickup()
 }
 
 function effectiveFireRate(gs: GS, ammo: AmmoType): number {
@@ -852,7 +962,7 @@ function updateEnemies(gs: GS, dt: number) {
         e.fireTimer = e.fireRate * (0.8 + Math.random() * 0.4)
         if (e.visible || e.type !== "stealth") {
           // Aim at player
-          const dx = gs.playerX - e.x, dy = PLAYER_Y - e.y
+          const dx = gs.playerX - e.x, dy = gs.playerY - e.y
           const mag = Math.hypot(dx, dy) || 1
           const spd = 200 + gs.worldId * 30
           spawnEnemyBullet(gs, e.x, e.y + e.h / 2, dx / mag * spd, dy / mag * spd, 12 + gs.worldId * 3)
@@ -949,7 +1059,7 @@ function updateBoss(gs: GS, dt: number) {
 }
 
 function executeBossAttack(gs: GS, b: Boss) {
-  const px = gs.playerX, py = PLAYER_Y
+  const px = gs.playerX, py = gs.playerY
   const bx = b.x, by = b.y + b.h / 2
 
   if (gs.worldId === 0) {
@@ -1313,6 +1423,29 @@ function executeBossAttack(gs: GS, b: Boss) {
 }
 
 function collectDrop(gs: GS, d: Drop) {
+  if (d.kind === "core") {
+    // Núcleo de perfección: mejora el láser equipado
+    const eq = gs.save.equipment
+    const curId = eq.laserId
+    const cur = laserPerfectPct(eq, curId)
+    if (cur >= 100) {
+      // Láser ya perfecto: el núcleo se convierte en monedas
+      gs.runCoins += 5
+      gs.flashMsg = "Láser perfecto · +5 monedas"
+      gs.flashT = 1.5
+      spawnParticles(gs, d.x, d.y, "#ffcc44", 12, 130)
+      SFX.pickup()
+      return
+    }
+    const np = Math.min(100, cur + CORE_PERF_GAIN)
+    eq.laserPerfection[curId] = np
+    gs.flashMsg = np >= 100 ? `★ ${equippedLaser(eq).name} ¡PERFECTO! ★` : `Núcleo: perfección +${CORE_PERF_GAIN}%`
+    gs.flashT = 1.8
+    spawnParticles(gs, d.x, d.y, "#ffee44", 18, 160)
+    spawnShockwave(gs, d.x, d.y, 40, "#ffee44")
+    SFX.pickup()
+    return
+  }
   if (d.kind === "magnet" || d.kind === "overdrive" || d.kind === "bomb") {
     // Power-up de campo
     if (d.kind === "magnet") {
@@ -1356,7 +1489,7 @@ function updateDrops(gs: GS, dt: number) {
     d.bobT += dt * 2
     if (magnetOn) {
       // Vuela hacia la nave
-      const dx = gs.playerX - d.x, dy = PLAYER_Y - d.y
+      const dx = gs.playerX - d.x, dy = gs.playerY - d.y
       const mag = Math.hypot(dx, dy) || 1
       const pull = 420
       d.x += dx / mag * pull * dt
@@ -1365,7 +1498,7 @@ function updateDrops(gs: GS, dt: number) {
       d.y += d.vy * dt
     }
     // Check collection
-    const dist = Math.hypot(d.x - gs.playerX, d.y - PLAYER_Y)
+    const dist = Math.hypot(d.x - gs.playerX, d.y - gs.playerY)
     if (dist < 32) {
       collectDrop(gs, d)
       return false
@@ -1387,7 +1520,7 @@ function updateParticles(gs: GS, dt: number) {
 function damagePlayer(gs: GS, dmg: number, invSet: number, hitColor: string) {
   if (gs.shieldActive) {
     gs.shieldHP -= dmg
-    spawnParticles(gs, gs.playerX, PLAYER_Y, "#4488ff", 8, 150)
+    spawnParticles(gs, gs.playerX, gs.playerY, "#4488ff", 8, 150)
     gs.screenShake = Math.max(gs.screenShake, 4)
     return false
   }
@@ -1396,7 +1529,7 @@ function damagePlayer(gs: GS, dmg: number, invSet: number, hitColor: string) {
   gs.invTimer = invSet
   gs.combo = 0; gs.comboTimer = 0   // recibir daño corta la racha
   gs.screenShake = Math.max(gs.screenShake, 7)
-  spawnParticles(gs, gs.playerX, PLAYER_Y, hitColor, 14, 170)
+  spawnParticles(gs, gs.playerX, gs.playerY, hitColor, 14, 170)
   SFX.playerHit()
   if (gs.playerHP <= 0) { gs.playerHP = 0; transitionTo(gs, "gameover"); return true }
   return false
@@ -1411,6 +1544,11 @@ function onBossDefeated(gs: GS, b2: Boss) {
   spawnParticles(gs, b2.x, b2.y, b2.accent, 60, 350)
   for (let i = 0; i < 5; i++) {
     setTimeout(() => spawnParticles(gs, b2.x + (Math.random()-0.5)*100, b2.y + (Math.random()-0.5)*60, b2.accent, 20, 200), i * 200)
+  }
+  // Los jefes siempre arrojan núcleos para mejorar el láser
+  const coreCount = gs.isEndless ? 1 : 2
+  for (let i = 0; i < coreCount; i++) {
+    gs.drops.push({ id: nextId(gs), x: b2.x + (Math.random() - 0.5) * 120, y: b2.y + 40 + i * 30, vx: 0, vy: 55, kind: "core", bobT: Math.random() * Math.PI * 2 })
   }
   SFX.bigExplosion()
   if (gs.isEndless) {
@@ -1485,7 +1623,7 @@ function checkCollisions(gs: GS) {
 
   // Enemy bullets vs player (escudo absorbe el daño)
   for (const b of gs.enemyBullets) {
-    const dist = Math.hypot(b.x - gs.playerX, b.y - PLAYER_Y)
+    const dist = Math.hypot(b.x - gs.playerX, b.y - gs.playerY)
     const hitRadius = gs.shieldActive ? SHIELD_HURTBOX : 18
     if (dist < b.radius + hitRadius) {
       b.lifetime = 0
@@ -1500,7 +1638,7 @@ function checkCollisions(gs: GS) {
   }
   for (const e of gs.enemies) {
     if (!e.visible && e.type === "stealth") continue
-    const dist = Math.hypot(e.x - gs.playerX, e.y - PLAYER_Y)
+    const dist = Math.hypot(e.x - gs.playerX, e.y - gs.playerY)
     if (dist < e.w / 2 + 18) {
       const dmg = contactDmg[e.type] ?? 15
       // El kamikaze y los minis explotan al chocar
@@ -1532,7 +1670,7 @@ function checkCollisions(gs: GS) {
   // Boss contact
   if (gs.boss?.alive) {
     const b2 = gs.boss
-    const dist = Math.hypot(gs.playerX - b2.x, PLAYER_Y - b2.y)
+    const dist = Math.hypot(gs.playerX - b2.x, gs.playerY - b2.y)
     if (dist < 40) {
       if (damagePlayer(gs, 30, 1.5, "#ff4400")) return
     }
@@ -1635,10 +1773,12 @@ function updateWaveProgression(gs: GS, dt: number) {
 function resetRunState(gs: GS) {
   const maxHP = upMaxHP(gs.save.upgrades, getShip(gs.save))
   gs.playerMaxHP = maxHP; gs.playerHP = maxHP; gs.invTimer = 0
+  gs.playerX = W / 2; gs.playerY = PLAYER_Y
+  gs.touchX = null; gs.touchY = null
   gs.enemies = []; gs.bullets = []; gs.enemyBullets = []; gs.drops = []
   gs.boss = null; gs.bossLaserActive = false
   gs.fireTimer = 0
-  gs.shieldActive = false; gs.shieldHP = SHIELD_MAX_HP
+  gs.shieldActive = false; gs.shieldMaxHP = effShieldMaxHP(gs); gs.shieldHP = gs.shieldMaxHP
   gs.shieldDuration = 0; gs.shieldCooldown = 0
   gs.screenShake = 0
   gs.combo = 0; gs.comboTimer = 0
@@ -1653,7 +1793,22 @@ function bankCoins(gs: GS) {
     gs.save.coins += gs.runCoins
     gs.runCoins = 0
   }
+  saveBankedAmmo(gs)   // la munición sobrante se guarda para futuras partidas
   writeStarSave(gs.save)
+}
+
+// Munición guardada: carga el stock bancado al inicio de la partida
+function loadBankedAmmo(gs: GS) {
+  gs.ammo = { basic: -1, laser: 0, spread: 0, missile: 0 }
+  const banked = gs.save.bankedAmmo ?? {}
+  gs.ammo.laser = banked.laser ?? 0
+  gs.ammo.spread = banked.spread ?? 0
+  gs.ammo.missile = banked.missile ?? 0
+  gs.activeAmmo = "basic"
+}
+// Munición guardada: persiste el sobrante de la corrida al terminarla
+function saveBankedAmmo(gs: GS) {
+  gs.save.bankedAmmo = { basic: -1, laser: gs.ammo.laser, spread: gs.ammo.spread, missile: gs.ammo.missile }
 }
 
 function startEndless(gs: GS) {
@@ -1662,8 +1817,7 @@ function startEndless(gs: GS) {
   gs.score = 0
   gs.runCoins = 0
   gs.worldId = 0
-  gs.ammo = { basic: -1, laser: 0, spread: 0, missile: 0 }
-  gs.activeAmmo = "basic"
+  loadBankedAmmo(gs)
   resetRunState(gs)
   gs.phase = "playing"; gs.phaseTimer = 0
   startNextEndlessWave(gs)
@@ -1705,8 +1859,8 @@ function transitionTo(gs: GS, phase: Phase) {
   if (phase === "gameover") {
     if (gs.isEndless && gs.endlessWave > gs.save.endlessBest) gs.save.endlessBest = gs.endlessWave
     bankCoins(gs)
-    spawnParticles(gs, gs.playerX, PLAYER_Y, "#ff4400", 30, 250)
-    spawnShockwave(gs, gs.playerX, PLAYER_Y, 120, "#ff4400")
+    spawnParticles(gs, gs.playerX, gs.playerY, "#ff4400", 30, 250)
+    spawnShockwave(gs, gs.playerX, gs.playerY, 120, "#ff4400")
   }
 }
 
@@ -2330,11 +2484,36 @@ function isPowerup(k: DropKind): k is PowerupKind {
 
 function drawDrop(ctx: CanvasRenderingContext2D, d: Drop, time: number) {
   const bob = Math.sin(d.bobT + time * 3) * 4
+  ctx.save()
+  ctx.translate(d.x, d.y + bob)
+
+  // Núcleo de perfección: estrella dorada brillante
+  if (d.kind === "core") {
+    ctx.shadowColor = "#ffee44"; ctx.shadowBlur = 18
+    ctx.save(); ctx.rotate(time * 1.5)
+    ctx.fillStyle = "#ffee44"
+    ctx.beginPath()
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 - Math.PI / 2
+      const ax = Math.cos(a) * 16, ay = Math.sin(a) * 16
+      if (i === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay)
+      const b = a + Math.PI / 5
+      ctx.lineTo(Math.cos(b) * 7, Math.sin(b) * 7)
+    }
+    ctx.closePath(); ctx.fill()
+    ctx.restore()
+    ctx.shadowBlur = 0
+    ctx.strokeStyle = "#ffaa00"; ctx.lineWidth = 2
+    ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.stroke()
+    ctx.fillStyle = "#ffaa00"; ctx.font = "bold 9px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText("PERF", 0, 24)
+    ctx.restore()
+    return
+  }
+
   const powerup = isPowerup(d.kind)
   const color = isPowerup(d.kind) ? POWERUP_COLORS[d.kind] : AMMO_COLORS[d.kind]
   const icon = isPowerup(d.kind) ? POWERUP_ICONS[d.kind] : AMMO_ICONS[d.kind]
-  ctx.save()
-  ctx.translate(d.x, d.y + bob)
   ctx.shadowColor = color; ctx.shadowBlur = 14
   // Power-ups: anillo doble giratorio para destacar
   if (powerup) {
@@ -2524,6 +2703,23 @@ function drawHUD(ctx: CanvasRenderingContext2D, gs: GS) {
     ctx.fillText("¡JEFE!", W / 2, 18)
   }
 
+  // Botón de robot de reparación (esquina superior izquierda)
+  const bots = gs.save.equipment.repairBots
+  gs.repairBtn = { x: 14, y: 42, w: 84, h: 34 }
+  const rBtn = gs.repairBtn
+  const rReady = bots > 0 && gs.playerHP < gs.playerMaxHP
+  ctx.fillStyle = rReady ? "#44ff8822" : "rgba(255,255,255,0.05)"
+  ctx.beginPath(); ctx.roundRect(rBtn.x, rBtn.y, rBtn.w, rBtn.h, 8); ctx.fill()
+  ctx.strokeStyle = bots > 0 ? "#44ff88" : "#335544"; ctx.lineWidth = 1.5
+  ctx.beginPath(); ctx.roundRect(rBtn.x, rBtn.y, rBtn.w, rBtn.h, 8); ctx.stroke()
+  ctx.fillStyle = bots > 0 ? "#44ff88" : "#446655"
+  ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.fillText("🤖", rBtn.x + 20, rBtn.y + rBtn.h / 2)
+  ctx.fillStyle = bots > 0 ? "#ffffff" : "#446655"; ctx.font = "bold 12px monospace"; ctx.textAlign = "left"
+  ctx.fillText(`x${bots}`, rBtn.x + 34, rBtn.y + 14)
+  ctx.fillStyle = rReady ? "#44ff88" : "#446655"; ctx.font = "bold 9px monospace"
+  ctx.fillText("REPARAR", rBtn.x + 34, rBtn.y + 27)
+
   // Combo (esquina derecha superior, debajo del mute)
   if (gs.combo >= 2) {
     const cpulse = 1 + Math.sin(Date.now() / 90) * 0.08
@@ -2619,12 +2815,13 @@ function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   mkBtn("▶  CAMPAÑA", "campaign", H / 2 + 20, "#00e5ff", "#001020")
   mkBtn("♾  ENDLESS", "endless", H / 2 + 78, "#ff44aa", "#20000f")
   mkBtn("🔧  HANGAR", "hangar", H / 2 + 136, "#ffcc44", "#201400")
-  mkBtn("🚀  NAVES", "ships", H / 2 + 194, "#44ff88", "#001405")
+  mkBtn("🛠  EQUIPAMIENTO", "equip", H / 2 + 194, "#ff8844", "#201000")
+  mkBtn("🚀  NAVES", "ships", H / 2 + 252, "#44ff88", "#001405")
 
   // Récord endless
   if (gs.save.endlessBest > 0) {
     ctx.fillStyle = "#ff88bb"; ctx.font = "11px monospace"; ctx.textAlign = "center"
-    ctx.fillText(`Mejor oleada endless: ${gs.save.endlessBest}`, W / 2, H / 2 + 250)
+    ctx.fillText(`Mejor oleada endless: ${gs.save.endlessBest}`, W / 2, H / 2 + 310)
   }
 
   // Credits
@@ -2772,6 +2969,234 @@ function drawShipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     }
     ctx.restore()
   }
+  // Volver
+  ctx.fillStyle = "#888"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "bottom"
+  ctx.fillText("← Volver al menú", W / 2, H - 18)
+}
+
+/* Pantalla de EQUIPAMIENTO — láseres, escudos, robots y munición guardada */
+const PERFECT_BUY_STEP = 10            // +10% de perfección por compra
+function perfectBuyCost(pct: number): number { return Math.round(60 + pct * 3) }
+
+function drawEquipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
+  ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillRect(0, 0, W, H)
+  ctx.fillStyle = "#ff8844"; ctx.font = "bold 26px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+  ctx.fillText("🛠 EQUIPAMIENTO", W / 2, 24)
+  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 15px monospace"
+  ctx.fillText(`🪙 ${gs.save.coins.toLocaleString()} monedas`, W / 2, 58)
+
+  // Pestañas
+  const tabs: Array<{ id: "lasers" | "shields" | "bots" | "ammo"; label: string; color: string }> = [
+    { id: "lasers", label: "🔫 LÁSER", color: "#ffee00" },
+    { id: "shields", label: "🛡 ESCUDO", color: "#44aaff" },
+    { id: "bots", label: "🤖 ROBOTS", color: "#44ff88" },
+    { id: "ammo", label: "📦 MUNICIÓN", color: "#cc88ff" },
+  ]
+  gs.equipBtns = []
+  const tabW = W / 4, tabH = 36, tabY = 84
+  for (let i = 0; i < tabs.length; i++) {
+    const t = tabs[i]
+    const tx = i * tabW
+    gs.equipBtns.push({ action: `tab:${t.id}`, x: tx, y: tabY, w: tabW, h: tabH })
+    const active = gs.equipTab === t.id
+    ctx.fillStyle = active ? t.color + "33" : "rgba(255,255,255,0.05)"
+    ctx.fillRect(tx, tabY, tabW, tabH)
+    ctx.fillStyle = active ? t.color : "#666"
+    ctx.strokeStyle = active ? t.color : "#333"; ctx.lineWidth = active ? 2 : 1
+    ctx.strokeRect(tx + 0.5, tabY + 0.5, tabW - 1, tabH - 1)
+    ctx.font = active ? "bold 12px monospace" : "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText(t.label, tx + tabW / 2, tabY + tabH / 2)
+  }
+
+  const listTop = tabY + tabH + 8
+  const cardH = 96, cardW = W - 32, cx = 16
+
+  if (gs.equipTab === "lasers") {
+    // Láser equipado resumen
+    const eq = gs.save.equipment
+    const cur = equippedLaser(eq)
+    const curPct = laserPerfectPct(eq, eq.laserId)
+    ctx.fillStyle = "#888"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+    ctx.fillText(`Equipado: ${cur.name} · Perfección ${Math.floor(curPct)}% · Daño x${laserDmgMult(eq, eq.laserId).toFixed(2)}`, W / 2, listTop)
+    for (let i = 0; i < LASER_DEFS.length; i++) {
+      const laser = LASER_DEFS[i]
+      const owned = eq.ownedLasers.includes(laser.id)
+      const equipped = eq.laserId === laser.id
+      const pct = laserPerfectPct(eq, laser.id)
+      const perfect = pct >= 100
+      const afford = gs.save.coins >= laser.price
+      const cy = listTop + 14 + i * (cardH + 6)
+      gs.equipBtns.push({ action: `laser:card:${laser.id}`, x: cx, y: cy, w: cardW, h: cardH })
+
+      ctx.fillStyle = equipped ? laser.color + "22" : owned ? "#1a241a" : afford ? laser.color + "14" : "#1a1a22"
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.fill()
+      ctx.strokeStyle = equipped ? laser.color : owned ? "#2a4a3a" : afford ? laser.color + "66" : "#333"; ctx.lineWidth = equipped ? 2.5 : 1.5
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.stroke()
+
+      // Nombre + tier + desc
+      ctx.textAlign = "left"; ctx.textBaseline = "top"
+      ctx.fillStyle = laser.color; ctx.font = "bold 15px monospace"
+      ctx.fillText(`${laser.name}`, cx + 14, cy + 10)
+      ctx.fillStyle = "#666"; ctx.font = "10px monospace"
+      ctx.fillText(`NIVEL ${laser.tier}`, cx + 14, cy + 30)
+      ctx.fillStyle = "#aaaaaa"; ctx.font = "11px monospace"
+      ctx.fillText(laser.desc, cx + 14, cy + 44)
+      ctx.fillStyle = "#cccccc"; ctx.font = "bold 11px monospace"
+      ctx.fillText(`Daño x${(perfect ? laser.dmgMult * (1 + PERFECT_BONUS) : laser.dmgMult * (1 + pct * PERFECT_BONUS_PER_STEP)).toFixed(2)}`, cx + 14, cy + 62)
+
+      // Barra de perfección
+      const barX = cx + 14, barY = cy + 78, barW = 150, barH = 8
+      ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(barX, barY, barW, barH)
+      ctx.fillStyle = perfect ? "#ffee44" : pct > 50 ? "#44ff88" : "#ffaa44"
+      ctx.fillRect(barX, barY, barW * pct / 100, barH)
+      ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1; ctx.strokeRect(barX, barY, barW, barH)
+      ctx.fillStyle = perfect ? "#ffee44" : "#aaa"; ctx.font = "bold 10px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "middle"
+      ctx.fillText(perfect ? "★ PERFECTO ★" : `${Math.floor(pct)}%`, barX + barW + 6, barY + barH / 2)
+
+      // Botón derecho: perfección / comprar / equipar / equipada
+      const btnW = 78, btnH = 34
+      const btnX = cx + cardW - btnW - 10, btnY = cy + cardH - btnH - 10
+      gs.equipBtns.push({ action: equipped ? "laser:none" : owned ? `laser:equip:${laser.id}` : `laser:buy:${laser.id}`, x: btnX, y: btnY, w: btnW, h: btnH })
+      if (equipped && !perfect) {
+        const cost = perfectBuyCost(pct)
+        const pcAfford = gs.save.coins >= cost
+        gs.equipBtns.push({ action: `laser:perf:${laser.id}`, x: btnX, y: btnY, w: btnW, h: btnH })
+        const pulse = pcAfford ? 0.9 + Math.sin(time * 4 + i) * 0.1 : 1
+        ctx.save(); ctx.translate(btnX + btnW / 2, btnY + btnH / 2); ctx.scale(pulse, pulse)
+        ctx.fillStyle = pcAfford ? "#ffee44" : "#443c1a"
+        ctx.beginPath(); ctx.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 8); ctx.fill()
+        ctx.fillStyle = pcAfford ? "#201400" : "#887744"; ctx.font = "bold 10px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+        ctx.fillText(`PERF +${PERFECT_BUY_STEP}%`, 0, -6)
+        ctx.fillText(`🪙 ${cost}`, 0, 9)
+        ctx.restore()
+      } else if (equipped) {
+        ctx.fillStyle = "#ffee44"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+        ctx.fillText("✓ EQUIPADO", btnX + btnW / 2, btnY + btnH / 2)
+      } else if (owned) {
+        const pulse = 0.9 + Math.sin(time * 4 + i) * 0.1
+        ctx.save(); ctx.translate(btnX + btnW / 2, btnY + btnH / 2); ctx.scale(pulse, pulse)
+        ctx.fillStyle = laser.color
+        ctx.beginPath(); ctx.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 8); ctx.fill()
+        ctx.fillStyle = "#101400"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+        ctx.fillText("EQUIPAR", 0, 0)
+        ctx.restore()
+      } else {
+        const pulse = afford ? 0.9 + Math.sin(time * 4 + i) * 0.1 : 1
+        ctx.save(); ctx.translate(btnX + btnW / 2, btnY + btnH / 2); ctx.scale(pulse, pulse)
+        ctx.fillStyle = afford ? laser.color : "#33221a"
+        ctx.beginPath(); ctx.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 8); ctx.fill()
+        ctx.fillStyle = afford ? "#101400" : "#887766"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+        ctx.fillText(`🪙 ${laser.price}`, 0, 0)
+        ctx.restore()
+      }
+    }
+  } else if (gs.equipTab === "shields") {
+    const eq = gs.save.equipment
+    ctx.fillStyle = "#888"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+    ctx.fillText(`Equipado: ${equippedShield(eq).name} · HP ${Math.round(SHIELD_MAX_HP * equippedShield(eq).hpMult)} · +${Math.round((equippedShield(eq).durMult - 1) * 100)}% duración`, W / 2, listTop)
+    for (let i = 0; i < SHIELD_DEFS.length; i++) {
+      const sh = SHIELD_DEFS[i]
+      const owned = eq.ownedShields.includes(sh.id)
+      const equipped = eq.shieldId === sh.id
+      const afford = gs.save.coins >= sh.price
+      const cy = listTop + 14 + i * (cardH + 6)
+      gs.equipBtns.push({ action: `shield:card:${sh.id}`, x: cx, y: cy, w: cardW, h: cardH })
+
+      ctx.fillStyle = equipped ? sh.color + "22" : owned ? "#121a24" : afford ? sh.color + "14" : "#1a1a22"
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.fill()
+      ctx.strokeStyle = equipped ? sh.color : owned ? "#22334a" : afford ? sh.color + "66" : "#333"; ctx.lineWidth = equipped ? 2.5 : 1.5
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.stroke()
+
+      ctx.textAlign = "left"; ctx.textBaseline = "top"
+      ctx.fillStyle = sh.color; ctx.font = "bold 15px monospace"
+      ctx.fillText(sh.name, cx + 14, cy + 10)
+      ctx.fillStyle = "#666"; ctx.font = "10px monospace"
+      ctx.fillText(`NIVEL ${sh.tier}`, cx + 14, cy + 30)
+      ctx.fillStyle = "#aaaaaa"; ctx.font = "11px monospace"
+      ctx.fillText(sh.desc, cx + 14, cy + 44)
+      ctx.fillStyle = "#cccccc"; ctx.font = "bold 11px monospace"
+      ctx.fillText(`HP x${sh.hpMult} · Duración +${Math.round((sh.durMult - 1) * 100)}%`, cx + 14, cy + 64)
+
+      const btnW = 78, btnH = 34
+      const btnX = cx + cardW - btnW - 10, btnY = cy + cardH - btnH - 10
+      gs.equipBtns.push({ action: equipped ? "shield:none" : owned ? `shield:equip:${sh.id}` : `shield:buy:${sh.id}`, x: btnX, y: btnY, w: btnW, h: btnH })
+      if (equipped) {
+        ctx.fillStyle = sh.color; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+        ctx.fillText("✓ EQUIPADO", btnX + btnW / 2, btnY + btnH / 2)
+      } else if (owned) {
+        const pulse = 0.9 + Math.sin(time * 4 + i) * 0.1
+        ctx.save(); ctx.translate(btnX + btnW / 2, btnY + btnH / 2); ctx.scale(pulse, pulse)
+        ctx.fillStyle = sh.color
+        ctx.beginPath(); ctx.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 8); ctx.fill()
+        ctx.fillStyle = "#0a1020"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+        ctx.fillText("EQUIPAR", 0, 0)
+        ctx.restore()
+      } else {
+        const pulse = afford ? 0.9 + Math.sin(time * 4 + i) * 0.1 : 1
+        ctx.save(); ctx.translate(btnX + btnW / 2, btnY + btnH / 2); ctx.scale(pulse, pulse)
+        ctx.fillStyle = afford ? sh.color : "#222a33"
+        ctx.beginPath(); ctx.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 8); ctx.fill()
+        ctx.fillStyle = afford ? "#0a1020" : "#778899"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+        ctx.fillText(`🪙 ${sh.price}`, 0, 0)
+        ctx.restore()
+      }
+    }
+  } else if (gs.equipTab === "bots") {
+    const bots = gs.save.equipment.repairBots
+    ctx.fillStyle = "#888"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+    ctx.fillText(`Tienes ${bots} robot(s) de reparación · Repara ${Math.round(REPAIR_BOT_HEAL * 100)}% de vida`, W / 2, listTop)
+    const cy = listTop + 24
+    const cardH2 = 120
+    ctx.fillStyle = "#142414"; ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH2, 10); ctx.fill()
+    ctx.strokeStyle = "#44ff8866"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH2, 10); ctx.stroke()
+    ctx.textAlign = "left"; ctx.textBaseline = "top"
+    ctx.fillStyle = "#44ff88"; ctx.font = "bold 16px monospace"
+    ctx.fillText("🤖 Robot de Reparación", cx + 16, cy + 14)
+    ctx.fillStyle = "#aaaaaa"; ctx.font = "11px monospace"
+    ctx.fillText("De un solo uso. Se activa con el botón de la", cx + 16, cy + 40)
+    ctx.fillText("esquina superior durante la partida.", cx + 16, cy + 56)
+    ctx.fillStyle = "#cccccc"; ctx.font = "bold 11px monospace"
+    ctx.fillText(`Repara ${Math.round(REPAIR_BOT_HEAL * 100)}% del HP máximo.`, cx + 16, cy + 76)
+
+    const afford = gs.save.coins >= REPAIR_BOT_PRICE
+    const btnW = 110, btnH = 40
+    const btnX = cx + cardW - btnW - 12, btnY = cy + cardH2 - btnH - 12
+    gs.equipBtns.push({ action: "bot:buy", x: btnX, y: btnY, w: btnW, h: btnH })
+    const pulse = afford ? 0.9 + Math.sin(time * 4) * 0.1 : 1
+    ctx.save(); ctx.translate(btnX + btnW / 2, btnY + btnH / 2); ctx.scale(pulse, pulse)
+    ctx.fillStyle = afford ? "#44ff88" : "#1a2a1a"
+    ctx.beginPath(); ctx.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 8); ctx.fill()
+    ctx.fillStyle = afford ? "#0a1a0a" : "#446655"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText(`🪙 ${REPAIR_BOT_PRICE}`, 0, 0)
+    ctx.restore()
+  } else {
+    // Munición bancada
+    ctx.fillStyle = "#888"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+    ctx.fillText("Munición recolectada que se guarda entre partidas", W / 2, listTop)
+    const banked = gs.save.bankedAmmo ?? {}
+    const rows: Array<{ ammo: AmmoType; n: number }> = [
+      { ammo: "laser", n: banked.laser ?? 0 },
+      { ammo: "spread", n: banked.spread ?? 0 },
+      { ammo: "missile", n: banked.missile ?? 0 },
+    ]
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i]
+      const cy = listTop + 24 + i * 56
+      gs.equipBtns.push({ action: `ammo:card:${r.ammo}`, x: cx, y: cy, w: cardW, h: 48 })
+      ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.beginPath(); ctx.roundRect(cx, cy, cardW, 48, 8); ctx.fill()
+      ctx.strokeStyle = AMMO_COLORS[r.ammo] + "44"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(cx, cy, cardW, 48, 8); ctx.stroke()
+      ctx.textAlign = "left"; ctx.textBaseline = "middle"
+      ctx.fillStyle = AMMO_COLORS[r.ammo]; ctx.font = "bold 16px monospace"
+      ctx.fillText(AMMO_ICONS[r.ammo], cx + 18, cy + 24)
+      ctx.fillStyle = "#ffffff"; ctx.font = "bold 13px monospace"
+      ctx.fillText(AMMO_NAMES[r.ammo], cx + 40, cy + 24)
+      ctx.fillStyle = "#cccccc"; ctx.font = "bold 13px monospace"; ctx.textAlign = "right"
+      ctx.fillText(`x${r.n}`, cx + cardW - 16, cy + 24)
+    }
+    ctx.fillStyle = "#666"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText("Se usa automáticamente al iniciar una partida.", W / 2, listTop + 24 + 3 * 56 + 20)
+  }
+
   // Volver
   ctx.fillStyle = "#888"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "bottom"
   ctx.fillText("← Volver al menú", W / 2, H - 18)
@@ -3012,6 +3437,9 @@ function draw(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   if (gs.phase === "ship-store") {
     drawShipStore(ctx, gs, time); ctx.restore(); drawMuteBtn(ctx); return
   }
+  if (gs.phase === "equip-store") {
+    drawEquipStore(ctx, gs, time); ctx.restore(); drawMuteBtn(ctx); return
+  }
   if (gs.phase === "gameover") {
     for (const p of gs.particles) drawParticle(ctx, p)
     drawShockwaves(ctx, gs); drawFloaters(ctx, gs)
@@ -3050,7 +3478,7 @@ function draw(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   }
 
   drawPlayerShip(
-    ctx, gs.playerX, PLAYER_Y, getShip(gs.save), gs.invTimer,
+    ctx, gs.playerX, gs.playerY, getShip(gs.save), gs.invTimer,
     gs.shieldActive, gs.shieldHP, gs.shieldMaxHP,
     gs.shieldCooldown, gs.shieldCdMax, time,
   )
@@ -3162,6 +3590,7 @@ function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: 
         if (btn.action === "campaign") transitionTo(gs, "world-select")
         else if (btn.action === "endless") startEndless(gs)
         else if (btn.action === "hangar") { gs.phase = "hangar"; gs.phaseTimer = 0 }
+        else if (btn.action === "equip") { gs.phase = "equip-store"; gs.phaseTimer = 0; gs.equipTab = "lasers" }
         else if (btn.action === "ships") { gs.phase = "ship-store"; gs.phaseTimer = 0 }
         return
       }
@@ -3204,6 +3633,94 @@ function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: 
     return
   }
 
+  if (gs.phase === "equip-store") {
+    if (y > H - 42) { gs.phase = "intro"; gs.phaseTimer = 0; return }
+    // Recorre en orden inverso para que el botón específico tenga prioridad sobre la tarjeta
+    for (let i = gs.equipBtns.length - 1; i >= 0; i--) {
+      const btn = gs.equipBtns[i]
+      if (!(x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h)) continue
+      const a = btn.action
+      if (a.startsWith("tab:")) {
+        gs.equipTab = a.slice(4) as GS["equipTab"]
+        return
+      }
+      if (a.startsWith("laser:buy:")) {
+        const id = a.slice(10)
+        const laser = LASER_DEFS.find(l => l.id === id)!
+        if (gs.save.coins >= laser.price) {
+          gs.save.coins -= laser.price
+          gs.save.equipment.ownedLasers.push(id)
+          gs.save.equipment.laserId = id
+          writeStarSave(gs.save)
+          gs.flashMsg = `¡${laser.name} comprado!`
+          gs.flashT = 1.5; SFX.worldClear()
+        } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+        return
+      }
+      if (a.startsWith("laser:equip:")) {
+        const id = a.slice(12)
+        if (gs.save.equipment.ownedLasers.includes(id)) {
+          gs.save.equipment.laserId = id
+          writeStarSave(gs.save)
+          gs.flashMsg = `${LASER_DEFS.find(l => l.id === id)!.name} equipado`
+          gs.flashT = 1.2; SFX.pickup()
+        }
+        return
+      }
+      if (a.startsWith("laser:perf:")) {
+        const id = a.slice(11)
+        const pct = laserPerfectPct(gs.save.equipment, id)
+        if (pct >= 100) return
+        const cost = perfectBuyCost(pct)
+        if (gs.save.coins >= cost) {
+          gs.save.coins -= cost
+          gs.save.equipment.laserPerfection[id] = Math.min(100, pct + PERFECT_BUY_STEP)
+          writeStarSave(gs.save)
+          const np = gs.save.equipment.laserPerfection[id]
+          gs.flashMsg = np >= 100 ? "★ ¡LÁSER PERFECTO! ★" : `Perfección +${PERFECT_BUY_STEP}%`
+          gs.flashT = 1.6; SFX.pickup()
+        } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+        return
+      }
+      if (a.startsWith("shield:buy:")) {
+        const id = a.slice(11)
+        const sh = SHIELD_DEFS.find(s => s.id === id)!
+        if (gs.save.coins >= sh.price) {
+          gs.save.coins -= sh.price
+          gs.save.equipment.ownedShields.push(id)
+          gs.save.equipment.shieldId = id
+          writeStarSave(gs.save)
+          gs.flashMsg = `¡${sh.name} comprado!`
+          gs.flashT = 1.5; SFX.worldClear()
+        } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+        return
+      }
+      if (a.startsWith("shield:equip:")) {
+        const id = a.slice(13)
+        if (gs.save.equipment.ownedShields.includes(id)) {
+          gs.save.equipment.shieldId = id
+          writeStarSave(gs.save)
+          gs.flashMsg = `${SHIELD_DEFS.find(s => s.id === id)!.name} equipado`
+          gs.flashT = 1.2; SFX.pickup()
+        }
+        return
+      }
+      if (a === "bot:buy") {
+        if (gs.save.coins >= REPAIR_BOT_PRICE) {
+          gs.save.coins -= REPAIR_BOT_PRICE
+          gs.save.equipment.repairBots += 1
+          writeStarSave(gs.save)
+          gs.flashMsg = "+1 Robot de reparación"
+          gs.flashT = 1.5; SFX.pickup()
+        } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+        return
+      }
+      // Tarjetas (solo para UI, sin acción propia)
+      return
+    }
+    return
+  }
+
   if (gs.phase === "hangar") {
     if (y > H - 42) { gs.phase = "intro"; gs.phaseTimer = 0; return }
     for (const btn of gs.hangarBtns) {
@@ -3237,8 +3754,7 @@ function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: 
           gs.worldId = btn.worldId
           gs.score = 0
           gs.runCoins = 0
-          gs.ammo = { basic: -1, laser: 0, spread: 0, missile: 0 }
-          gs.activeAmmo = "basic"
+          loadBankedAmmo(gs)
           transitionTo(gs, "playing")
         }
         return
@@ -3248,6 +3764,14 @@ function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: 
   }
 
   if (gs.phase === "playing" || gs.phase === "boss") {
+    // Botón de robot de reparación
+    if (gs.repairBtn) {
+      const rb = gs.repairBtn
+      if (x >= rb.x - 6 && x <= rb.x + rb.w + 6 && y >= rb.y - 6 && y <= rb.y + rb.h + 6) {
+        repairShip(gs)
+        return
+      }
+    }
     // Botón de escudo (área de toque ampliada para dedos)
     if (gs.shieldBtn) {
       const sb = gs.shieldBtn
@@ -3279,8 +3803,7 @@ function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: 
       } else {
         gs.worldId++
         gs.score = 0
-        gs.ammo = { basic: -1, laser: 0, spread: 0, missile: 0 }
-        gs.activeAmmo = "basic"
+        loadBankedAmmo(gs)
         transitionTo(gs, "playing")
       }
     }
@@ -3296,8 +3819,7 @@ function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: 
         } else {
           gs.score = 0
           gs.runCoins = 0
-          gs.ammo = { basic: -1, laser: 0, spread: 0, missile: 0 }
-          gs.activeAmmo = "basic"
+          loadBankedAmmo(gs)
           transitionTo(gs, "playing")
         }
         return
@@ -3484,7 +4006,7 @@ export default function StarAssaultGame() {
         return
       }
       // Solo mueve la nave si el toque está ENCIMA del HUD
-      if (ty < H - HUD_H) gs.touchX = tx
+      if (ty < H - HUD_H) { gs.touchX = tx; gs.touchY = ty }
       handleTap(gs, t.clientX, t.clientY, rect, sx, sx)
     }
 
@@ -3500,7 +4022,7 @@ export default function StarAssaultGame() {
         return
       }
       // Solo rastrea la nave encima del HUD para evitar que salte al dedo que toca botones
-      if (ty < H - HUD_H) gs.touchX = tx
+      if (ty < H - HUD_H) { gs.touchX = tx; gs.touchY = ty }
     }
 
     const onTouchEnd = (e: TouchEvent) => {
@@ -3515,7 +4037,7 @@ export default function StarAssaultGame() {
         return
       }
       gs.isTouching = false
-      if (e.touches.length === 0) gs.touchX = null
+      if (e.touches.length === 0) { gs.touchX = null; gs.touchY = null }
     }
 
     const onMouseMove = (e: MouseEvent) => {
@@ -3528,6 +4050,7 @@ export default function StarAssaultGame() {
         return
       }
       gs.touchX = mx
+      gs.touchY = my
     }
 
     const onMouseDown = (e: MouseEvent) => {
@@ -3570,6 +4093,9 @@ export default function StarAssaultGame() {
       }
       if (e.key === "Shift" || e.key === "s" || e.key === "S") {
         activateShield(gs)
+      }
+      if (e.key === "r" || e.key === "R") {
+        repairShip(gs)
       }
       if (e.key === " " || e.key === "Enter") {
         const { sx, rect } = getScale()
