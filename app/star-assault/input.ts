@@ -242,6 +242,15 @@ export function onHangarInvButton(gs: GS, x: number, y: number): boolean {
   return false
 }
 
+// ¿El punto está sobre un tile arrastrable del inventario? (para no iniciar scroll)
+export function onHangarTile(gs: GS, x: number, y: number): boolean {
+  if (gs.phase !== "hangar" || gs.hangarTab !== "inventory") return false
+  for (const a of gs.itemAreas) {
+    if (x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) return true
+  }
+  return false
+}
+
 // Resuelve el drop: equipar en slot vacío, intercambiar/reemplazar, o desequipar fuera.
 export function hangarDragEnd(gs: GS, x: number, y: number): void {
   const drag = gs.dragItem

@@ -184,6 +184,14 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
       qty: 1, perfection: inst.perfection, equipped: lo.lasers.includes(inst.uid),
       tier: laserDef(inst.type).tier,
     }))
+    // Láseres equipados que ya no están en el inventario (gastados/fusionados):
+    // mostrar un tile con QUITAR para poder sacarlos de la nave.
+    for (const uid of lo.lasers) {
+      if (uid && !laserTiles.some(t => t.key === uid)) {
+        const def = laserDef(getLaserInstance(eq, uid)?.type ?? "laser_std")
+        laserTiles.push({ key: uid, name: def.name, color: def.color, qty: 0, perfection: 0, equipped: true, tier: def.tier })
+      }
+    }
     cy = drawInvGrid(ctx, gs, laserTiles, cy, "laser")
 
     // Sección ESCUDOS
@@ -555,7 +563,11 @@ export function hangarInvScrollArea(): { top: number; bottom: number } {
 
 export function invMaxScroll(gs: GS): number {
   const eq = gs.save.equipment
-  const laserRows = Math.max(1, Math.ceil(eq.lasers.length / INV_COLS))
+  const ship = getShip(gs.save)
+  const lo = getLoadout(eq, ship.id)
+  // Cuenta también láseres equipados que ya no están en el inventario (gastados/fusionados)
+  const laserTotal = eq.lasers.length + lo.lasers.filter(u => !!u && !eq.lasers.some(l => l.uid === u)).length
+  const laserRows = Math.max(1, Math.ceil(laserTotal / INV_COLS))
   const shieldRows = Math.max(1, Math.ceil(SHIELD_DEFS.length / INV_COLS))
   const headerH = 18
   const gapH = 12
@@ -627,8 +639,8 @@ function drawInvTile(ctx: CanvasRenderingContext2D, gs: GS, tile: InvTile, kind:
   ctx.fillStyle = text; ctx.font = "bold 8px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
   ctx.fillText(label, btnX + btnW / 2, btnY + 12)
 
-  // Botón mejorar perfección (láser individual, solo si no está perfecto)
-  if (kind === "laser" && !perfect && tile.perfection < 100) {
+  // Botón mejorar perfección (láser individual, solo si se tiene y no está perfecto)
+  if (kind === "laser" && owned && !perfect && tile.perfection < 100) {
     const pBtnY = btnY + 28
     const cost = perfectBuyCost(tile.perfection)
     gs.equipBtns.push({ action: `laser:perf:${tile.key}`, x: btnX, y: pBtnY, w: btnW, h: 24 })

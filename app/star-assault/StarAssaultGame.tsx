@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react"
 import { makeGS, update, activateShield, repairShip } from "./engine"
 import { draw, worldMaxScroll, invMaxScroll, hangarInvScrollArea } from "./ui"
-import { handleTap, hangarDragStart, hangarDragMove, hangarDragEnd, onHangarInvButton } from "./input"
+import { handleTap, hangarDragStart, hangarDragMove, hangarDragEnd, onHangarInvButton, onHangarTile } from "./input"
 import { W, H, HUD_H, AMMO_NAMES } from "./constants"
 import type { GS, AmmoType } from "./types"
 
@@ -70,8 +70,9 @@ export default function StarAssaultGame() {
         gs.dragX = tx; gs.dragY = ty
         return
       }
-      // Scroll del inventario del hangar (zona debajo de los slots)
-      if (gs.phase === "hangar" && gs.hangarTab === "inventory" && !gs.confirm && !onHangarInvButton(gs, tx, ty)) {
+      // Scroll del inventario del hangar: solo en los huecos vacíos (fuera de tiles y botones)
+      if (gs.phase === "hangar" && gs.hangarTab === "inventory" && !gs.confirm
+          && !onHangarTile(gs, tx, ty) && !onHangarInvButton(gs, tx, ty)) {
         const inv = hangarInvScrollArea()
         if (ty >= inv.top && ty < inv.bottom && invMaxScroll(gs) > 0) {
           tapPending = { x: tx, y: ty, cx: t.clientX, cy: t.clientY }
@@ -181,7 +182,8 @@ export default function StarAssaultGame() {
         gs.dragX = mx; gs.dragY = my
         return
       }
-      if (gs.phase === "hangar" && gs.hangarTab === "inventory" && !gs.confirm && !onHangarInvButton(gs, mx, my)) {
+      if (gs.phase === "hangar" && gs.hangarTab === "inventory" && !gs.confirm
+          && !onHangarTile(gs, mx, my) && !onHangarInvButton(gs, mx, my)) {
         const inv = hangarInvScrollArea()
         if (my >= inv.top && my < inv.bottom && invMaxScroll(gs) > 0) {
           tapPending = { x: mx, y: my, cx: e.clientX, cy: e.clientY }
