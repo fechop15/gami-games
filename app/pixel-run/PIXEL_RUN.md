@@ -9,8 +9,24 @@
 
 ```
 app/pixel-run/
-├── page.tsx          ← wrapper Next.js (metadata + export)
-└── PixelRunGame.tsx  ← juego completo (~2600 líneas, Canvas 2D)
+├── page.tsx              ← wrapper Next.js (metadata + export)
+├── PixelRunGame.tsx      ← componente React + bucle RAF + input (touch/teclado)
+├── types.ts              ← tipos compartidos (GS, entidades, Skin, Save…)
+├── config.ts             ← constantes, mundos, skins/habilidades, paletas
+├── audio.ts              ← SFX procedural
+├── save.ts               ← persistencia localStorage + racha diaria
+├── particles.ts          ← spawn / update / draw de partículas
+├── physics.ts            ← colisiones, plataformas móviles, reflow, respawn seguro
+├── state.ts              ← initGS, loadLevel, respawn, loseLife
+├── entities.ts           ← enemigos, proyectiles, bolas de fuego, checkEntities
+├── input.ts              ← hit-regions (botones) + deriveInput
+├── levels.ts             ← definición de niveles (fetch levels.json)
+└── render/
+    ├── index.ts          ← orquesta el render (mundo + HUD + overlays)
+    ├── primitives.ts     ← rrect, strokeRRect, drawButton, drawCloud, drawStar
+    ├── world.ts          ← fondo, plataformas, jugador, enemigos, entidades
+    ├── hud.ts            ← HUD + botones táctiles
+    └── screens.ts        ← intro, tienda, pausa, transición, fin de nivel
 ```
 
 ### Flujo de datos
@@ -18,32 +34,24 @@ app/pixel-run/
 ```
 useEffect
   ├── resize canvas a viewport
-  ├── initGS()        → estado inicial
-  ├── loadLevel(0)    → carga nivel 0
+  ├── initGS()        → estado inicial (state.ts)
+  ├── loadLevel(0)    → carga nivel 0 (state.ts)
   ├── touch handlers  → actualizan gs.tMap
   ├── keyboard handler→ actualizan gs.inp + advancePhase()
   └── game loop (RAF)
         ├── reset inp.L/R = false
         ├── syncKeyboard()   → OR con teclado
         ├── update(gs, dt)
-        │     ├── deriveInput()    → OR con touch
+        │     ├── deriveInput()      → OR con touch (input.ts)
         │     ├── física jugador
-        │     ├── resolución plataformas
-        │     ├── checkEntities()  → enemigos, monedas, pinchos, meta
-        │     ├── updateEnemies()
-        │     ├── updateProjectiles()
+        │     ├── resolución plataformas (physics.ts)
+        │     ├── checkEntities()    → enemigos, monedas, pinchos, meta (entities.ts)
+        │     ├── updateEnemies() / updateFireballs()
         │     └── cámara lerp
-        └── render(gs)
-              ├── drawBackground()
-              ├── drawPlatform() × n
-              ├── drawCheckpoint() × n
-              ├── drawGoal()
-              ├── drawCoin() × n
-              ├── drawEnemy() × n
-              ├── drawPlayer()
-              ├── drawProjectiles()
-              ├── drawParticles()
-              ├── drawHUD()
+        └── render(gs)  → render/index.ts
+              ├── drawWorld()      (render/world.ts)
+              ├── drawParticles()  (particles.ts)
+              ├── drawHUD()        (render/hud.ts)
               └── overlays (intro, lvlDone, gameOver, win)
 ```
 
@@ -301,11 +309,23 @@ interface GS {
   parts: Particle[];
 
   // Input
-  inp: { L, R, J: boolean };
+  inp: { L, R, J, F: boolean };
   runT: number;           // turbo timer (s)
   ltap: { L, R: number }; // timestamps último toque por lado
   tMap: Map<number, TD>;  // touches activos
   stepT: number;          // cooldown pasos
+
+  // Wallet / progresión persistente
+  owned: number[];        // skins desbloqueadas
+  skin: number;           // skin equipado
+  extras: number;         // vidas extra compradas (persisten)
+  coins: number;          // monedas totales
+
+  // Habilidades de personaje
+  jumpsLeft: number;      // Ninja: salto doble disponible
+  fbCd: number;           // Pirata: cooldown de bolas de fuego
+  fbs: Fireball[];        // bolas de fuego activas
+  shield: number;         // protección por mundo (1 daño gratis)
 
   // UI
   phT: number;            // timer de fase (lvlDone countdown)
@@ -318,21 +338,23 @@ interface GS {
 ## Ideas para próximas iteraciones
 
 ### Gameplay
-- [ ] **Checkpoint visual**: animación al activar (estrella que explota con partículas)
+- [x] **Checkpoint visual**: animación al activar (estrella que explota con partículas)
+- [x] **Power-ups**: estrella de invencibilidad temporal (moneda especial por nivel)
+- [x] **Combos**: pisar enemigos en cadena multiplica el puntaje (×2, ×3...)
 - [ ] **Vidas extra**: moneda especial cada N metros que da 1 vida
-- [ ] **Power-ups**: estrella de invencibilidad temporal, zapatos de turbo permanente por 10s
 - [ ] **Enemigos avanzados**: tortuga (necesita pisarla 2 veces), fantasma (atraviesa plataformas)
 - [ ] **Jefe de nivel** (boss): al final de cada 2 mundos, un NPC grande con mecánica especial
-- [ ] **Combos**: pisar enemigos en cadena multiplica el puntaje (×2, ×3...)
 
 ### Progresión
-- [ ] **Tienda entre niveles**: gastar monedas en power-ups o skins
+- [x] **Tienda**: monedas persistentes para comprar vidas extra y desbloquear skins
+- [x] **Skins de personaje**: cada skin tiene una habilidad (doble salto, fuego, espinas, caída suave)
+- [x] **Habilidades por personaje**: inmune a espinas, doble salto, bolas de fuego, caída suave
+- [x] **Protección por mundo**: 1 daño gratis por mundo
 - [ ] **Unlock de mundos**: el mundo siguiente se desbloquea al completar el anterior
 - [ ] **Modo time trial**: cronómetro, puntuación por tiempo
 - [ ] **Récords**: guardar el mejor tiempo por nivel en localStorage
 
 ### Visual / Audio
-- [ ] **Skins de personaje**: diferente paleta de colores (ropa azul, roja, negra...)
 - [ ] **Música de fondo**: generada con Web Audio API (loop de notas procedurales por tema)
 - [ ] **Efectos de clima**: lluvia en jungla, nieve en nubes
 - [ ] **Parallax adicional**: capa extra de objetos en segundo plano
@@ -340,7 +362,6 @@ interface GS {
 ### Técnico
 - [ ] **Responsive Canvas**: soporte a `devicePixelRatio` para pantallas retina
 - [ ] **Modo landscape forzado**: girar pantalla para mejor experiencia en mobile
-- [ ] **Pantalla de pausa**: tap en HUD o tecla P
 - [ ] **Level editor básico**: drag-and-drop de plataformas y enemigos en modo dev
 
 ### Bugs / Deuda técnica

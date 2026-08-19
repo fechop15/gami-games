@@ -1,4 +1,5 @@
 // ── JSON schema types ─────────────────────────────────────────────────────────
+import type { Platform, Enemy, Coin, Spike } from './types';
 
 interface PlatDef {
   x: number; yOff: number; w: number; h: number;
@@ -19,12 +20,7 @@ export interface WorldDef {
   plats: PlatDef[]; ens: EnemyDef[]; coins: CoinDef[]; spikes: SpikeDef[];
 }
 
-// ── Runtime types (matching PixelRunGame.tsx) ─────────────────────────────────
-
-export interface Platform { x: number; y: number; w: number; h: number; origX: number; dir: number; spd: number; rng: number; }
-export interface Enemy    { id: number; type: 'spider'|'worm'|'monkey'|'plant'|'espin'; x: number; y: number; vx: number; vy: number; w: number; h: number; patL: number; patR: number; alive: boolean; stompT: number; fr: number; ft: number; baseY: number; }
-export interface Coin     { x: number; y: number; got: boolean; }
-export interface Spike    { x: number; y: number; w: number; }
+export type { Platform, Enemy, Coin, Spike };
 
 export interface LvlData {
   plats: Platform[]; ens: Enemy[]; cns: Coin[]; sps: Spike[];
