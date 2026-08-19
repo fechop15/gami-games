@@ -480,9 +480,21 @@ export default function PixelRunGame() {
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none', userSelect: 'none', background: '#000' }}
-    />
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        height: '100dvh',
+        overflow: 'hidden',
+        background: '#000',
+        overscrollBehavior: 'none',
+        touchAction: 'none',
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none', userSelect: 'none', background: '#000' }}
+      />
+    </div>
   );
 }
