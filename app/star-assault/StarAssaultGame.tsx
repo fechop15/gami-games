@@ -1,8 +1,8 @@
 "use client"
 import { useEffect, useRef } from "react"
 import { makeGS, update, activateShield, repairShip } from "./engine"
-import { draw, worldMaxScroll } from "./ui"
-import { handleTap, hangarDragStart, hangarDragMove, hangarDragEnd } from "./input"
+import { draw, worldMaxScroll, invMaxScroll, hangarInvScrollArea } from "./ui"
+import { handleTap, hangarDragStart, hangarDragMove, hangarDragEnd, onHangarInvButton } from "./input"
 import { W, H, HUD_H, AMMO_NAMES } from "./constants"
 import type { GS, AmmoType } from "./types"
 
@@ -70,6 +70,17 @@ export default function StarAssaultGame() {
         gs.dragX = tx; gs.dragY = ty
         return
       }
+      // Scroll del inventario del hangar (zona debajo de los slots)
+      if (gs.phase === "hangar" && gs.hangarTab === "inventory" && !gs.confirm && !onHangarInvButton(gs, tx, ty)) {
+        const inv = hangarInvScrollArea()
+        if (ty >= inv.top && ty < inv.bottom && invMaxScroll(gs) > 0) {
+          tapPending = { x: tx, y: ty, cx: t.clientX, cy: t.clientY }
+          tapStartX = tx; tapStartY = ty
+          gs.invDragStartY = ty
+          gs.invDragBase = gs.invScroll
+          return
+        }
+      }
       // Solo mueve la nave si el toque está ENCIMA del HUD
       if (ty < H - HUD_H) { gs.touchX = tx; gs.touchY = ty }
       handleTap(gs, t.clientX, t.clientY, rect, sx, sx)
@@ -84,6 +95,11 @@ export default function StarAssaultGame() {
       if (gs.dragItem) { hangarDragMove(gs, tx, ty); return }
       if (gs.phase === "world-select" && gs.worldDragStartY !== null) {
         gs.worldScroll = Math.max(0, Math.min(gs.worldDragBase + (gs.worldDragStartY - ty), worldMaxScroll()))
+        if (Math.abs(tx - tapStartX) > 8 || Math.abs(ty - tapStartY) > 8) tapPending = null
+        return
+      }
+      if (gs.phase === "hangar" && gs.invDragStartY !== null) {
+        gs.invScroll = Math.max(0, Math.min(gs.invDragBase + (gs.invDragStartY - ty), invMaxScroll(gs)))
         if (Math.abs(tx - tapStartX) > 8 || Math.abs(ty - tapStartY) > 8) tapPending = null
         return
       }
@@ -103,6 +119,15 @@ export default function StarAssaultGame() {
       }
       if (gs.phase === "world-select") {
         gs.worldDragStartY = null
+        const { sx, rect } = getScale()
+        if (tapPending) {
+          handleTap(gs, tapPending.cx, tapPending.cy, rect, sx, sx)
+          tapPending = null
+        }
+        return
+      }
+      if (gs.phase === "hangar" && gs.invDragStartY !== null) {
+        gs.invDragStartY = null
         const { sx, rect } = getScale()
         if (tapPending) {
           handleTap(gs, tapPending.cx, tapPending.cy, rect, sx, sx)
@@ -131,6 +156,11 @@ export default function StarAssaultGame() {
         if (Math.abs(mx - tapStartX) > 8 || Math.abs(my - tapStartY) > 8) tapPending = null
         return
       }
+      if (gs.phase === "hangar" && gs.invDragStartY !== null) {
+        gs.invScroll = Math.max(0, Math.min(gs.invDragBase + (gs.invDragStartY - my), invMaxScroll(gs)))
+        if (Math.abs(mx - tapStartX) > 8 || Math.abs(my - tapStartY) > 8) tapPending = null
+        return
+      }
       gs.touchX = mx
       gs.touchY = my
     }
@@ -151,6 +181,16 @@ export default function StarAssaultGame() {
         gs.dragX = mx; gs.dragY = my
         return
       }
+      if (gs.phase === "hangar" && gs.hangarTab === "inventory" && !gs.confirm && !onHangarInvButton(gs, mx, my)) {
+        const inv = hangarInvScrollArea()
+        if (my >= inv.top && my < inv.bottom && invMaxScroll(gs) > 0) {
+          tapPending = { x: mx, y: my, cx: e.clientX, cy: e.clientY }
+          tapStartX = mx; tapStartY = my
+          gs.invDragStartY = my
+          gs.invDragBase = gs.invScroll
+          return
+        }
+      }
       handleTap(gs, e.clientX, e.clientY, rect, sx, sx)
     }
 
@@ -163,6 +203,15 @@ export default function StarAssaultGame() {
       }
       if (gs.phase === "world-select") {
         gs.worldDragStartY = null
+        const { sx, rect } = getScale()
+        if (tapPending) {
+          handleTap(gs, tapPending.cx, tapPending.cy, rect, sx, sx)
+          tapPending = null
+        }
+        return
+      }
+      if (gs.phase === "hangar" && gs.invDragStartY !== null) {
+        gs.invDragStartY = null
         const { sx, rect } = getScale()
         if (tapPending) {
           handleTap(gs, tapPending.cx, tapPending.cy, rect, sx, sx)

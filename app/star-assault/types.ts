@@ -73,6 +73,8 @@ export interface BtnArea { x: number; y: number; w: number; h: number }
 
 export interface DragItem { kind: "laser" | "shield"; id: string }
 
+export interface ConfirmBox { title: string; msg: string; action: string }
+
 export interface GS {
   phase: Phase
   playerX: number; playerY: number; playerHP: number; playerMaxHP: number; invTimer: number
@@ -102,6 +104,10 @@ export interface GS {
   worldScroll: number
   worldDragStartY: number | null
   worldDragBase: number
+  // Scroll del inventario del hangar
+  invScroll: number
+  invDragStartY: number | null
+  invDragBase: number
   bossLaserActive: boolean; bossLaserT: number; bossLaserX: number
   shieldActive: boolean; shieldHP: number; shieldMaxHP: number
   shieldDuration: number; shieldCooldown: number; shieldCdMax: number
@@ -116,4 +122,7 @@ export interface GS {
   slotAreas: Array<BtnArea & { kind: "laser" | "shield"; index: number }>
   dragItem: DragItem | null
   dragX: number; dragY: number
+  // Diálogo de confirmación del hangar
+  confirm: ConfirmBox | null
+  confirmBtns: Array<BtnArea & { action: string }>
 }

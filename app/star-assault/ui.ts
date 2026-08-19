@@ -76,6 +76,56 @@ export const UPGRADE_DEFS: UpgradeDef[] = [
   { key: "magnet",    name: "Imán perm.",  desc: "Atrae drops siempre",   max: 1, cost: () => 600 },
 ]
 
+function drawConfirmDialog(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
+  if (!gs.confirm) { gs.confirmBtns = []; return }
+  gs.confirmBtns = []
+  const bw = 320, bh = 210
+  const bx = W / 2 - bw / 2, by = H / 2 - bh / 2
+  ctx.fillStyle = "rgba(0,0,0,0.78)"; ctx.fillRect(0, 0, W, H)
+
+  // Caja
+  ctx.fillStyle = "#0c141c"; ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 14); ctx.fill()
+  ctx.strokeStyle = "#ffcc44"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 14); ctx.stroke()
+
+  // Título
+  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 17px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.fillText(gs.confirm.title, W / 2, by + 30)
+
+  // Mensaje (envuelto en líneas)
+  ctx.fillStyle = "#ffffff"; ctx.font = "13px monospace"
+  const rawLines = gs.confirm.msg.split("\n")
+  const lines: string[] = []
+  for (const raw of rawLines) {
+    const words = raw.split(" ")
+    let cur = ""
+    for (const w of words) {
+      const test = cur ? cur + " " + w : w
+      if (ctx.measureText(test).width > bw - 36 && cur) { lines.push(cur); cur = w }
+      else cur = test
+    }
+    if (cur) lines.push(cur)
+  }
+  for (let i = 0; i < lines.length && i < 3; i++) ctx.fillText(lines[i], W / 2, by + 62 + i * 18)
+
+  // Botones SÍ / NO
+  const btnW = 120, btnH = 44
+  const btnY = by + bh - btnH - 18
+  const yesX = bx + 24, noX = bx + bw - btnW - 24
+  gs.confirmBtns.push({ action: "confirm:yes", x: yesX, y: btnY, w: btnW, h: btnH })
+  gs.confirmBtns.push({ action: "confirm:no", x: noX, y: btnY, w: btnW, h: btnH })
+
+  const pulse = 0.94 + Math.sin(time * 4) * 0.06
+  ctx.save(); ctx.translate(yesX + btnW / 2, btnY + btnH / 2); ctx.scale(pulse, pulse)
+  ctx.fillStyle = "#44ff88"; ctx.beginPath(); ctx.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 8); ctx.fill()
+  ctx.fillStyle = "#001405"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.fillText("SÍ", 0, 0)
+  ctx.restore()
+
+  ctx.fillStyle = "#445566"; ctx.beginPath(); ctx.roundRect(noX, btnY, btnW, btnH, 8); ctx.fill()
+  ctx.fillStyle = "#eef3f8"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.fillText("NO", noX + btnW / 2, btnY + btnH / 2)
+}
+
 function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillRect(0, 0, W, H)
   ctx.fillStyle = "#ffcc44"; ctx.font = "bold 26px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
@@ -112,21 +162,48 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   if (gs.hangarTab === "inventory") {
     gs.slotAreas = []
     gs.itemAreas = []
-    // Inventario: slots de la nave actual + listas compactas de láseres y escudos
+    gs.equipBtns = []
+    // Inventario: slots de la nave actual + cuadrícula de láseres y escudos (4 por fila)
     ctx.fillStyle = "#cccccc"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
     ctx.fillText(`Nave: ${ship.name} · Daño x${totalLaserMult(gs).toFixed(2)} · Escudo HP ${effShieldMaxHP(gs)}`, W / 2, listTop)
     drawSlotChips(ctx, gs, lo.lasers, lo.lasers.length, laserDef, listTop + 12, "LÁSERES EQUIPADOS", "laser")
     drawSlotChips(ctx, gs, lo.shields, lo.shields.length, shieldDef, listTop + 84, "ESCUDOS EQUIPADOS", "shield")
 
-    // Listas compactas del inventario
+    // Cuadrícula desplazable del inventario
     const invTop = listTop + 156
+    const invBottom = H - 48
+    gs.invScroll = Math.max(0, Math.min(gs.invScroll, invMaxScroll(gs)))
+    let cy = invTop - gs.invScroll
+
+    // Sección LÁSERES
     ctx.fillStyle = "#44ff88"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
-    ctx.fillText("INVENTARIO — LÁSERES", 16, invTop - 4)
-    drawInventoryList(ctx, gs, LASER_DEFS, invTop, "laser")
-    const shieldTop = invTop + eq.lasers.length * 90
+    ctx.fillText("INVENTARIO — LÁSERES", 16, cy)
+    cy += 18
+    const laserTiles: InvTile[] = eq.lasers.map(inst => ({
+      key: inst.uid, name: laserDef(inst.type).name, color: laserDef(inst.type).color,
+      qty: 1, perfection: inst.perfection, equipped: lo.lasers.includes(inst.uid),
+      tier: laserDef(inst.type).tier,
+    }))
+    cy = drawInvGrid(ctx, gs, laserTiles, cy, "laser")
+
+    // Sección ESCUDOS
+    cy += 12
     ctx.fillStyle = "#44aaff"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
-    ctx.fillText("INVENTARIO — ESCUDOS", 16, shieldTop - 4)
-    drawInventoryList(ctx, gs, SHIELD_DEFS, shieldTop, "shield")
+    ctx.fillText("INVENTARIO — ESCUDOS", 16, cy)
+    cy += 18
+    const shieldTiles: InvTile[] = SHIELD_DEFS.map(item => ({
+      key: item.id, name: item.name, color: item.color, qty: eq.shields[item.id] ?? 0,
+      perfection: 0, equipped: lo.shields.some(s => s === item.id), tier: item.tier,
+    }))
+    drawInvGrid(ctx, gs, shieldTiles, cy, "shield")
+
+    // Indicador de scroll
+    if (invMaxScroll(gs) > 0) {
+      const iy = invBottom - 16
+      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.beginPath(); ctx.roundRect(W / 2 - 110, iy - 10, 220, 22, 10); ctx.fill()
+      ctx.fillStyle = "#888"; ctx.font = "10px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText("⌄ Desliza para ver más ⌄", W / 2, iy)
+    }
 
     // Item arrastrado siguiendo el dedo
     if (gs.dragItem) {
@@ -192,6 +269,17 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   // Volver
   ctx.fillStyle = "#888"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "bottom"
   ctx.fillText("← Volver al menú", W / 2, H - 18)
+
+  // Mensaje flash (feedback de equipar/mejorar)
+  if (gs.flashT > 0) {
+    const alpha = Math.min(1, gs.flashT * 2)
+    ctx.fillStyle = `rgba(255,255,100,${alpha})`
+    ctx.font = "bold 15px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText(gs.flashMsg, W / 2, H - 52)
+  }
+
+  // Diálogo de confirmación (encima de todo)
+  drawConfirmDialog(ctx, gs, time)
 }
 
 /* Pantalla de TIENDA DE NAVES — comprar y equipar naves */
@@ -269,6 +357,9 @@ function drawShipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   // Volver
   ctx.fillStyle = "#888"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "bottom"
   ctx.fillText("← Volver al menú", W / 2, H - 18)
+
+  // Diálogo de confirmación (encima de todo)
+  drawConfirmDialog(ctx, gs, time)
 }
 
 /* ── Helpers del equip-store ── */
@@ -444,88 +535,107 @@ function drawItemList(
 
 // Lista compacta del inventario del hangar: cada item en una fila con su cantidad
 // y botón EQUIPAR/QUITAR. Soporta scroll si no cabe (gs.invScroll).
-function drawInventoryList(
-  ctx: CanvasRenderingContext2D,
-  gs: GS,
-  items: EquipItem[],
-  top: number,
-  kind: "laser" | "shield",
-) {
+// Cuadrícula del inventario del hangar: items como cuadros en filas de a 4.
+interface InvTile {
+  key: string; name: string; color: string
+  qty: number; perfection: number; equipped: boolean; tier: number
+}
+
+const INV_COLS = 4
+const INV_TILE_W = 106
+const INV_TILE_H = 140
+const INV_GAP_X = 8
+const INV_GAP_Y = 10
+const INV_GRID_X = 16
+
+export function hangarInvScrollArea(): { top: number; bottom: number } {
+  const listTop = 82 + 34 + 6
+  return { top: listTop + 156, bottom: H - 48 }
+}
+
+export function invMaxScroll(gs: GS): number {
   const eq = gs.save.equipment
-  const ship = getShip(gs.save)
-  const lo = getLoadout(eq, ship.id)
-  const slotArr = kind === "laser" ? lo.lasers : lo.shields
-  const cardW = W - 40, cx = 20
-  const rowH = kind === "laser" ? 84 : 62, gap = 6
-  const btnW = 96, btnH = 32
+  const laserRows = Math.max(1, Math.ceil(eq.lasers.length / INV_COLS))
+  const shieldRows = Math.max(1, Math.ceil(SHIELD_DEFS.length / INV_COLS))
+  const headerH = 18
+  const gapH = 12
+  const laserH = laserRows * (INV_TILE_H + INV_GAP_Y)
+  const shieldH = shieldRows * (INV_TILE_H + INV_GAP_Y)
+  const contentH = headerH + laserH + gapH + headerH + shieldH
+  const { top, bottom } = hangarInvScrollArea()
+  return Math.max(0, contentH - (bottom - top))
+}
 
-  // Para láseres: una fila por INSTANCIA individual (se mejoran por separado)
-  // Para escudos: una fila por tipo (Record)
-  const rows = kind === "laser"
-    ? eq.lasers.map(inst => ({
-        key: inst.uid, type: inst.type, name: laserDef(inst.type).name,
-        color: laserDef(inst.type).color, qty: 1, perfection: inst.perfection,
-        equipped: slotArr.includes(inst.uid),
-      }))
-    : items.map(item => ({
-        key: item.id, type: item.id, name: item.name, color: item.color,
-        qty: eq.shields[item.id] ?? 0, perfection: 0,
-        equipped: slotArr.filter(s => s === item.id).length > 0,
-      }))
+function drawInvGrid(ctx: CanvasRenderingContext2D, gs: GS, tiles: InvTile[], top: number, kind: "laser" | "shield"): number {
+  if (tiles.length === 0) return top
+  for (let i = 0; i < tiles.length; i++) {
+    const col = i % INV_COLS
+    const row = Math.floor(i / INV_COLS)
+    const tx = INV_GRID_X + col * (INV_TILE_W + INV_GAP_X)
+    const ty = top + row * (INV_TILE_H + INV_GAP_Y)
+    drawInvTile(ctx, gs, tiles[i], kind, tx, ty)
+  }
+  const rows = Math.ceil(tiles.length / INV_COLS)
+  return top + rows * (INV_TILE_H + INV_GAP_Y)
+}
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]
-    const cy = top + i * (rowH + gap)
-    const perfect = row.perfection >= 100
+function drawInvTile(ctx: CanvasRenderingContext2D, gs: GS, tile: InvTile, kind: "laser" | "shield", tx: number, ty: number) {
+  const w = INV_TILE_W, h = INV_TILE_H
+  const perfect = tile.perfection >= 100
+  const owned = tile.qty > 0
 
-    ctx.fillStyle = row.equipped ? row.color + "22" : row.qty > 0 ? "#1a241a" : "#16161c"
-    ctx.beginPath(); ctx.roundRect(cx, cy, cardW, rowH, 8); ctx.fill()
-    ctx.strokeStyle = row.equipped ? row.color : row.qty > 0 ? "#2a4a3a" : "#333"; ctx.lineWidth = row.equipped ? 2 : 1
-    ctx.beginPath(); ctx.roundRect(cx, cy, cardW, rowH, 8); ctx.stroke()
+  // Fondo del cuadro
+  ctx.fillStyle = tile.equipped ? tile.color + "22" : owned ? "#1a241a" : "#16161c"
+  ctx.beginPath(); ctx.roundRect(tx, ty, w, h, 8); ctx.fill()
+  ctx.strokeStyle = tile.equipped ? tile.color : owned ? "#2a4a3a" : "#333"
+  ctx.lineWidth = tile.equipped ? 2 : 1
+  ctx.beginPath(); ctx.roundRect(tx, ty, w, h, 8); ctx.stroke()
 
-    // Cuadrado con el icono del item (origen de drag)
-    const tileSize = 40
-    const tileX = cx + 14, tileY = cy + (rowH - tileSize) / 2
-    drawItemTile(ctx, kind, row.color, tileX, tileY, tileSize)
+  // Icono con tier
+  const iconSize = 44
+  const iconX = tx + (w - iconSize) / 2, iconY = ty + 6
+  drawItemTile(ctx, kind, tile.color, iconX, iconY, iconSize, tile.tier)
 
-    // Nombre (a la derecha del cuadrado)
-    const infoX = cx + tileSize + 26
-    ctx.textAlign = "left"; ctx.textBaseline = "middle"
-    ctx.fillStyle = row.color; ctx.font = "bold 12px monospace"
-    ctx.fillText(shortItemName(row.name), infoX, cy + (kind === "laser" ? 22 : 24))
-    // Perfección individual (láser)
-    if (kind === "laser") {
-      ctx.fillStyle = perfect ? "#ffee44" : "#ccc"; ctx.font = "bold 10px monospace"
-      ctx.fillText(perfect ? "★ PERFECTO" : `Perf ${Math.floor(row.perfection)}%`, infoX, cy + 46)
-    }
+  // Nombre corto
+  ctx.textAlign = "center"; ctx.textBaseline = "top"
+  ctx.fillStyle = tile.color; ctx.font = "bold 9px monospace"
+  ctx.fillText(shortItemName(tile.name), tx + w / 2, ty + 52)
 
-    // Área arrastrable: del cuadrado al borde izquierdo de los botones
-    if (row.equipped || row.qty > 0) {
-      gs.itemAreas.push({ kind, id: row.key, x: cx + 14, y: cy + 4, w: cardW - 14 - 8 - btnW - 18, h: rowH - 8 })
-    }
+  // Perfección / cantidad
+  ctx.fillStyle = perfect ? "#ffee44" : "#aaa"; ctx.font = "bold 9px monospace"
+  const info = kind === "laser"
+    ? (perfect ? "★ PERFECTO" : `Perf ${Math.floor(tile.perfection)}%`)
+    : (owned ? `×${tile.qty}` : "—")
+  ctx.fillText(info, tx + w / 2, ty + 66)
 
-    // Botón equipar/quitar
-    const btnX = cx + cardW - btnW - 10, btnY = cy + (kind === "laser" ? 6 : (rowH - btnH) / 2)
-    let label: string, color: string, text: string, action: string
-    if (row.equipped) { label = "QUITAR"; color = "#445566"; text = "#eef3f8"; action = `${kind}:unequip:${row.key}` }
-    else if (row.qty > 0) { label = "EQUIPAR"; color = row.color; text = "#0a100a"; action = `${kind}:equip:${row.key}` }
-    else { label = "NO TIENES"; color = "#333"; text = "#666"; action = `${kind}:none` }
-    gs.equipBtns.push({ action, x: btnX, y: btnY, w: btnW, h: btnH })
-    ctx.fillStyle = color
-    ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 6); ctx.fill()
-    ctx.fillStyle = text; ctx.font = "bold 10px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
-    ctx.fillText(label, btnX + btnW / 2, btnY + btnH / 2)
+  // Área arrastrable (icono + info, arriba de los botones)
+  if (tile.equipped || owned) {
+    gs.itemAreas.push({ kind, id: tile.key, x: tx + 2, y: ty + 2, w: w - 4, h: 72 })
+  }
 
-    // Botón mejorar perfección (láser individual, solo si no está perfecto)
-    if (kind === "laser" && !perfect && row.perfection < 100) {
-      const pBtnX = btnX, pBtnY = btnY + btnH + 6
-      const cost = perfectBuyCost(row.perfection)
-      gs.equipBtns.push({ action: `laser:perf:${row.key}`, x: pBtnX, y: pBtnY, w: btnW, h: btnH })
-      ctx.fillStyle = "#ffee4433"
-      ctx.beginPath(); ctx.roundRect(pBtnX, pBtnY, btnW, btnH, 6); ctx.fill()
-      ctx.fillStyle = "#ffee44"; ctx.font = "bold 9px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
-      ctx.fillText(`MEJORAR 🪙${cost}`, pBtnX + btnW / 2, pBtnY + btnH / 2)
-    }
+  // Botón equipar/quitar
+  const btnW = w - 14
+  const btnX = tx + 7
+  let label: string, color: string, text: string, action: string
+  if (tile.equipped) { label = "QUITAR"; color = "#445566"; text = "#eef3f8"; action = `${kind}:unequip:${tile.key}` }
+  else if (owned) { label = "EQUIPAR"; color = tile.color; text = "#0a100a"; action = `${kind}:equip:${tile.key}` }
+  else { label = "NO TIENES"; color = "#333"; text = "#666"; action = `${kind}:none` }
+  const btnY = ty + 78
+  gs.equipBtns.push({ action, x: btnX, y: btnY, w: btnW, h: 24 })
+  ctx.fillStyle = color
+  ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, 24, 5); ctx.fill()
+  ctx.fillStyle = text; ctx.font = "bold 8px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.fillText(label, btnX + btnW / 2, btnY + 12)
+
+  // Botón mejorar perfección (láser individual, solo si no está perfecto)
+  if (kind === "laser" && !perfect && tile.perfection < 100) {
+    const pBtnY = btnY + 28
+    const cost = perfectBuyCost(tile.perfection)
+    gs.equipBtns.push({ action: `laser:perf:${tile.key}`, x: btnX, y: pBtnY, w: btnW, h: 24 })
+    ctx.fillStyle = "#ffee4433"
+    ctx.beginPath(); ctx.roundRect(btnX, pBtnY, btnW, 24, 5); ctx.fill()
+    ctx.fillStyle = "#ffee44"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText(`MEJORAR 🪙${cost}`, btnX + btnW / 2, pBtnY + 12)
   }
 }
 
@@ -697,6 +807,9 @@ function drawEquipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   // Volver
   ctx.fillStyle = "#888"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "bottom"
   ctx.fillText("← Volver al menú", W / 2, H - 18)
+
+  // Diálogo de confirmación (encima de todo)
+  drawConfirmDialog(ctx, gs, time)
 }
 
 export function worldMaxScroll(): number {

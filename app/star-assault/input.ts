@@ -12,7 +12,7 @@ import { WORLDS } from "./worlds"
 import { transitionTo, startEndless, loadBankedAmmo, repairShip, activateShield } from "./engine"
 import { UPGRADE_DEFS } from "./ui"
 import { SFX, setSoundMuted, getSoundMuted } from "./audio"
-import { writeStarSave } from "./save"
+import { writeStarSave, type ShipUpgrades } from "./save"
 
 // Equipa un item del inventario en el primer slot libre de la nave actual
 function equipSlot(gs: GS, kind: "laser" | "shield", id: string): boolean {
@@ -34,6 +34,112 @@ function unequipSlot(gs: GS, kind: "laser" | "shield", id: string): boolean {
   if (idx === -1) return false
   arr[idx] = null
   return true
+}
+
+// Ejecuta una acción de gestión del inventario tras confirmarla el jugador
+function execHangarAction(gs: GS, action: string) {
+  const eq = gs.save.equipment
+  if (action.startsWith("laser:equip:")) {
+    const uid = action.slice("laser:equip:".length)
+    const inst = getLaserInstance(eq, uid)
+    const nm = inst ? laserDef(inst.type).name : "Láser"
+    if (equipSlot(gs, "laser", uid)) {
+      writeStarSave(gs.save)
+      gs.flashMsg = `${nm} equipado`
+      gs.flashT = 1.2; SFX.pickup()
+    } else { gs.flashMsg = "Sin slots libres"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+  if (action.startsWith("laser:unequip:")) {
+    const id = action.slice("laser:unequip:".length)
+    if (unequipSlot(gs, "laser", id)) {
+      writeStarSave(gs.save)
+      const inst = getLaserInstance(eq, id)
+      gs.flashMsg = `${inst ? laserDef(inst.type).name : "Láser"} desequipado`
+      gs.flashT = 1.2; SFX.pickup()
+    }
+    return
+  }
+  if (action.startsWith("shield:equip:")) {
+    const id = action.slice("shield:equip:".length)
+    if (equipSlot(gs, "shield", id)) {
+      writeStarSave(gs.save)
+      gs.flashMsg = `${shieldDef(id).name} equipado`
+      gs.flashT = 1.2; SFX.pickup()
+    } else { gs.flashMsg = "Sin slots libres"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+  if (action.startsWith("shield:unequip:")) {
+    const id = action.slice("shield:unequip:".length)
+    if (unequipSlot(gs, "shield", id)) {
+      writeStarSave(gs.save)
+      gs.flashMsg = `${shieldDef(id).name} desequipado`
+      gs.flashT = 1.2; SFX.pickup()
+    }
+    return
+  }
+  if (action.startsWith("upgrade:")) {
+    const key = action.slice("upgrade:".length) as keyof ShipUpgrades
+    const def = UPGRADE_DEFS.find(d => d.key === key)
+    if (!def) return
+    const lvl = gs.save.upgrades[key]
+    if (lvl >= def.max) { gs.flashMsg = "Ya está al máximo"; gs.flashT = 1; return }
+    const cost = def.cost(lvl)
+    if (gs.save.coins >= cost) {
+      gs.save.coins -= cost
+      gs.save.upgrades[key] = lvl + 1
+      writeStarSave(gs.save)
+      SFX.pickup()
+    } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+  if (action.startsWith("laser:perf:")) {
+    const uid = action.slice("laser:perf:".length)
+    const inst = getLaserInstance(eq, uid)
+    if (!inst) return
+    const pct = inst.perfection
+    if (pct >= 100) return
+    const cost = perfectBuyCost(pct)
+    if (gs.save.coins >= cost) {
+      gs.save.coins -= cost
+      inst.perfection = Math.min(100, pct + PERFECT_BUY_STEP)
+      writeStarSave(gs.save)
+      const np = inst.perfection
+      gs.flashMsg = np >= 100 ? "★ ¡LÁSER PERFECTO! ★" : `Perfección +${PERFECT_BUY_STEP}%`
+      gs.flashT = 1.6; SFX.pickup()
+    } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+}
+
+// Ejecuta una acción de la tienda de naves tras confirmarla el jugador
+function execShipAction(gs: GS, action: string) {
+  if (action.startsWith("ship:buy:")) {
+    const id = action.slice("ship:buy:".length)
+    const ship = SHIP_DEFS.find(s => s.id === id)
+    if (!ship) return
+    if (gs.save.coins >= ship.price) {
+      gs.save.coins -= ship.price
+      gs.save.shipsOwned.push(ship.id)
+      gs.save.shipId = ship.id
+      writeStarSave(gs.save)
+      gs.flashMsg = `¡${ship.name} comprada!`
+      gs.flashT = 1.5; SFX.worldClear()
+    } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+  if (action.startsWith("ship:equip:")) {
+    const id = action.slice("ship:equip:".length)
+    const ship = SHIP_DEFS.find(s => s.id === id)
+    if (!ship) return
+    if (gs.save.shipId !== ship.id) {
+      gs.save.shipId = ship.id
+      writeStarSave(gs.save)
+      gs.flashMsg = `${ship.name} equipada`
+      gs.flashT = 1.2; SFX.pickup()
+    }
+    return
+  }
 }
 
 // Fusión: gasta FUSION_COUNT del mismo tipo; si acierta obtienes 1 del nivel siguiente, si falla se pierden
@@ -97,7 +203,7 @@ function fuseItem(gs: GS, kind: "laser" | "shield", id: string) {
 // Inicia el arrastre si el punto toca un item del inventario o un slot ocupado.
 // Devuelve true si se inició el drag (el tap NO debe disparar handleTap).
 export function hangarDragStart(gs: GS, x: number, y: number): boolean {
-  if (gs.phase !== "hangar" || gs.hangarTab !== "inventory") return false
+  if (gs.phase !== "hangar" || gs.hangarTab !== "inventory" || gs.confirm) return false
   // Ítems del inventario primero
   for (const a of gs.itemAreas) {
     if (x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) {
@@ -127,6 +233,15 @@ export function hangarDragMove(gs: GS, x: number, y: number): void {
   gs.dragX = x; gs.dragY = y
 }
 
+// ¿El punto está sobre un botón del inventario del hangar? (para no iniciar scroll)
+export function onHangarInvButton(gs: GS, x: number, y: number): boolean {
+  if (gs.phase !== "hangar" || gs.hangarTab !== "inventory") return false
+  for (const b of gs.equipBtns) {
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return true
+  }
+  return false
+}
+
 // Resuelve el drop: equipar en slot vacío, intercambiar/reemplazar, o desequipar fuera.
 export function hangarDragEnd(gs: GS, x: number, y: number): void {
   const drag = gs.dragItem
@@ -136,6 +251,13 @@ export function hangarDragEnd(gs: GS, x: number, y: number): void {
   const lo = getLoadout(eq, ship.id)
   const slotArr = drag.kind === "laser" ? lo.lasers : lo.shields
   const equipped = drag.kind === "laser" ? lo.lasers.includes(drag.id) : lo.shields.includes(drag.id)
+
+  // Tap sin arrastre real (menos de 12px): no hacer nada para evitar desequipar por error
+  const dx = x - gs.dragX, dy = y - gs.dragY
+  if (Math.sqrt(dx * dx + dy * dy) < 12) {
+    gs.dragItem = null
+    return
+  }
 
   // Slot objetivo bajo el dedo
   let targetSlot = -1
@@ -172,6 +294,107 @@ export function hangarDragEnd(gs: GS, x: number, y: number): void {
   SFX.pickup()
 }
 
+// Ejecuta una acción de la tienda de equipamiento tras confirmarla el jugador
+function execStoreAction(gs: GS, action: string) {
+  const eq = gs.save.equipment
+  if (action.startsWith("laser:buy:")) {
+    const id = action.slice("laser:buy:".length)
+    const def = laserDef(id)
+    if (gs.save.coins >= def.price) {
+      gs.save.coins -= def.price
+      addLaserToInventory(eq, id)
+      gs.ammo.laser = inventoryLaserTotal(eq)
+      writeStarSave(gs.save)
+      gs.flashMsg = `¡${def.name} comprado!`
+      gs.flashT = 1.5; SFX.worldClear()
+    } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+  if (action.startsWith("laser:fuse:")) {
+    fuseItem(gs, "laser", action.slice("laser:fuse:".length))
+    return
+  }
+  if (action.startsWith("shield:buy:")) {
+    const id = action.slice("shield:buy:".length)
+    const def = shieldDef(id)
+    if (gs.save.coins >= def.price) {
+      gs.save.coins -= def.price
+      eq.shields[id] = (eq.shields[id] ?? 0) + 1
+      writeStarSave(gs.save)
+      gs.flashMsg = `¡${def.name} comprado!`
+      gs.flashT = 1.5; SFX.worldClear()
+    } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+  if (action.startsWith("shield:fuse:")) {
+    fuseItem(gs, "shield", action.slice("shield:fuse:".length))
+    return
+  }
+  if (action === "bot:buy") {
+    if (gs.save.coins >= REPAIR_BOT_PRICE) {
+      gs.save.coins -= REPAIR_BOT_PRICE
+      eq.repairBots += 1
+      writeStarSave(gs.save)
+      gs.flashMsg = "+1 Robot de reparación"
+      gs.flashT = 1.5; SFX.pickup()
+    } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+  if (action.startsWith("ammo:buy:")) {
+    const ammo = action.slice("ammo:buy:".length) as "laser" | "spread" | "missile"
+    const buy = AMMO_BUY[ammo]
+    if (!buy) return
+    if (gs.save.coins >= buy.price) {
+      gs.save.coins -= buy.price
+      if (ammo === "laser") {
+        addLaserToInventory(eq, "laser_std")
+        gs.ammo.laser = inventoryLaserTotal(eq)
+      } else {
+        gs.ammo[ammo] = (gs.ammo[ammo] ?? 0) + buy.amount
+        gs.save.bankedAmmo = { ...gs.save.bankedAmmo, [ammo]: gs.ammo[ammo] }
+      }
+      writeStarSave(gs.save)
+      gs.flashMsg = `+${buy.amount} ${AMMO_NAMES[ammo]}!`
+      gs.flashT = 1.5; SFX.worldClear()
+    } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+  if (action.startsWith("uav:buy:")) {
+    const id = action.slice("uav:buy:".length)
+    const def = uavDef(id)
+    if (gs.save.coins >= def.price) {
+      gs.save.coins -= def.price
+      eq.uavsOwned = eq.uavsOwned ?? []
+      eq.uavsOwned.push(id)
+      eq.uavsEquipped = eq.uavsEquipped ?? []
+      eq.uavsEquipped.push(id)
+      writeStarSave(gs.save)
+      gs.flashMsg = `¡${def.name} comprado y equipado!`
+      gs.flashT = 1.5; SFX.worldClear()
+    } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+    return
+  }
+  if (action.startsWith("uav:equip:")) {
+    const id = action.slice("uav:equip:".length)
+    eq.uavsEquipped = eq.uavsEquipped ?? []
+    if (!eq.uavsEquipped.includes(id)) {
+      eq.uavsEquipped.push(id)
+      writeStarSave(gs.save)
+      gs.flashMsg = `${uavDef(id).name} equipado (+${uavDef(id).slotsBonus} slots)`
+      gs.flashT = 1.4; SFX.pickup()
+    }
+    return
+  }
+  if (action.startsWith("uav:unequip:")) {
+    const id = action.slice("uav:unequip:".length)
+    eq.uavsEquipped = (eq.uavsEquipped ?? []).filter(x => x !== id)
+    writeStarSave(gs.save)
+    gs.flashMsg = `${uavDef(id).name} desequipado`
+    gs.flashT = 1.2; SFX.pickup()
+    return
+  }
+}
+
 export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: number, scaleY: number) {
   const x = (cx - canvasRect.left) * scaleX
   const y = (cy - canvasRect.top) * scaleY
@@ -180,6 +403,26 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
   const mb = MUTE_BTN
   if (x >= mb.x - 6 && x <= mb.x + mb.w + 6 && y >= mb.y - 6 && y <= mb.y + mb.h + 6) {
     setSoundMuted(!getSoundMuted())
+    return
+  }
+
+  // Diálogo de confirmación — bloquea cualquier otra interacción
+  if (gs.confirm) {
+    for (const btn of gs.confirmBtns) {
+      if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+        if (btn.action === "confirm:yes") {
+          const a = gs.confirm.action
+          gs.confirm = null
+          if (gs.phase === "equip-store") execStoreAction(gs, a)
+          else if (gs.phase === "ship-store") execShipAction(gs, a)
+          else execHangarAction(gs, a)
+        } else {
+          gs.confirm = null
+          SFX.shieldOff()
+        }
+        return
+      }
+    }
     return
   }
 
@@ -205,21 +448,11 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         const owned = gs.save.shipsOwned.includes(ship.id)
         if (owned) {
           if (gs.save.shipId !== ship.id) {
-            gs.save.shipId = ship.id
-            writeStarSave(gs.save)
-            gs.flashMsg = `${ship.name} equipada`
-            gs.flashT = 1.2
-            SFX.pickup()
+            gs.confirm = { title: "EQUIPAR NAVE", msg: `¿Equipar la nave ${ship.name}?`, action: `ship:equip:${ship.id}` }
           }
         } else {
           if (gs.save.coins >= ship.price) {
-            gs.save.coins -= ship.price
-            gs.save.shipsOwned.push(ship.id)
-            gs.save.shipId = ship.id
-            writeStarSave(gs.save)
-            gs.flashMsg = `¡${ship.name} comprada!`
-            gs.flashT = 1.5
-            SFX.worldClear()
+            gs.confirm = { title: "COMPRAR NAVE", msg: `¿Comprar la nave ${ship.name} por 🪙 ${ship.price}?`, action: `ship:buy:${ship.id}` }
           } else {
             gs.flashMsg = "Monedas insuficientes"
             gs.flashT = 1
@@ -248,12 +481,7 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         const id = a.slice("laser:buy:".length)
         const def = laserDef(id)
         if (gs.save.coins >= def.price) {
-          gs.save.coins -= def.price
-          addLaserToInventory(eq, id)
-          gs.ammo.laser = inventoryLaserTotal(eq)
-          writeStarSave(gs.save)
-          gs.flashMsg = `¡${def.name} comprado!`
-          gs.flashT = 1.5; SFX.worldClear()
+          gs.confirm = { title: "COMPRAR LÁSER", msg: `¿Comprar ${def.name} por 🪙 ${def.price}?`, action: a }
         } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
         return
       }
@@ -276,7 +504,19 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         return
       }
       if (a.startsWith("laser:fuse:")) {
-        fuseItem(gs, "laser", a.slice("laser:fuse:".length))
+        const id = a.slice("laser:fuse:".length)
+        const def = laserDef(id)
+        const matching = eq.lasers.filter(l => l.type === id).length
+        const next = LASER_DEFS.find(d => d.tier === def.tier + 1)
+        if (matching < FUSION_COUNT) return
+        if (next) {
+          const chance = Math.round(fusionChance(def.tier) * 100)
+          gs.confirm = {
+            title: "FUSIONAR LÁSER",
+            msg: `¿Fusionar ${FUSION_COUNT}x ${def.name} para obtener 1x ${next.name}?\nProbabilidad: ${chance}%`,
+            action: a,
+          }
+        } else { gs.flashMsg = "¡Ya es el nivel máximo!"; gs.flashT = 1.2; SFX.shieldOff() }
         return
       }
       if (a.startsWith("laser:perf:")) {
@@ -300,11 +540,7 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         const id = a.slice("shield:buy:".length)
         const def = shieldDef(id)
         if (gs.save.coins >= def.price) {
-          gs.save.coins -= def.price
-          eq.shields[id] = (eq.shields[id] ?? 0) + 1
-          writeStarSave(gs.save)
-          gs.flashMsg = `¡${def.name} comprado!`
-          gs.flashT = 1.5; SFX.worldClear()
+          gs.confirm = { title: "COMPRAR ESCUDO", msg: `¿Comprar ${def.name} por 🪙 ${def.price}?`, action: a }
         } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
         return
       }
@@ -327,16 +563,24 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         return
       }
       if (a.startsWith("shield:fuse:")) {
-        fuseItem(gs, "shield", a.slice("shield:fuse:".length))
+        const id = a.slice("shield:fuse:".length)
+        const def = shieldDef(id)
+        const qty = eq.shields[id] ?? 0
+        const next = SHIELD_DEFS.find(d => d.tier === def.tier + 1)
+        if (qty < FUSION_COUNT) return
+        if (next) {
+          const chance = Math.round(fusionChance(def.tier) * 100)
+          gs.confirm = {
+            title: "FUSIONAR ESCUDO",
+            msg: `¿Fusionar ${FUSION_COUNT}x ${def.name} para obtener 1x ${next.name}?\nProbabilidad: ${chance}%`,
+            action: a,
+          }
+        } else { gs.flashMsg = "¡Ya es el nivel máximo!"; gs.flashT = 1.2; SFX.shieldOff() }
         return
       }
       if (a === "bot:buy") {
         if (gs.save.coins >= REPAIR_BOT_PRICE) {
-          gs.save.coins -= REPAIR_BOT_PRICE
-          eq.repairBots += 1
-          writeStarSave(gs.save)
-          gs.flashMsg = "+1 Robot de reparación"
-          gs.flashT = 1.5; SFX.pickup()
+          gs.confirm = { title: "COMPRAR ROBOT", msg: `¿Comprar 1 Robot de reparación por 🪙 ${REPAIR_BOT_PRICE}?`, action: a }
         } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
         return
       }
@@ -345,18 +589,7 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         const buy = AMMO_BUY[ammo]
         if (!buy) return
         if (gs.save.coins >= buy.price) {
-          gs.save.coins -= buy.price
-          if (ammo === "laser") {
-            // Comprar 1 láser estándar: se agrega al inventario
-            addLaserToInventory(eq, "laser_std")
-            gs.ammo.laser = inventoryLaserTotal(eq)
-          } else {
-            gs.ammo[ammo] = (gs.ammo[ammo] ?? 0) + buy.amount
-            gs.save.bankedAmmo = { ...gs.save.bankedAmmo, [ammo]: gs.ammo[ammo] }
-          }
-          writeStarSave(gs.save)
-          gs.flashMsg = `+${buy.amount} ${AMMO_NAMES[ammo]}!`
-          gs.flashT = 1.5; SFX.worldClear()
+          gs.confirm = { title: "COMPRAR MUNICIÓN", msg: `¿Comprar ${buy.amount}x ${AMMO_NAMES[ammo]} por 🪙 ${buy.price}?`, action: a }
         } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
         return
       }
@@ -364,34 +597,22 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         const id = a.slice("uav:buy:".length)
         const def = uavDef(id)
         if (gs.save.coins >= def.price) {
-          gs.save.coins -= def.price
-          eq.uavsOwned = eq.uavsOwned ?? []
-          eq.uavsOwned.push(id)
-          eq.uavsEquipped = eq.uavsEquipped ?? []
-          eq.uavsEquipped.push(id)
-          writeStarSave(gs.save)
-          gs.flashMsg = `¡${def.name} comprado y equipado!`
-          gs.flashT = 1.5; SFX.worldClear()
+          gs.confirm = { title: "COMPRAR UAV", msg: `¿Comprar ${def.name} por 🪙 ${def.price}?`, action: a }
         } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
         return
       }
       if (a.startsWith("uav:equip:")) {
         const id = a.slice("uav:equip:".length)
+        const def = uavDef(id)
         eq.uavsEquipped = eq.uavsEquipped ?? []
         if (!eq.uavsEquipped.includes(id)) {
-          eq.uavsEquipped.push(id)
-          writeStarSave(gs.save)
-          gs.flashMsg = `${uavDef(id).name} equipado (+${uavDef(id).slotsBonus} slots)`
-          gs.flashT = 1.4; SFX.pickup()
+          gs.confirm = { title: "EQUIPAR UAV", msg: `¿Equipar ${def.name} (+${def.slotsBonus} slots)?`, action: a }
         }
         return
       }
       if (a.startsWith("uav:unequip:")) {
         const id = a.slice("uav:unequip:".length)
-        eq.uavsEquipped = (eq.uavsEquipped ?? []).filter(x => x !== id)
-        writeStarSave(gs.save)
-        gs.flashMsg = `${uavDef(id).name} desequipado`
-        gs.flashT = 1.2; SFX.pickup()
+        gs.confirm = { title: "QUITAR UAV", msg: `¿Quitar ${uavDef(id).name} de la nave?`, action: a }
         return
       }
       // Tarjetas (solo para UI, sin acción propia)
@@ -411,45 +632,56 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
     }
 
     if (gs.hangarTab === "inventory") {
-      // Inventario: equipar / quitar items de los slots
+      // Inventario: equipar / quitar / mejorar con confirmación
       for (let i = gs.equipBtns.length - 1; i >= 0; i--) {
         const btn = gs.equipBtns[i]
         if (!(x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h)) continue
         const a = btn.action
         if (a.startsWith("laser:equip:")) {
-          const id = a.slice("laser:equip:".length)
-          if (equipSlot(gs, "laser", id)) {
-            writeStarSave(gs.save)
-            gs.flashMsg = `${laserDef(id).name} equipado`
-            gs.flashT = 1.2; SFX.pickup()
+          const uid = a.slice("laser:equip:".length)
+          const inst = getLaserInstance(gs.save.equipment, uid)
+          const def = inst ? laserDef(inst.type) : laserDef("laser_std")
+          const ship = getShip(gs.save)
+          const lo = getLoadout(gs.save.equipment, ship.id)
+          if (lo.lasers.includes(null)) {
+            gs.confirm = { title: "EQUIPAR LÁSER", msg: `¿Equipar ${def.name} en tu nave?`, action: a }
           } else { gs.flashMsg = "Sin slots libres"; gs.flashT = 1; SFX.shieldOff() }
           return
         }
         if (a.startsWith("laser:unequip:")) {
           const id = a.slice("laser:unequip:".length)
-          if (unequipSlot(gs, "laser", id)) {
-            writeStarSave(gs.save)
-            gs.flashMsg = `${laserDef(id).name} desequipado`
-            gs.flashT = 1.2; SFX.pickup()
+          const inst = getLaserInstance(gs.save.equipment, id)
+          const nm = inst ? laserDef(inst.type).name : "Láser"
+          gs.confirm = { title: "QUITAR LÁSER", msg: `¿Quitar ${nm} de tu nave?`, action: a }
+          return
+        }
+        if (a.startsWith("laser:perf:")) {
+          const uid = a.slice("laser:perf:".length)
+          const inst = getLaserInstance(gs.save.equipment, uid)
+          if (!inst) return
+          const pct = inst.perfection
+          if (pct >= 100) return
+          const cost = perfectBuyCost(pct)
+          gs.confirm = {
+            title: "MEJORAR LÁSER",
+            msg: `¿Mejorar ${laserDef(inst.type).name}?\nCosto: 🪙 ${cost} · +${PERFECT_BUY_STEP}%`,
+            action: a,
           }
           return
         }
         if (a.startsWith("shield:equip:")) {
           const id = a.slice("shield:equip:".length)
-          if (equipSlot(gs, "shield", id)) {
-            writeStarSave(gs.save)
-            gs.flashMsg = `${shieldDef(id).name} equipado`
-            gs.flashT = 1.2; SFX.pickup()
+          const def = shieldDef(id)
+          const ship = getShip(gs.save)
+          const lo = getLoadout(gs.save.equipment, ship.id)
+          if (lo.shields.includes(null)) {
+            gs.confirm = { title: "EQUIPAR ESCUDO", msg: `¿Equipar ${def.name} en tu nave?`, action: a }
           } else { gs.flashMsg = "Sin slots libres"; gs.flashT = 1; SFX.shieldOff() }
           return
         }
         if (a.startsWith("shield:unequip:")) {
           const id = a.slice("shield:unequip:".length)
-          if (unequipSlot(gs, "shield", id)) {
-            writeStarSave(gs.save)
-            gs.flashMsg = `${shieldDef(id).name} desequipado`
-            gs.flashT = 1.2; SFX.pickup()
-          }
+          gs.confirm = { title: "QUITAR ESCUDO", msg: `¿Quitar ${shieldDef(id).name} de tu nave?`, action: a }
           return
         }
         return
@@ -466,10 +698,11 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
       if (lvl >= def.max) { gs.flashMsg = "Ya está al máximo"; gs.flashT = 1; return }
       const cost = def.cost(lvl)
       if (gs.save.coins >= cost) {
-        gs.save.coins -= cost
-        gs.save.upgrades[def.key] = lvl + 1
-        writeStarSave(gs.save)
-        SFX.pickup()
+        gs.confirm = {
+          title: "COMPRAR MEJORA",
+          msg: `¿Comprar ${def.name} (nivel ${lvl + 1}) por 🪙 ${cost}?`,
+          action: `upgrade:${def.key}`,
+        }
       } else {
         gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1
         SFX.shieldOff()
