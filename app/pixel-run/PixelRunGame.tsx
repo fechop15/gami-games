@@ -27,8 +27,9 @@ interface Enemy { id: number; type: 'spider' | 'worm' | 'monkey' | 'plant' | 'es
 interface Coin { x: number; y: number; got: boolean; }
 interface Spike { x: number; y: number; w: number; }
 interface Projectile { x: number; y: number; vx: number; vy: number; life: number; }
+interface Fireball { x: number; y: number; vx: number; life: number; }
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; ml: number; col: string; r: number; }
-interface TD { sx: number; sy: number; cx: number; cy: number; t: number; btn?: 'L' | 'R' | 'jump' | 'run'; }
+interface TD { sx: number; sy: number; cx: number; cy: number; t: number; btn?: 'L' | 'R' | 'jump' | 'run' | 'fire'; }
 
 interface GS {
   phase: Phase; lv: number; lives: number; score: number; coins: number; elapsed: number;
@@ -38,7 +39,7 @@ interface GS {
   plats: Platform[]; ens: Enemy[]; cns: Coin[]; sps: Spike[];
   gX: number; lW: number; theme: Theme; gY: number;
   camX: number; parts: Particle[]; projs: Projectile[];
-  inp: { L: boolean; R: boolean; J: boolean; };
+  inp: { L: boolean; R: boolean; J: boolean; F: boolean; };
   runT: number; ltap: { L: number; R: number; };
   tMap: Map<number, TD>;
   phT: number; msg: string; msgT: number;
@@ -60,7 +61,12 @@ interface GS {
   btnFade: number;                                                // 1..0 — visibilidad de botones táctiles
   // Wallet persistente + progresión
   owned: number[]; skin: number; streak: number; lastDay: string;
+  extras: number;                                         // vidas extra compradas (persisten)
   shopMsg: string; shopMsgT: number;
+  // Habilidades de personaje
+  jumpsLeft: number;                                      // Ninja: salto doble
+  fbCd: number; fbs: Fireball[];                          // Pirata: bolas de fuego
+  shield: number;                                         // Protección por mundo (1 daño gratis)
 }
 
 // ── Metadata de mundos ───────────────────────────────────────────────────────
@@ -83,17 +89,22 @@ interface Skin {
   hat: string; hatMid: string; hatDk: string;
   body: string; bodyMid: string; bodyDk: string;
   collar: string; collarDk: string;
+  ability: string; abilityIcon: string; abilityName: string;
 }
 const SKINS: Skin[] = [
-  { name: 'Clásico',    price: 0,   hat: '#ffd54f', hatMid: '#f9a825', hatDk: '#e65100', body: '#ffd54f', bodyMid: '#ffc107', bodyDk: '#ff8f00', collar: '#ff8f00', collarDk: '#e65100' },
-  { name: 'Ninja',      price: 200, hat: '#546e7a', hatMid: '#37474f', hatDk: '#263238', body: '#455a64', bodyMid: '#37474f', bodyDk: '#263238', collar: '#d32f2f', collarDk: '#b71c1c' },
-  { name: 'Pirata',     price: 400, hat: '#8d6e63', hatMid: '#6d4c41', hatDk: '#4e342e', body: '#c62828', bodyMid: '#b71c1c', bodyDk: '#7f0000', collar: '#fdd835', collarDk: '#f9a825' },
-  { name: 'Astronauta', price: 600, hat: '#eceff1', hatMid: '#cfd8dc', hatDk: '#90a4ae', body: '#eceff1', bodyMid: '#b0bec5', bodyDk: '#78909c', collar: '#29b6f6', collarDk: '#0288d1' },
+  { name: 'Clásico',    price: 0,   hat: '#ffd54f', hatMid: '#f9a825', hatDk: '#e65100', body: '#ffd54f', bodyMid: '#ffc107', bodyDk: '#ff8f00', collar: '#ff8f00', collarDk: '#e65100', ability: 'spikeImmune', abilityIcon: '🛡', abilityName: 'Imune a espinas' },
+  { name: 'Ninja',      price: 200, hat: '#546e7a', hatMid: '#37474f', hatDk: '#263238', body: '#455a64', bodyMid: '#37474f', bodyDk: '#263238', collar: '#d32f2f', collarDk: '#b71c1c', ability: 'doubleJump', abilityIcon: '⚡', abilityName: 'Doble salto' },
+  { name: 'Pirata',     price: 400, hat: '#8d6e63', hatMid: '#6d4c41', hatDk: '#4e342e', body: '#c62828', bodyMid: '#b71c1c', bodyDk: '#7f0000', collar: '#fdd835', collarDk: '#f9a825', ability: 'fireball', abilityIcon: '🔥', abilityName: 'Bolas de fuego' },
+  { name: 'Astronauta', price: 600, hat: '#eceff1', hatMid: '#cfd8dc', hatDk: '#90a4ae', body: '#eceff1', bodyMid: '#b0bec5', bodyDk: '#78909c', collar: '#29b6f6', collarDk: '#0288d1', ability: 'softLand', abilityIcon: '🪂', abilityName: 'Caída suave' },
 ];
 // Color arcoíris para el power-up estrella
 function rainbow(t: number): string {
   const h = Math.floor((t * 360) % 360);
   return `hsl(${h}, 90%, 60%)`;
+}
+// Habilidad activa según el personaje equipado
+function hasAbility(gs: GS, id: string): boolean {
+  return (SKINS[gs.skin]?.ability ?? 'spikeImmune') === id;
 }
 
 // ── Fecha (racha diaria) ─────────────────────────────────────────────────────
@@ -173,7 +184,7 @@ function sfxCombo(n: number) { beep(500 + n * 120, 1000 + n * 200, 0.10, 'square
 
 // ── Save / load ────────────────────────────────────────────────────────────────
 const SKEY = 'pixel-run-save';
-interface Save { stars: number[]; best: number; coins: number; owned: number[]; skin: number; streak: number; lastDay: string; }
+interface Save { stars: number[]; best: number; coins: number; owned: number[]; skin: number; streak: number; lastDay: string; extras: number; }
 function loadSave(): Save {
   try {
     const d = localStorage.getItem(SKEY);
@@ -187,10 +198,11 @@ function loadSave(): Save {
         skin: p.skin ?? 0,
         streak: p.streak ?? 0,
         lastDay: p.lastDay ?? '',
+        extras: p.extras ?? 0,
       };
     }
   } catch {}
-  return { stars: [0, 0, 0, 0, 0, 0, 0], best: 0, coins: 0, owned: [0], skin: 0, streak: 0, lastDay: '' };
+  return { stars: [0, 0, 0, 0, 0, 0, 0], best: 0, coins: 0, owned: [0], skin: 0, streak: 0, lastDay: '', extras: 0 };
 }
 function writeSave(gs: GS) {
   try {
@@ -203,6 +215,7 @@ function writeSave(gs: GS) {
       skin: gs.skin,
       streak: gs.streak,
       lastDay: gs.lastDay,
+      extras: gs.extras,
     }));
   } catch {}
 }
@@ -230,14 +243,14 @@ function initGS(cw: number, ch: number): GS {
   const gY = ch - 70;
   const sv = loadSave();
   const gs: GS = {
-    phase: 'intro', lv: 0, lives: 3, score: 0, coins: sv.coins, elapsed: 0,
+    phase: 'intro', lv: 0, lives: 3 + sv.extras, score: 0, coins: sv.coins, elapsed: 0,
     px: 80, py: gY - PH, pvx: 0, pvy: 0, onG: false, fR: true,
     ps: 'idle', afr: 0, aft: 0,
     invT: 0, coyT: 0, jBuf: 0,
     plats: [], ens: [], cns: [], sps: [],
     gX: 0, lW: 0, theme: 'green', gY,
     camX: 0, parts: [], projs: [],
-    inp: { L: false, R: false, J: false },
+    inp: { L: false, R: false, J: false, F: false },
     runT: 0, ltap: { L: 0, R: 0 },
     tMap: new Map(),
     phT: 0, msg: '', msgT: 0,
@@ -255,7 +268,9 @@ function initGS(cw: number, ch: number): GS {
     jumpStrength: 1, jumpHeld: false, touchJump: false,
     btnFade: 1,
     owned: sv.owned, skin: sv.skin, streak: sv.streak, lastDay: sv.lastDay,
+    extras: sv.extras,
     shopMsg: '', shopMsgT: 0,
+    jumpsLeft: 0, fbCd: 0, fbs: [], shield: 1,
   };
   // Racha diaria: al abrir el juego
   const today = todayStr();
@@ -292,9 +307,13 @@ function loadLevel(gs: GS, lv: number, ch: number) {
   gs.camX = 0;
   gs.parts = []; gs.projs = [];
   gs.invT = 0; gs.coyT = 0;
-  gs.inp = { L: false, R: false, J: false };
+  // Estado por mundo: proteccion, bolas de fuego y saltos
+  gs.shield = 1;
+  gs.fbs = []; gs.fbCd = 0;
+  gs.jumpsLeft = SKINS[gs.skin].ability === 'doubleJump' ? 1 : 0;
+  gs.inp = { L: false, R: false, J: false, F: false };
   gs.runT = 0;
-  gs.ckX = data.startX; gs.ckY = g - PH; gs.ckList = data.checks; gs.nextCk = 0;
+  gs.ckX = data.startX; gs.ckY = spawnFeetY(gs, data.startX) - PH; gs.ckList = data.checks; gs.nextCk = 0;
   gs.sqT = 0; gs.sqDir = 0; gs.prevOnG = false; gs.stepT = 0;
   gs.lvlCoins = 0; gs.totalLvlCoins = data.cns.length;
   // Reset mejoras
@@ -319,9 +338,29 @@ function loadLevel(gs: GS, lv: number, ch: number) {
   }
 }
 
+// Devuelve el Y de los pies del jugador sobre la plataforma más baja (más cercana
+// al suelo) que hay debajo de la x dada, para que el respawn nunca caiga al vacío
+// en mapas aéreos (Cielo / Nubes) donde no hay suelo continuo.
+function spawnFeetY(gs: GS, cx: number): number {
+  const pcx = cx + PW / 2;
+  let under: Platform | null = null;
+  for (const p of gs.plats) {
+    if (pcx >= p.x && pcx <= p.x + p.w) {
+      if (!under || p.y > under.y) under = p;
+    }
+  }
+  if (under) return under.y;
+  let nearest: Platform | null = null, nd = Infinity;
+  for (const p of gs.plats) {
+    const d = pcx < p.x ? p.x - pcx : pcx > p.x + p.w ? pcx - (p.x + p.w) : 0;
+    if (d < nd) { nd = d; nearest = p; }
+  }
+  return nearest ? nearest.y : gs.gY;
+}
+
 function respawn(gs: GS) {
   gs.px = gs.ckX;
-  gs.py = gs.ckY;
+  gs.py = spawnFeetY(gs, gs.ckX) - PH;
   gs.pvx = 0; gs.pvy = 0;
   gs.onG = false; gs.fR = true;
   gs.ps = 'idle';
@@ -331,8 +370,18 @@ function respawn(gs: GS) {
   gs.sqT = 0;
 }
 
-function loseLife(gs: GS) {
+function loseLife(gs: GS, noShield = false) {
   if (gs.invT > 0 || gs.starPowerT > 0) return;
+  // Protección por mundo: absorbe el primer daño de cada mundo (menos caer al vacío)
+  if (gs.shield > 0 && !noShield) {
+    gs.shield = 0;
+    gs.invT = 1.5;
+    gs.flashT = 0.14; gs.flashCol = '#00e5ff';   // flash azul (escudo)
+    sfxPower();
+    spawnParticles(gs, gs.px + PW / 2, gs.py + PH / 2, '#00e5ff', 14, ['#00e5ff', '#b3e5fc', '#fff']);
+    gs.msg = '🛡 Escudo absorbido'; gs.msgT = 1.2;
+    return;
+  }
   gs.lives--;
   gs.invT = 2.0;
   gs.comboT = 0; gs.comboN = 0;
@@ -1469,8 +1518,9 @@ function drawHUD(ctx: CanvasRenderingContext2D, gs: GS, cw: number) {
   ctx.fillStyle = hudGrad; ctx.fillRect(0, 0, cw, 56);
   ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(0, 55, cw, 1);
 
-  // Lives (hearts with glow)
-  for (let i = 0; i < 3; i++) {
+  // Lives (hearts with glow) — refleja las vidas totales (3 + compradas)
+  const showLives = Math.max(1, Math.min(gs.lives, MAX_LIVES));
+  for (let i = 0; i < showLives; i++) {
     const hx = 18 + i * 30, hy = 20, filled = i < gs.lives;
     if (filled) {
       const hGlow = ctx.createRadialGradient(hx, hy, 0, hx, hy, 16);
@@ -1487,6 +1537,18 @@ function drawHUD(ctx: CanvasRenderingContext2D, gs: GS, cw: number) {
       ctx.beginPath(); ctx.ellipse(hx - 4, hy - 4, 3, 2, -0.4, 0, Math.PI * 2); ctx.fill();
     }
   }
+
+  // Escudo por mundo + habilidad del personaje (debajo de los corazones)
+  ctx.textAlign = 'left';
+  ctx.font = '13px monospace';
+  if (gs.shield > 0) { ctx.globalAlpha = 0.95; ctx.fillStyle = '#00e5ff'; }
+  else { ctx.globalAlpha = 0.3; ctx.fillStyle = 'rgba(255,255,255,0.6)'; }
+  ctx.fillText('🛡', 18, 50);
+  ctx.globalAlpha = 0.85;
+  ctx.font = 'bold 12px monospace';
+  ctx.fillStyle = '#ffd54f';
+  ctx.fillText(`${SKINS[gs.skin].abilityIcon} ${SKINS[gs.skin].abilityName}`, 38, 51);
+  ctx.globalAlpha = 1;
 
   // Level indicator (center)
   ctx.textAlign = 'center';
@@ -1592,6 +1654,35 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, projs: Projectile[], cam
   ctx.globalAlpha = 1;
 }
 
+function drawFireballs(ctx: CanvasRenderingContext2D, fbs: Fireball[], camX: number) {
+  const t = performance.now() / 1000;
+  for (const fb of fbs) {
+    const sx = fb.x - camX;
+    if (sx < -20 || sx > ctx.canvas.width + 20) continue;
+    const alpha = Math.min(1, fb.life * 1.8);
+    ctx.globalAlpha = alpha;
+    const wob = Math.sin(t * 20 + fb.x * 0.1) * 1.5;
+    ctx.save();
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = '#ff6f00';
+    const g = ctx.createRadialGradient(sx + fb.vx * -0.03, fb.y + wob, 1, sx, fb.y + wob, 9);
+    g.addColorStop(0, '#fff59d');
+    g.addColorStop(0.4, '#ff7043');
+    g.addColorStop(1, '#d84315');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(sx, fb.y + wob, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(sx - 2, fb.y + wob - 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
 function drawParticles(ctx: CanvasRenderingContext2D, parts: Particle[], camX: number) {
   for (const p of parts) {
     const alpha = Math.max(0, p.life / p.ml);
@@ -1637,6 +1728,12 @@ function drawTouchButtons(ctx: CanvasRenderingContext2D, cw: number, ch: number,
   drawTouchButton(ctx, r, '►', gs.inp.R, dark, '#ffffff', fade);
   drawTouchButton(ctx, j, '▲', gs.touchJump, dark, '#ffd700', fade);
 
+  // Botón de disparo solo con el Pirata (bolas de fuego)
+  if (hasAbility(gs, 'fireball')) {
+    const fb = fireBtnRect(cw, ch);
+    drawTouchButton(ctx, fb, '🔥', gs.inp.F, dark, '#ff7043', fade);
+  }
+
   if (fade > 0.05) {
     ctx.save();
     ctx.globalAlpha = 0.7 * fade;
@@ -1646,6 +1743,10 @@ function drawTouchButtons(ctx: CanvasRenderingContext2D, cw: number, ch: number,
       ['MOVER', (l.x + r.x + r.w) / 2, l.y - 8],
       ['SALTAR', j.x + j.w / 2, j.y - 8],
     ];
+    if (hasAbility(gs, 'fireball')) {
+      const fb = fireBtnRect(cw, ch);
+      labels.push(['FUEGO', fb.x + fb.w / 2, fb.y - 8]);
+    }
     // Borde claro + texto oscuro para leerse sobre fondos claros y oscuros
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
@@ -1979,9 +2080,10 @@ function drawShop(ctx: CanvasRenderingContext2D, cw: number, ch: number, gs: GS,
     ctx.fillText('♥', hStartX + h * hSpacing, heartsY + 16);
   }
   // botón comprar
-  const canBuyLife = gs.lives < MAX_LIVES && gs.coins >= LIFE_COST;
+  const canBuyLife = gs.extras < MAX_LIVES - 3 && gs.coins >= LIFE_COST;
+  const atMax = gs.extras >= MAX_LIVES - 3;
   const btnColor = canBuyLife ? '#e53935' : '#616161';
-  const btnLabel = gs.lives >= MAX_LIVES ? `♥ MÁXIMO (${MAX_LIVES})` : `+1 vida  🪙${LIFE_COST}`;
+  const btnLabel = atMax ? `♥ MÁXIMO (${MAX_LIVES})` : `+1 vida  🪙${LIFE_COST}`;
   drawButton(ctx, lr, btnColor, btnLabel);
 
   for (let i = 0; i < SKINS.length; i++) {
@@ -1997,6 +2099,9 @@ function drawShop(ctx: CanvasRenderingContext2D, cw: number, ch: number, gs: GS,
     drawSkinPreview(ctx, r.x + r.w / 2, r.y + r.h * 0.56, i, t);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center';
     ctx.fillText(SKINS[i].name, r.x + r.w / 2, r.y + 22);
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = '#ffd54f';
+    ctx.fillText(`${SKINS[i].abilityIcon} ${SKINS[i].abilityName}`, r.x + r.w / 2, r.y + 40);
     ctx.font = 'bold 13px monospace';
     if (equipped) { ctx.fillStyle = '#69f0ae'; ctx.fillText('✓ EQUIPADO', r.x + r.w / 2, r.y + r.h - 13); }
     else if (owned) { ctx.fillStyle = '#90caf9'; ctx.fillText('Equipar', r.x + r.w / 2, r.y + r.h - 13); }
@@ -2074,6 +2179,7 @@ function render(ctx: CanvasRenderingContext2D, gs: GS, cw: number, ch: number) {
   }
 
   drawProjectiles(ctx, gs.projs, camX);
+  drawFireballs(ctx, gs.fbs, camX);
   drawParticles(ctx, gs.parts, camX);
   drawMessage(ctx, gs, camX);
 
@@ -2241,6 +2347,23 @@ function checkEntities(gs: GS, cw: number, ch: number) {
   const pL = gs.px, pR = gs.px + PW, pT = gs.py, pB = gs.py + PH;
   const parts = THEME_PARTS[gs.theme];
 
+  // Bolas de fuego del jugador contra enemigos
+  for (const fb of gs.fbs) {
+    const fbL = fb.x - 8, fbR = fb.x + 8, fbT = fb.y - 8, fbB = fb.y + 8;
+    for (const e of gs.ens) {
+      if (!e.alive) continue;
+      const eL = e.x, eR = e.x + e.w, eT = e.y, eB = e.y + e.h;
+      if (fbR <= eL || fbL >= eR || fbB <= eT || fbT >= eB) continue;
+      fb.life = 0;
+      e.alive = false; e.stompT = 0.5;
+      gs.score += 200;
+      sfxStomp();
+      spawnParticles(gs, e.x + e.w / 2, e.y + e.h / 2, '#ff7043', 10, ['#ff7043', '#ffca28', '#fff']);
+      gs.msg = '+200'; gs.msgT = 0.6;
+      break;
+    }
+  }
+
   // Enemies
   for (const e of gs.ens) {
     if (!e.alive) continue;
@@ -2259,7 +2382,10 @@ function checkEntities(gs: GS, cw: number, ch: number) {
     if (gs.invT > 0) continue;
 
     // espin no se puede pisar — las púas siempre dañan
-    if (e.type === 'espin') { loseLife(gs); return; }
+    if (e.type === 'espin') {
+      if (hasAbility(gs, 'spikeImmune')) { continue; }   // Clásico: inmune
+      loseLife(gs); return;
+    }
     // Stomp: jugador cayendo, base cerca del tope del enemigo
     if (gs.pvy > 0 && pB < eT + e.h * 0.45) {
       e.alive = false;
@@ -2313,7 +2439,7 @@ function checkEntities(gs: GS, cw: number, ch: number) {
   }
 
   // Spikes
-  if (gs.invT <= 0) {
+  if (gs.invT <= 0 && !hasAbility(gs, 'spikeImmune')) {
     for (const sp of gs.sps) {
       const spT = sp.y - 18, spB = sp.y;
       if (pR > sp.x && pL < sp.x + sp.w && pB > spT && pT < spB) {
@@ -2337,7 +2463,7 @@ function checkEntities(gs: GS, cw: number, ch: number) {
   // Checkpoints
   while (gs.nextCk < gs.ckList.length && gs.px + PW / 2 > gs.ckList[gs.nextCk]) {
     gs.ckX = gs.ckList[gs.nextCk];
-    gs.ckY = gs.onG ? gs.py : gs.gY - PH;
+    gs.ckY = gs.onG ? gs.py : spawnFeetY(gs, gs.ckList[gs.nextCk]) - PH;
     gs.nextCk++;
     spawnParticles(gs, gs.ckX, gs.gY - 50, '#00e676', 8);
     gs.msg = '¡Punto de control!'; gs.msgT = 1.2;
@@ -2356,10 +2482,10 @@ function checkEntities(gs: GS, cw: number, ch: number) {
     writeSave(gs);
   }
 
-  // Fall off — caer al vacío siempre mata (ignora invencibilidad y power-up)
+  // Fall off — caer al vacío siempre mata (ignora invencibilidad, power-up y escudo)
   if (gs.py > ch + 80) {
     gs.invT = 0; gs.starPowerT = 0;
-    loseLife(gs);
+    loseLife(gs, true);
   }
 }
 
@@ -2408,7 +2534,7 @@ function update(gs: GS, dt: number, cw: number, ch: number) {
 
   // Animación de entrada: ignora input hasta aterrizar
   if (gs.entryLock) {
-    gs.inp.L = false; gs.inp.R = false; gs.inp.J = false;
+    gs.inp.L = false; gs.inp.R = false; gs.inp.J = false; gs.inp.F = false;
   }
 
   const speed = gs.runT > 0 ? RUN_V : WALK_V;
@@ -2418,8 +2544,9 @@ function update(gs: GS, dt: number, cw: number, ch: number) {
   else if (gs.inp.R) { gs.pvx = speed; gs.fR = true; }
   else { gs.pvx *= gs.onG ? 0.60 : 0.90; if (Math.abs(gs.pvx) < 5) gs.pvx = 0; }
 
-  // Gravity
-  gs.pvy = Math.min(gs.pvy + GRAV * dt, 900);
+  // Gravity (Astronauta: caída suave → desciende más lento)
+  const maxFallV = hasAbility(gs, 'softLand') ? 330 : 900;
+  gs.pvy = Math.min(gs.pvy + GRAV * dt, maxFallV);
 
   // Jump
   if (gs.inp.J) {
@@ -2428,8 +2555,26 @@ function update(gs: GS, dt: number, cw: number, ch: number) {
       gs.pvy = JMP_V * gs.jumpStrength;  // salto variable (touch: por fuerza del swipe)
       gs.onG = false;
       gs.coyT = 0;
+      gs.jumpsLeft = hasAbility(gs, 'doubleJump') ? 1 : 0;   // Ninja: reserva el salto doble
       gs.sqT = 0.12; gs.sqDir = 1;
       sfxJump();
+    } else if (gs.jumpsLeft > 0) {
+      // Salto doble en el aire (Ninja)
+      gs.pvy = JMP_V * 0.92;
+      gs.jumpsLeft--;
+      gs.sqT = 0.12; gs.sqDir = 1;
+      sfxJump();
+      // Ráfaga de partículas del doble salto
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI + (Math.random() - 0.5) * Math.PI;
+        const spd = 50 + Math.random() * 80;
+        gs.parts.push({
+          x: gs.px + PW / 2, y: gs.py + PH,
+          vx: Math.cos(a) * spd, vy: -Math.random() * 60,
+          life: 0.3 + Math.random() * 0.2, ml: 0.5,
+          col: '#cfd8dc', r: 2 + Math.random() * 2,
+        });
+      }
     }
     gs.inp.J = false;
     gs.jumpStrength = 1; // reset para el siguiente salto
@@ -2440,6 +2585,15 @@ function update(gs: GS, dt: number, cw: number, ch: number) {
     gs.pvy = Math.max(gs.pvy, JMP_V * 0.35);
   }
   if (gs.onG) gs.touchJump = false;
+
+  // Bolas de fuego (Pirata)
+  gs.fbCd = Math.max(0, gs.fbCd - dt);
+  if (gs.inp.F && hasAbility(gs, 'fireball') && gs.fbCd <= 0) {
+    gs.fbCd = 0.3;
+    gs.fbs.push({ x: gs.px + (gs.fR ? PW : -4), y: gs.py + PH * 0.35, vx: gs.fR ? 540 : -540, life: 1.2 });
+    sfxStomp();
+  }
+  gs.inp.F = false;
 
   // Timers
   gs.onG = false;
@@ -2460,7 +2614,10 @@ function update(gs: GS, dt: number, cw: number, ch: number) {
   resolvePlatformsY(gs, dt);
 
   // Squash on land
-  if (!gs.prevOnG && gs.onG) { gs.sqT = 0.14; gs.sqDir = -1; }
+  if (!gs.prevOnG && gs.onG) {
+    gs.sqT = 0.14; gs.sqDir = -1;
+    gs.jumpsLeft = hasAbility(gs, 'doubleJump') ? 1 : 0;   // recupera el salto doble al pisar
+  }
   gs.prevOnG = gs.onG;
   gs.sqT = Math.max(0, gs.sqT - dt);
 
@@ -2487,6 +2644,10 @@ function update(gs: GS, dt: number, cw: number, ch: number) {
   if (!gs.entryLock && gs.btnFade > 0) {
     gs.btnFade = Math.max(0, gs.btnFade - dt * 0.5);
   }
+
+  // Mueve y expira las bolas de fuego del jugador
+  for (const fb of gs.fbs) { fb.x += fb.vx * dt; fb.life -= dt; }
+  gs.fbs = gs.fbs.filter(fb => fb.life > 0);
 
   // Entity checks
   checkEntities(gs, cw, ch);
@@ -2563,6 +2724,13 @@ function jumpBtnRect(cw: number, ch: number): Rect {
   const js = Math.min(cw * 0.38, s * 1.8);
   return { x: cw - js - 16, y: ch - js - 28, w: js, h: js };
 }
+// Botón de bolas de fuego (Pirata): a la izquierda del salto
+function fireBtnRect(cw: number, ch: number): Rect {
+  const s = btnSize(cw);
+  const fs = Math.min(cw * 0.24, s * 1.1);
+  const j = jumpBtnRect(cw, ch);
+  return { x: j.x - fs - 14, y: ch - fs - 28, w: fs, h: fs };
+}
 
 // ── React component ────────────────────────────────────────────────────────────
 export default function PixelRunGame() {
@@ -2616,7 +2784,8 @@ export default function PixelRunGame() {
     const beginTransition = (toLv: number) => { gs.phase = 'transition'; gs.transT = 0.9; gs.transToLv = toLv; };
     const resetToIntro = () => {
       writeSave(gs);
-      gs.lives = 3; gs.score = 0; gs.paused = false;
+      gs.lives = 3 + gs.extras; gs.score = 0; gs.paused = false;
+      gs.shield = 1;
       gs.gY = canvas.height - 70; gs.phase = 'intro';
     };
     const buyOrEquip = (i: number) => {
@@ -2644,10 +2813,10 @@ export default function PixelRunGame() {
       } else if (gs.phase === 'shop') {
         if (inRect(x, y, backBtnRect())) { writeSave(gs); gs.phase = 'intro'; return; }
         if (inRect(x, y, liveBuyBtnRect(cw, ch))) {
-          if (gs.lives < MAX_LIVES && gs.coins >= LIFE_COST) {
-            gs.coins -= LIFE_COST; gs.lives++; writeSave(gs);
+          if (gs.extras < MAX_LIVES - 3 && gs.coins >= LIFE_COST) {
+            gs.coins -= LIFE_COST; gs.extras++; gs.lives = 3 + gs.extras; writeSave(gs);
             sfxBuy(); gs.shopMsg = `♥ +1 vida (${gs.lives}/${MAX_LIVES})`; gs.shopMsgT = 2;
-          } else if (gs.lives >= MAX_LIVES) {
+          } else if (gs.extras >= MAX_LIVES - 3) {
             gs.shopMsg = `Ya tenés el máximo de vidas`; gs.shopMsgT = 2;
           } else {
             gs.shopMsg = 'Monedas insuficientes'; gs.shopMsgT = 2;
@@ -2675,6 +2844,13 @@ export default function PixelRunGame() {
       for (const touch of Array.from(e.changedTouches)) {
         const td: TD = { sx: touch.clientX, sy: touch.clientY, cx: touch.clientX, cy: touch.clientY, t: Date.now() };
         gs.tMap.set(touch.identifier, td);
+
+        // Botón de bolas de fuego (Pirata)
+        if (hasAbility(gs, 'fireball') && inRect(touch.clientX, touch.clientY, fireBtnRect(cw, ch))) {
+          td.btn = 'fire';
+          gs.inp.F = true;
+          continue;
+        }
 
         // Botón de acción (▲ saltar)
         if (inRect(touch.clientX, touch.clientY, jumpBtnRect(cw, ch))) {
@@ -2783,7 +2959,7 @@ export default function PixelRunGame() {
     };
 
     const GAME_KEYS = new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',
-      'a','A','d','D','w','W',' ','Shift','Enter','Escape','p','P']);
+      'a','A','d','D','w','W',' ','Shift','Enter','Escape','p','P','x','X','f','F']);
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (!GAME_KEYS.has(e.key)) return;
@@ -2794,6 +2970,10 @@ export default function PixelRunGame() {
       // Pausa con P/Escape durante el juego
       if (gs.phase === 'playing' && !gs.paused) {
         if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') { gs.paused = true; return; }
+        // Bolas de fuego (Pirata) — X / F
+        if (!isRepeat && (e.key === 'x' || e.key === 'X' || e.key === 'f' || e.key === 'F')) {
+          gs.inp.F = true;
+        }
         // Salto en el flanco de bajada (evita auto-hop por key-repeat)
         if (!isRepeat && (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'w' || e.key === 'W')) {
           gs.jumpStrength = 1; gs.inp.J = true;
