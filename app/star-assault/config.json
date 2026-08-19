@@ -1,0 +1,64 @@
+{
+  "lasers": [
+    { "id": "laser_std",     "name": "Láser Estándar",   "tier": 1, "price": 0,    "dmgMult": 1.0,  "color": "#ffee00", "desc": "Núcleo básico sin mejoras." },
+    { "id": "laser_plasma",  "name": "Láser de Plasma",  "tier": 2, "price": 350,  "dmgMult": 1.12, "color": "#ff8844", "desc": "Núcleo ardiente, +12% de daño." },
+    { "id": "laser_photon",  "name": "Láser Fotónico",   "tier": 3, "price": 700,  "dmgMult": 1.26, "color": "#44ccff", "desc": "Luz condensada, +26% de daño." },
+    { "id": "laser_ion",     "name": "Láser de Iones",   "tier": 4, "price": 1200, "dmgMult": 1.42, "color": "#aa66ff", "desc": "Partículas cargadas, +42% de daño." },
+    { "id": "laser_tachyon", "name": "Láser Taquiónico", "tier": 5, "price": 2000, "dmgMult": 1.6,  "color": "#ff55dd", "desc": "Velocidad superlumínica, +60%." }
+  ],
+  "shields": [
+    { "id": "shield_std",     "name": "Escudo Estándar",    "tier": 1, "price": 0,    "hpMult": 1.0,  "durMult": 1.0,  "color": "#4488ff", "desc": "Burbuja de defensa básica." },
+    { "id": "shield_energy",  "name": "Escudo de Energía",  "tier": 2, "price": 350,  "hpMult": 1.25, "durMult": 1.1,  "color": "#44ffcc", "desc": "+25% HP absorbible y +10% duración." },
+    { "id": "shield_plasma",  "name": "Escudo de Plasma",   "tier": 3, "price": 800,  "hpMult": 1.5,  "durMult": 1.2,  "color": "#ffaa44", "desc": "+50% HP absorbible y +20% duración." },
+    { "id": "shield_prism",   "name": "Escudo Prisma",      "tier": 4, "price": 1400, "hpMult": 1.8,  "durMult": 1.35, "color": "#ff88ff", "desc": "Reflejos potentes, +80% y +35%." },
+    { "id": "shield_aegis",   "name": "Escudo Aegis",       "tier": 5, "price": 2200, "hpMult": 2.2,  "durMult": 1.5,  "color": "#ffee55", "desc": "La cúpula definitiva, +120% y +50%." }
+  ],
+  "ships": [
+    { "id": "aurora",     "name": "Aurora",     "desc": "Nave de combate equilibrada.",             "price": 0,    "speedMult": 1.0,  "hpMult": 1.0,  "fireMult": 1.0,  "laserSlots": 2, "shieldSlots": 2, "shape": "delta",       "hull": "#00e5ff", "hull2": "#0088cc", "hull3": "#004488", "wing": "#0088cc", "accent": "#aaeeff", "engine": "#00e5ff" },
+    { "id": "vibora",     "name": "Víbora",     "desc": "Interceptora ultrarrápida, algo más frágil.", "price": 800,  "speedMult": 1.2,  "hpMult": 0.85, "fireMult": 1.0,  "laserSlots": 3, "shieldSlots": 1, "shape": "interceptor", "hull": "#44ff88", "hull2": "#22aa55", "hull3": "#114422", "wing": "#22aa55", "accent": "#ccffdd", "engine": "#44ff88" },
+    { "id": "juggernaut", "name": "Juggernaut", "desc": "Blindaje pesado y cañones dobles.",         "price": 1500, "speedMult": 0.8,  "hpMult": 1.5,  "fireMult": 1.0,  "laserSlots": 2, "shieldSlots": 4, "shape": "tank",        "hull": "#ff8844", "hull2": "#cc5511", "hull3": "#662200", "wing": "#cc5511", "accent": "#ffddbb", "engine": "#ffaa44" },
+    { "id": "fenix",      "name": "Fénix",      "desc": "Cadencia superior, casco ligero.",          "price": 2500, "speedMult": 1.05, "hpMult": 0.8,  "fireMult": 0.85, "laserSlots": 3, "shieldSlots": 2, "shape": "jet",         "hull": "#ff44aa", "hull2": "#cc2277", "hull3": "#660033", "wing": "#cc2277", "accent": "#ffccee", "engine": "#ff66cc" },
+    { "id": "phantom",    "name": "Phantom",    "desc": "Sigilosa: imán de drops permanente.",        "price": 3500, "speedMult": 1.02, "hpMult": 0.9,  "fireMult": 0.95, "laserSlots": 4, "shieldSlots": 2, "shape": "phantom",     "hull": "#aa88ff", "hull2": "#6633cc", "hull3": "#220055", "wing": "#6633cc", "accent": "#ddccff", "engine": "#bb88ff", "passive": { "magnet": true } },
+    { "id": "omega",      "name": "Omega",      "desc": "La leyenda: todo lo anterior, mejorado.",   "price": 6000, "speedMult": 1.1,  "hpMult": 1.25, "fireMult": 0.85, "laserSlots": 5, "shieldSlots": 4, "shape": "omega",       "hull": "#ffdd44", "hull2": "#ffaa00", "hull3": "#885500", "wing": "#ffaa00", "accent": "#fff3cc", "engine": "#ffdd44" }
+  ],
+  "repairRobot": {
+    "price": 150,
+    "healPct": 0.4
+  },
+  "balance": {
+    "playerSpeed": 300,
+    "playerVertMult": 0.9,
+    "enemyBaseVy": {
+      "scout": 80,
+      "grunt": 55,
+      "tank": 32,
+      "stealth": 62,
+      "shooter": 40,
+      "kamikaze": 105,
+      "splitter": 48,
+      "mini": 115
+    },
+    "enemyWorldScale": 0.1,
+    "enemyWorldScaleCap": 0.6,
+    "fusion": {
+      "count": 3,
+      "baseChance": 0.55,
+      "chanceGainPerTier": 0.05
+    },
+    "perfection": {
+      "buyStep": 10,
+      "buyCostBase": 60,
+      "buyCostPer": 3,
+      "stepBonus": 0.006,
+      "perfectBonus": 0.25,
+      "coreGain": 12,
+      "coreChance": 0.06
+    },
+    "shieldBase": {
+      "maxHp": 60,
+      "duration": 4,
+      "cooldown": 8,
+      "hurtbox": 24
+    }
+  }
+}

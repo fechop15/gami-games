@@ -8,14 +8,19 @@ export interface ShipUpgrades {
 
 export type AmmoType = "basic" | "laser" | "spread" | "missile"
 
-// Equipamiento comprable por nave
+// Loadout (slots) de una nave: qué items del inventario están equipados
+export interface ShipLoadout {
+  lasers: (string | null)[]   // items equipados en los slots de láser
+  shields: (string | null)[]  // items equipados en los slots de escudo
+}
+
+// Equipamiento: inventario de items + loadout por nave
 export interface EquipmentState {
-  laserId: string            // láser equipado (id de LASER_DEFS)
-  shieldId: string           // escudo equipado (id de SHIELD_DEFS)
-  ownedLasers: string[]      // láseres comprados
-  ownedShields: string[]     // escudos comprados
-  laserPerfection: Record<string, number>   // % de perfección (0-100) por láser
-  repairBots: number         // robots de reparación disponibles (un solo uso)
+  lasers: Record<string, number>        // inventario de láseres: { laserId: cantidad }
+  shields: Record<string, number>       // inventario de escudos: { shieldId: cantidad }
+  laserPerfection: Record<string, number>   // % de perfección (0-100) por láser base
+  repairBots: number                    // robots de reparación disponibles (un solo uso)
+  loadouts: Record<string, ShipLoadout> // loadout por nave (slots equipados)
 }
 
 export interface StarSave {
@@ -27,7 +32,7 @@ export interface StarSave {
   upgrades: ShipUpgrades     // mejoras permanentes de nave
   shipId: string             // id de la nave equipada
   shipsOwned: string[]       // ids de naves compradas
-  equipment: EquipmentState  // equipamiento (láser, escudo, robots, perfección)
+  equipment: EquipmentState  // inventario + loadouts por nave
   bankedAmmo: Record<AmmoType, number>  // munición guardada entre partidas
 }
 
@@ -42,13 +47,14 @@ export const DEFAULT_LASER_ID = "laser_std"
 export const DEFAULT_SHIELD_ID = "shield_std"
 export const TOTAL_WORLDS = 16
 
-const DEFAULT_EQUIPMENT: EquipmentState = {
-  laserId: DEFAULT_LASER_ID,
-  shieldId: DEFAULT_SHIELD_ID,
-  ownedLasers: [DEFAULT_LASER_ID],
-  ownedShields: [DEFAULT_SHIELD_ID],
-  laserPerfection: {},
-  repairBots: 0,
+function defaultEquipment(): EquipmentState {
+  return {
+    lasers: { [DEFAULT_LASER_ID]: 1 },
+    shields: { [DEFAULT_SHIELD_ID]: 1 },
+    laserPerfection: {},
+    repairBots: 0,
+    loadouts: {},
+  }
 }
 
 const DEFAULT_BANKED: Record<AmmoType, number> = {
@@ -64,12 +70,7 @@ const DEFAULTS: StarSave = {
   upgrades: { ...DEFAULT_UPGRADES },
   shipId: DEFAULT_SHIP_ID,
   shipsOwned: [DEFAULT_SHIP_ID],
-  equipment: {
-    ...DEFAULT_EQUIPMENT,
-    ownedLasers: [...DEFAULT_EQUIPMENT.ownedLasers],
-    ownedShields: [...DEFAULT_EQUIPMENT.ownedShields],
-    laserPerfection: { ...DEFAULT_EQUIPMENT.laserPerfection },
-  },
+  equipment: defaultEquipment(),
   bankedAmmo: { ...DEFAULT_BANKED },
 }
 
@@ -81,7 +82,23 @@ export function loadStarSave(): StarSave {
     const p = JSON.parse(raw) as Partial<StarSave>
     const highScores = p.highScores ?? []
     while (highScores.length < TOTAL_WORLDS) highScores.push(0)
-    const eq = (p.equipment ?? {}) as Partial<EquipmentState>
+    const eq = (p.equipment ?? {}) as Partial<EquipmentState> & Record<string, unknown>
+    // Migración del formato viejo (v5: laserId/ownedLasers) al de inventario
+    const lasers: Record<string, number> = {}
+    if (eq.lasers && typeof eq.lasers === "object") {
+      Object.assign(lasers, eq.lasers)
+    } else if (Array.isArray(eq.ownedLasers)) {
+      // Formato viejo: cada id comprado → 3 copias para poder fusionar
+      for (const id of eq.ownedLasers) lasers[id] = 3
+    }
+    if (!(DEFAULT_LASER_ID in lasers)) lasers[DEFAULT_LASER_ID] = 1
+    const shields: Record<string, number> = {}
+    if (eq.shields && typeof eq.shields === "object") {
+      Object.assign(shields, eq.shields)
+    } else if (Array.isArray(eq.ownedShields)) {
+      for (const id of eq.ownedShields) shields[id] = 3
+    }
+    if (!(DEFAULT_SHIELD_ID in shields)) shields[DEFAULT_SHIELD_ID] = 1
     return {
       worldsCleared: p.worldsCleared ?? 0,
       highScores: highScores.slice(0, TOTAL_WORLDS),
@@ -92,12 +109,11 @@ export function loadStarSave(): StarSave {
       shipId: p.shipId ?? DEFAULT_SHIP_ID,
       shipsOwned: Array.isArray(p.shipsOwned) && p.shipsOwned.length > 0 ? p.shipsOwned : [DEFAULT_SHIP_ID],
       equipment: {
-        laserId: eq.laserId ?? DEFAULT_LASER_ID,
-        shieldId: eq.shieldId ?? DEFAULT_SHIELD_ID,
-        ownedLasers: Array.isArray(eq.ownedLasers) && eq.ownedLasers.length > 0 ? eq.ownedLasers : [DEFAULT_LASER_ID],
-        ownedShields: Array.isArray(eq.ownedShields) && eq.ownedShields.length > 0 ? eq.ownedShields : [DEFAULT_SHIELD_ID],
+        lasers,
+        shields,
         laserPerfection: { ...(eq.laserPerfection ?? {}) },
         repairBots: eq.repairBots ?? 0,
+        loadouts: (eq.loadouts && typeof eq.loadouts === "object" ? eq.loadouts : {}) as Record<string, ShipLoadout>,
       },
       bankedAmmo: { ...DEFAULT_BANKED, ...(p.bankedAmmo ?? {}) },
     }
@@ -110,12 +126,7 @@ function cloneDefaults(): StarSave {
   return {
     ...DEFAULTS,
     upgrades: { ...DEFAULT_UPGRADES },
-    equipment: {
-      ...DEFAULT_EQUIPMENT,
-      ownedLasers: [...DEFAULT_EQUIPMENT.ownedLasers],
-      ownedShields: [...DEFAULT_EQUIPMENT.ownedShields],
-      laserPerfection: { ...DEFAULT_EQUIPMENT.laserPerfection },
-    },
+    equipment: defaultEquipment(),
     bankedAmmo: { ...DEFAULT_BANKED },
   }
 }

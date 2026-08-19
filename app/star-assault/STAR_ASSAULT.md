@@ -3,7 +3,7 @@
 > Juego 004 del catálogo Gami Game
 > Ruta: `/star-assault`
 > Tecnología: Canvas 2D puro (sin dependencias externas), Next.js App Router, TypeScript
-> Estado: **v5** (16 mundos, tienda de naves, combos, power-ups, meta-progresión, modo Endless, equipamiento: láseres/escudos/robots, munición guardada, láseres perfectos)
+> Estado: **v6** (16 mundos, tienda de naves, combos, power-ups, meta-progresión, modo Endless, equipamiento por inventario con slots por nave, láseres como munición, fusión con probabilidad, láseres perfectos)
 
 ---
 
@@ -12,39 +12,42 @@
 ```
 app/star-assault/
 ├── page.tsx              ← Wrapper de Next.js (metadata + export)
-├── StarAssaultGame.tsx   ← Todo el juego (~3600 líneas)
-├── save.ts               ← Persistencia en localStorage (monedas, mejoras, naves, récords)
+├── StarAssaultGame.tsx   ← Componente React: canvas, game loop y eventos (~200 líneas)
+├── config.json           ← Config dinámica: láseres, escudos, naves, robots y balance (velocidades, fusión, perfección)
+├── types.ts              ← Tipos compartidos (Phase, GS, entidades, etc.)
+├── constants.ts          ← Constantes derivadas de config (dimensiones, velocidades, combo, fusión, perfección)
+├── ships.ts              ← Naves (stats y slots) desde config
+├── items.ts              ← Láseres/escudos + helpers de inventario, loadout, daño y escudo
+├── worlds.ts             ← Definición de los 16 mundos
+├── engine.ts             ← Lógica de juego: update, spawn, colisiones, enemigos, jefes, drops, meta
+├── draw.ts               ← Dibujo de entidades, HUD, fondo y efectos
+├── ui.ts                 ← Dibujo de fases y menús (intro, hangar, tiendas, equipamiento)
+├── input.ts              ← Manejo de input (handleTap) y acciones de tienda/fusión
+├── audio.ts              ← SFX (Web Audio API, síntesis procedural)
+├── save.ts               ← Persistencia en localStorage (monedas, mejoras, naves, inventario, loadouts)
 └── STAR_ASSAULT.md       ← Este documento
 ```
 
 ---
 
-## Arquitectura del componente
+## Arquitectura
 
-El juego es un único componente React (`StarAssaultGame`) que monta un `<canvas>` de **480 × 854 px** (lógico) escalado con CSS para llenar la pantalla del dispositivo:
+El juego está **modularizado en archivos por responsabilidad** (ver [Archivos](#archivos)), en lugar de un monolito. El componente React (`StarAssaultGame.tsx`) es delgado (~200 líneas): monta el `<canvas>` de **480 × 854 px** (lógico) escalado con CSS, corre el game loop (`requestAnimationFrame`) y los event listeners, delegando en:
 
-```
-scale = min(vw / 480, vh / 854)
-```
-
-El estado del juego vive en `useRef<GS>` (no en `useState`) para evitar re-renders durante el game loop, que usa `requestAnimationFrame`. El canvas escala **uniformemente** (misma proporción X e Y), por lo que las conversiones touch usan un único factor de escala.
-
-### Secciones del archivo (orden de aparición)
-
-| Sección | Descripción |
+| Módulo | Responsabilidad |
 |---|---|
-| Constantes | Dimensiones, velocidades, escudo, combo, power-ups, **helpers de mejoras de nave** (`upMaxHP`, `upShieldDur`, `upShieldCd`, `upFireMult`, `upHasMagnet`) |
-| Tipos | `Phase`, `AmmoType`, `EnemyType`, `PowerupKind`, `DropKind`, interfaces de entidades y `GS` |
-| Definición de mundos | Array `WORLDS: WorldDef[]` — 5 mundos con oleadas y config de jefe |
-| Helpers de entidades | `makeEnemy`, `makeBoss`, `makeStar`, `makeGS`, `spawnFloater`, `spawnShockwave` |
-| Spawn | balas del jugador/enemigo, partículas, **drops (munición + power-ups)** |
-| Update | orquestador `update` + subsistemas (`registerKill`, `damagePlayer`, combo, power-ups, endless) |
-| Draw helpers | naves, balas, drops, fondo, estrellas, HUD, **trail, floaters, shockwaves** |
-| Draw phases | intro, world-select, **hangar**, boss-intro, world-clear, gameover, victory |
-| Draw frame | `draw` — orquesta con screen shake |
-| Input | `handleTap` (touch + mouse) |
-| Audio | `SFX.*` — síntesis procedural con Web Audio API + mute |
-| Componente | `StarAssaultGame` — setup, game loop, event listeners |
+| `constants.ts` | Constantes derivadas de `config.json` (dimensiones, velocidades, escudo, combo, fusión, perfección) |
+| `items.ts` | Definición de láseres/escudos + helpers de inventario, loadout, daño proporcional y escudo |
+| `ships.ts` | Naves (stats y slots) desde `config.json` |
+| `worlds.ts` | Los 16 mundos con oleadas y config de jefe |
+| `engine.ts` | `update` y subsistemas: spawn, colisiones, enemigos, jefes, drops, combo, power-ups, endless, meta-progresión |
+| `draw.ts` | Dibujo de naves, balas, drops, fondo, estrellas, HUD y efectos (trail, floaters, shockwaves) |
+| `ui.ts` | Dibujo de fases/menús: intro, world-select, hangar, tienda de naves, equipamiento, boss-intro, world-clear, gameover, victory |
+| `input.ts` | `handleTap` (touch + mouse) y acciones de tienda (equipar, fusionar, comprar, perfección) |
+| `audio.ts` | `SFX.*` — síntesis procedural con Web Audio API + mute |
+| `save.ts` | Persistencia en localStorage (monedas, mejoras, naves, inventario, loadouts) |
+
+El estado del juego vive en `useRef<GS>` (no en `useState`) para evitar re-renders durante el game loop. El canvas escala **uniformemente** (misma proporción X e Y), por lo que las conversiones touch usan un único factor de escala.
 
 ---
 
@@ -258,27 +261,50 @@ Pantalla accesible desde el intro (botón **🚀 NAVES**). Comprar una nave la e
 
 ---
 
-## Equipamiento (`equip-store`) — láseres, escudos y robots (v5)
+## Equipamiento (`equip-store`) — inventario de items y slots por nave (v6)
 
-Pantalla accesible desde el intro (botón **🛠 EQUIPAMIENTO**) con 4 pestañas: **LÁSER**, **ESCUDO**, **ROBOTS** y **MUNICIÓN**. El equipamiento aplica a cualquier nave.
+Pantalla accesible desde el intro (botón **🛠 EQUIPAMIENTO**) con 4 pestañas: **LÁSER**, **ESCUDO**, **ROBOTS** y **MUNICIÓN**.
 
-### Láseres (`LASER_DEFS`) — aumentan el daño
+### Inventario y loadout por nave
+
+Los **láseres y escudos son items del inventario con cantidades** (`equipment.lasers` / `equipment.shields` como `{ id: cantidad }`). Cada nave tiene un número de **slots** (`laserSlots` / `shieldSlots` en `config.json`) y su propio **loadout** (`equipment.loadouts[shipId]`) que define qué items están equipados en cada slot. Los items se compran, se equipan y se desequipan libremente.
+
+| Nave | Slots láser | Slots escudo |
+|---|---|---|
+| Aurora | 2 | 2 |
+| Víbora | 3 | 1 |
+| Juggernaut | 2 | 4 |
+| Fénix | 3 | 2 |
+| Phantom | 4 | 2 |
+| Omega | 5 | 4 |
+
+### Láseres = munición gastable
+
+- **Daño proporcional**: el daño de todas las municiones se multiplica por `totalLaserMult()` = la **suma** del multiplicador de cada láser equipado. Más láseres equipados = más daño.
+- **Munición**: los láseres del inventario **son la munición de láser**. Al disparar munición `laser` se gasta 1 láser del inventario (`spendLaserFromInventory`). Los drops de "LÁSER" añaden láseres al inventario (`+3`).
+- La pestaña **MUNICIÓN** muestra el total de láseres en el inventario.
 
 | Láser | Nivel | Daño | Precio |
 |---|---|---|---|
 | Láser Estándar | 1 | ×1.00 | Gratis |
-| Láser de Plasma | 2 | ×1.15 | 350 |
-| Láser Fotónico | 3 | ×1.32 | 700 |
-| Láser de Iones | 4 | ×1.50 | 1200 |
-| Láser Taquiónico | 5 | ×1.70 | 2000 |
+| Láser de Plasma | 2 | ×1.12 | 350 |
+| Láser Fotónico | 3 | ×1.26 | 700 |
+| Láser de Iones | 4 | ×1.42 | 1200 |
+| Láser Taquiónico | 5 | ×1.60 | 2000 |
 
-El daño de **todas las municiones** (`basic`, `laser`, `spread`, `missile`) se multiplica por `laserDmgMult()`.
+### Fusión de láseres (con probabilidad)
 
-**Perfección (0-100%)**: cada láser tiene un % de perfección que multiplica aún más el daño (`+0.6%` por punto). Al llegar a **100% el láser es PERFECTO** (bonus extra `+25%`). Se aumenta de dos formas:
-- **Drops de jefes**: al derrotar un jefe siempre suelta **núcleos** (2 en campaña, 1 en endless) que dan `+12%` de perfección al láser equipado. Los enemigos también pueden soltar núcleos raramente (`CORE_DROP_CHANCE = 6%`).
-- **Tienda**: botón `PERF +10%` en el láser equipado (costo creciente `60 + pct×3`).
+- **Fusionar 3 iguales** con probabilidad de éxito de subir al siguiente nivel: `fusionChance(tier) = min(0.95, 0.55 + (tier−1)×0.05)`.
+- Éxito → obtienes 1 láser del nivel siguiente. Fallo → pierdes los 3.
+- Solo disponible si tienes ≥3 del mismo tipo y existe un nivel superior (el máximo no se fusiona).
 
-### Escudos (`SHIELD_DEFS`) — aumentan el escudo
+### Perfección (0-100%)
+
+Cada láser tiene un % de perfección que multiplica aún más el daño (`+0.6%` por punto). Al llegar a **100% el láser es PERFECTO** (bonus extra `+25%`). Se aumenta de dos formas:
+- **Drops de jefes**: al derrotar un jefe suelta **núcleos** (2 en campaña, 1 en endless) que dan `+12%` de perfección al primer láser equipado. Los enemigos pueden soltar núcleos raramente (`CORE_DROP_CHANCE = 6%`).
+- **Tienda**: botón `PERF +10%` (costo creciente `60 + pct×3`).
+
+### Escudos — proporcionales a los equipados
 
 | Escudo | Nivel | HP absorbible | Duración | Precio |
 |---|---|---|---|---|
@@ -288,7 +314,7 @@ El daño de **todas las municiones** (`basic`, `laser`, `spread`, `missile`) se 
 | Escudo Prisma | 4 | ×1.80 | +35% | 1400 |
 | Escudo Aegis | 5 | ×2.20 | +50% | 2200 |
 
-Se aplican sobre las mejoras permanentes del Hangar (`upShieldDur`) vía `effShieldMaxHP`/`effShieldDur`.
+El HP absorbible y la duración son **proporcionales a los escudos equipados** (`totalShieldHpMult` / `totalShieldDurMult`), aplicados sobre las mejoras del Hangar (`upShieldDur`).
 
 ### Robots de reparación (un solo uso)
 
@@ -298,7 +324,7 @@ Se aplican sobre las mejoras permanentes del Hangar (`upShieldDur`) vía `effShi
 
 ### Munición guardada
 
-La munición recolectada en las partidas (`laser`, `spread`, `missile`) se **guarda entre partidas** (`save.bankedAmmo`). Al iniciar una corrida se carga el stock bancado (`loadBankedAmmo`) y al terminar (mundo conquistado o game over) el sobrante se guarda (`saveBankedAmmo`). La pestaña **MUNICIÓN** muestra el stock guardado.
+`spread` y `missile` se guardan entre partidas (`save.bankedAmmo`). El láser vive en el inventario (`equipment.lasers`). Al iniciar una corrida se carga el stock (`loadBankedAmmo`) y al terminar el sobrante se guarda (`saveBankedAmmo`).
 
 ---
 
@@ -364,18 +390,23 @@ interface StarSave {
 
 ## Constantes clave (balance)
 
-```typescript
-PLAYER_SPEED     = 360
-SHIELD_DURATION  = 4     SHIELD_MAX_HP = 60    SHIELD_COOLDOWN = 8    SHIELD_HURTBOX = 24
-COMBO_TIMEOUT    = 2.5   COMBO_MAX = 8
-OVERDRIVE_DURATION = 6   MAGNET_DURATION = 5   OVERDRIVE_MULT = 0.6
-FIRE_RATES = { basic: 200, laser: 460, spread: 340, missile: 640 }
-// Daño de balas del jugador: basic 26, laser 65, spread 22×3, missile 90
+El balance vive en **`config.json`** (sección `balance`), no en código, para ajustarlo sin tocar TypeScript:
+
+```json
+{
+  "playerSpeed": 300,          // velocidad horizontal de la nave (antes 360)
+  "playerVertMult": 0.9,       // velocidad vertical (esquivas) = ×0.9 de la horizontal
+  "enemyBaseVy": { ... },      // velocidad base de descenso por tipo de enemigo
+  "enemyWorldScale": 0.1,      // +10% de velocidad por mundo (capado en 0.6)
+  "shieldBase": { "maxHp": 60, "duration": 4, "cooldown": 8, "hurtbox": 24 }
+}
 ```
+
+Otras constantes: `COMBO_TIMEOUT = 2.5`, `COMBO_MAX = 8`, `OVERDRIVE_DURATION = 6`, `MAGNET_DURATION = 5`, `OVERDRIVE_MULT = 0.6`, `FIRE_RATES = { basic: 200, laser: 460, spread: 340, missile: 640 }`. Daño base de balas: `basic 26, laser 65, spread 22×3, missile 90` (se multiplica por `totalLaserMult()`).
 
 ---
 
-## Ideas para iteraciones futuras (v5)
+## Ideas para iteraciones futuras (v6)
 
 ### Gameplay
 - [ ] **Perks por corrida** — elegir 1-2 pasivas antes de empezar (combo que decae más lento, revive único)
