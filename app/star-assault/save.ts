@@ -8,17 +8,23 @@ export interface ShipUpgrades {
 
 export type AmmoType = "basic" | "laser" | "spread" | "missile"
 
+// Una instancia de láser: cada pieza del inventario se mejora por individual
+export interface LaserInstance {
+  uid: string          // id único de la pieza (p.ej. "laser_std_3")
+  type: string         // laserId (el tipo/nivel base)
+  perfection: number   // 0-100 individual de ESTA pieza
+}
+
 // Loadout (slots) de una nave: qué items del inventario están equipados
 export interface ShipLoadout {
-  lasers: (string | null)[]   // items equipados en los slots de láser
-  shields: (string | null)[]  // items equipados en los slots de escudo
+  lasers: (string | null)[]   // uids de instancias de láser equipadas
+  shields: (string | null)[]  // ids de escudos equipados
 }
 
 // Equipamiento: inventario de items + loadout por nave
 export interface EquipmentState {
-  lasers: Record<string, number>        // inventario de láseres: { laserId: cantidad }
+  lasers: LaserInstance[]               // inventario de láseres (instancias individuales)
   shields: Record<string, number>       // inventario de escudos: { shieldId: cantidad }
-  laserPerfection: Record<string, number>   // % de perfección (0-100) por láser base
   repairBots: number                    // robots de reparación disponibles (un solo uso)
   loadouts: Record<string, ShipLoadout> // loadout por nave (slots equipados)
 }
@@ -49,9 +55,8 @@ export const TOTAL_WORLDS = 16
 
 function defaultEquipment(): EquipmentState {
   return {
-    lasers: { [DEFAULT_LASER_ID]: 1 },
+    lasers: [{ uid: DEFAULT_LASER_ID + "_0", type: DEFAULT_LASER_ID, perfection: 0 }],
     shields: { [DEFAULT_SHIELD_ID]: 1 },
-    laserPerfection: {},
     repairBots: 0,
     loadouts: {},
   }
@@ -83,15 +88,31 @@ export function loadStarSave(): StarSave {
     const highScores = p.highScores ?? []
     while (highScores.length < TOTAL_WORLDS) highScores.push(0)
     const eq = (p.equipment ?? {}) as Partial<EquipmentState> & Record<string, unknown>
-    // Migración del formato viejo (v5: laserId/ownedLasers) al de inventario
-    const lasers: Record<string, number> = {}
-    if (eq.lasers && typeof eq.lasers === "object") {
-      Object.assign(lasers, eq.lasers)
+    // Migración del formato viejo al de instancias individuales de láser
+    const oldPerf = (eq.laserPerfection ?? {}) as Record<string, number>
+    let lasers: LaserInstance[] = []
+    if (Array.isArray(eq.lasers) && eq.lasers.length > 0 && typeof eq.lasers[0] === "object") {
+      // Formato nuevo (instancias)
+      lasers = (eq.lasers as LaserInstance[]).map((l, i) => ({
+        uid: l.uid ?? l.type + "_" + i,
+        type: l.type,
+        perfection: l.perfection ?? 0,
+      }))
+    } else if (eq.lasers && typeof eq.lasers === "object" && !Array.isArray(eq.lasers)) {
+      // Formato agregado: Record<laserId, cantidad>
+      const rec = eq.lasers as Record<string, number>
+      let k = 0
+      for (const type of Object.keys(rec)) {
+        const n = rec[type] ?? 0
+        for (let i = 0; i < n; i++) lasers.push({ uid: type + "_" + k++, type, perfection: oldPerf[type] ?? 0 })
+      }
     } else if (Array.isArray(eq.ownedLasers)) {
-      // Formato viejo: cada id comprado → 3 copias para poder fusionar
-      for (const id of eq.ownedLasers) lasers[id] = 3
+      // Formato muy viejo (v5): ownedLasers: string[]
+      let k = 0
+      for (const type of eq.ownedLasers as string[]) lasers.push({ uid: type + "_" + k++, type, perfection: oldPerf[type] ?? 0 })
     }
-    if (!(DEFAULT_LASER_ID in lasers)) lasers[DEFAULT_LASER_ID] = 1
+    if (lasers.length === 0) lasers = [{ uid: DEFAULT_LASER_ID + "_0", type: DEFAULT_LASER_ID, perfection: 0 }]
+
     const shields: Record<string, number> = {}
     if (eq.shields && typeof eq.shields === "object") {
       Object.assign(shields, eq.shields)
@@ -99,6 +120,21 @@ export function loadStarSave(): StarSave {
       for (const id of eq.ownedShields) shields[id] = 3
     }
     if (!(DEFAULT_SHIELD_ID in shields)) shields[DEFAULT_SHIELD_ID] = 1
+
+    // Migrar loadouts: los slots de láser guardaban laserId, ahora deben guardar uid
+    const rawLoadouts = (eq.loadouts && typeof eq.loadouts === "object" ? eq.loadouts : {}) as Record<string, ShipLoadout>
+    const loadouts: Record<string, ShipLoadout> = {}
+    for (const shipId of Object.keys(rawLoadouts)) {
+      const lo = rawLoadouts[shipId] ?? { lasers: [], shields: [] }
+      const newLasers: (string | null)[] = (lo.lasers ?? []).map(slot => {
+        if (!slot) return null
+        // slot era un laserId → buscar el primer uid de ese type
+        const inst = lasers.find(l => l.type === slot)
+        return inst ? inst.uid : null
+      })
+      loadouts[shipId] = { lasers: newLasers, shields: [...(lo.shields ?? [])] }
+    }
+
     return {
       worldsCleared: p.worldsCleared ?? 0,
       highScores: highScores.slice(0, TOTAL_WORLDS),
@@ -111,9 +147,8 @@ export function loadStarSave(): StarSave {
       equipment: {
         lasers,
         shields,
-        laserPerfection: { ...(eq.laserPerfection ?? {}) },
         repairBots: eq.repairBots ?? 0,
-        loadouts: (eq.loadouts && typeof eq.loadouts === "object" ? eq.loadouts : {}) as Record<string, ShipLoadout>,
+        loadouts,
       },
       bankedAmmo: { ...DEFAULT_BANKED, ...(p.bankedAmmo ?? {}) },
     }

@@ -6,7 +6,7 @@ import {
   CORE_PERF_GAIN, CORE_DROP_CHANCE, REPAIR_BOT_HEAL, CONFIG,
 } from "./constants"
 import {
-  laserDef, laserPerfectPct, equippedLaserIds, equippedShieldIds, totalLaserMult,
+  laserDef, getLaserInstance, equippedLaserUids, equippedShieldIds, totalLaserMult,
   effShieldMaxHP, effShieldDur, shieldDef, upShieldCd,
   inventoryLaserTotal, spendLaserFromInventory, addLaserToInventory, ensureLoadouts,
 } from "./items"
@@ -990,12 +990,13 @@ function executeBossAttack(gs: GS, b: Boss) {
 
 function collectDrop(gs: GS, d: Drop) {
   if (d.kind === "core") {
-    // Núcleo de perfección: mejora el primer láser equipado
+    // Núcleo de perfección: mejora el primer láser equipado (por individual)
     const eq = gs.save.equipment
-    const ids = equippedLaserIds(gs)
-    const curId = ids.length > 0 ? ids[0] : "laser_std"
-    const cur = laserPerfectPct(eq, curId)
-    if (cur >= 100) {
+    const uids = equippedLaserUids(gs)
+    const curUid = uids.length > 0 ? uids[0] : (eq.lasers[0]?.uid ?? "laser_std")
+    const inst = getLaserInstance(eq, curUid)
+    if (!inst) return
+    if (inst.perfection >= 100) {
       // Láser ya perfecto: el núcleo se convierte en monedas
       gs.runCoins += 5
       gs.flashMsg = "Láser perfecto · +5 monedas"
@@ -1004,9 +1005,9 @@ function collectDrop(gs: GS, d: Drop) {
       SFX.pickup()
       return
     }
-    const np = Math.min(100, cur + CORE_PERF_GAIN)
-    eq.laserPerfection[curId] = np
-    gs.flashMsg = np >= 100 ? `★ ${laserDef(curId).name} ¡PERFECTO! ★` : `Núcleo: perfección +${CORE_PERF_GAIN}%`
+    inst.perfection = Math.min(100, inst.perfection + CORE_PERF_GAIN)
+    const np = inst.perfection
+    gs.flashMsg = np >= 100 ? `★ ${laserDef(inst.type).name} ¡PERFECTO! ★` : `Núcleo: perfección +${CORE_PERF_GAIN}%`
     gs.flashT = 1.8
     spawnParticles(gs, d.x, d.y, "#ffee44", 18, 160)
     spawnShockwave(gs, d.x, d.y, 40, "#ffee44")
@@ -1043,9 +1044,9 @@ function collectDrop(gs: GS, d: Drop) {
   // Munición
   const ammo = d.kind as AmmoType
   if (ammo === "laser") {
-    // Los drops de láser añaden láseres al inventario (para disparar y fusionar)
+    // Los drops de láser añaden instancias al inventario (para disparar y fusionar)
     const n = 3
-    addLaserToInventory(gs.save.equipment, "laser_std", n)
+    for (let i = 0; i < n; i++) addLaserToInventory(gs.save.equipment, "laser_std")
     gs.ammo.laser = inventoryLaserTotal(gs.save.equipment)
     writeStarSave(gs.save)
     spawnParticles(gs, d.x, d.y, AMMO_COLORS.laser, 10, 120)

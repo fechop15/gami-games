@@ -4,7 +4,8 @@ import {
   FUSION_COUNT, fusionChance, REPAIR_BOT_PRICE,
 } from "./constants"
 import {
-  LASER_DEFS, SHIELD_DEFS, laserDef, shieldDef, laserPerfectPct, getLoadout, inventoryLaserTotal,
+  LASER_DEFS, SHIELD_DEFS, laserDef, shieldDef, getLaserInstance,
+  getLoadout, inventoryLaserTotal, addLaserToInventory,
 } from "./items"
 import { SHIP_DEFS, getShip } from "./ships"
 import { WORLDS } from "./worlds"
@@ -38,11 +39,8 @@ function unequipSlot(gs: GS, kind: "laser" | "shield", id: string): boolean {
 // Fusión: gasta FUSION_COUNT del mismo tipo; si acierta obtienes 1 del nivel siguiente, si falla se pierden
 function fuseItem(gs: GS, kind: "laser" | "shield", id: string) {
   const eq = gs.save.equipment
-  const stock = kind === "laser" ? eq.lasers : eq.shields
   const defs = kind === "laser" ? LASER_DEFS : SHIELD_DEFS
   const def = kind === "laser" ? laserDef(id) : shieldDef(id)
-  const qty = stock[id] ?? 0
-  if (qty < FUSION_COUNT) return
   const next = defs.find(d => d.tier === def.tier + 1)
   if (!next) {
     gs.flashMsg = "¡Ya es el nivel máximo!"
@@ -50,6 +48,36 @@ function fuseItem(gs: GS, kind: "laser" | "shield", id: string) {
     SFX.shieldOff()
     return
   }
+
+  let qty: number
+  if (kind === "laser") {
+    // Instancias individuales: contar las del mismo type y eliminar FUSION_COUNT
+    const matching = eq.lasers.filter(l => l.type === id)
+    qty = matching.length
+    if (qty < FUSION_COUNT) return
+    let removed = 0
+    for (let i = eq.lasers.length - 1; i >= 0 && removed < FUSION_COUNT; i--) {
+      if (eq.lasers[i].type === id) { eq.lasers.splice(i, 1); removed++ }
+    }
+    if (Math.random() < fusionChance(def.tier)) {
+      addLaserToInventory(eq, next.id)
+      gs.flashMsg = `¡Fusión exitosa! ${next.name} ×1`
+      gs.flashT = 1.6
+      SFX.pickup()
+    } else {
+      gs.flashMsg = `Fusión fallida... se perdieron ${FUSION_COUNT} ${def.name}`
+      gs.flashT = 1.6
+      SFX.shieldBreak()
+    }
+    gs.ammo.laser = inventoryLaserTotal(eq)
+    writeStarSave(gs.save)
+    return
+  }
+
+  // Escudos (Record agregado)
+  const stock = eq.shields
+  qty = stock[id] ?? 0
+  if (qty < FUSION_COUNT) return
   stock[id] = (stock[id] ?? 0) - FUSION_COUNT
   if (Math.random() < fusionChance(def.tier)) {
     stock[next.id] = (stock[next.id] ?? 0) + 1
@@ -61,7 +89,6 @@ function fuseItem(gs: GS, kind: "laser" | "shield", id: string) {
     gs.flashT = 1.6
     SFX.shieldBreak()
   }
-  gs.ammo.laser = inventoryLaserTotal(eq)
   writeStarSave(gs.save)
 }
 
@@ -142,7 +169,7 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         const def = laserDef(id)
         if (gs.save.coins >= def.price) {
           gs.save.coins -= def.price
-          eq.lasers[id] = (eq.lasers[id] ?? 0) + 1
+          addLaserToInventory(eq, id)
           gs.ammo.laser = inventoryLaserTotal(eq)
           writeStarSave(gs.save)
           gs.flashMsg = `¡${def.name} comprado!`
@@ -173,15 +200,17 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         return
       }
       if (a.startsWith("laser:perf:")) {
-        const id = a.slice("laser:perf:".length)
-        const pct = laserPerfectPct(eq, id)
+        const uid = a.slice("laser:perf:".length)
+        const inst = getLaserInstance(eq, uid)
+        if (!inst) return
+        const pct = inst.perfection
         if (pct >= 100) return
         const cost = perfectBuyCost(pct)
         if (gs.save.coins >= cost) {
           gs.save.coins -= cost
-          eq.laserPerfection[id] = Math.min(100, pct + PERFECT_BUY_STEP)
+          inst.perfection = Math.min(100, pct + PERFECT_BUY_STEP)
           writeStarSave(gs.save)
-          const np = eq.laserPerfection[id]
+          const np = inst.perfection
           gs.flashMsg = np >= 100 ? "★ ¡LÁSER PERFECTO! ★" : `Perfección +${PERFECT_BUY_STEP}%`
           gs.flashT = 1.6; SFX.pickup()
         } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }

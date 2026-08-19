@@ -2,11 +2,11 @@ import type { GS, EquipTab, AmmoType } from "./types"
 import type { ShipUpgrades } from "./save"
 import {
   W, H, HUD_H, AMMO_COLORS, AMMO_ICONS, AMMO_NAMES,
-  PERFECT_BUY_STEP, perfectBuyCost, REPAIR_BOT_PRICE, REPAIR_BOT_HEAL,
+  perfectBuyCost, REPAIR_BOT_PRICE, REPAIR_BOT_HEAL,
   FUSION_COUNT, fusionChance,
 } from "./constants"
 import {
-  LASER_DEFS, SHIELD_DEFS, laserDef, shieldDef, laserPerfectPct, singleLaserMult,
+  LASER_DEFS, SHIELD_DEFS, laserDef, shieldDef, singleLaserMult, getLaserInstance,
   getLoadout, totalLaserMult, effShieldMaxHP, inventoryLaserTotal,
 } from "./items"
 import { SHIP_DEFS, getShip } from "./ships"
@@ -119,7 +119,7 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     ctx.fillStyle = "#44ff88"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
     ctx.fillText("INVENTARIO — LÁSERES", 16, invTop - 4)
     drawInventoryList(ctx, gs, LASER_DEFS, invTop, "laser")
-    const shieldTop = invTop + LASER_DEFS.length * 68
+    const shieldTop = invTop + eq.lasers.length * 90
     ctx.fillStyle = "#44aaff"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
     ctx.fillText("INVENTARIO — ESCUDOS", 16, shieldTop - 4)
     drawInventoryList(ctx, gs, SHIELD_DEFS, shieldTop, "shield")
@@ -251,7 +251,7 @@ function drawShipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
 
 type EquipItem = {
   id: string; name: string; tier: number; price: number; color: string; desc: string
-  hpMult?: number; durMult?: number
+  dmgMult?: number; hpMult?: number; durMult?: number
 }
 
 function shortItemName(name: string): string {
@@ -305,9 +305,11 @@ function drawItemList(
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
     const cy = top + i * (cardH + gap)
-    const qty = kind === "laser" ? (eq.lasers[item.id] ?? 0) : (eq.shields[item.id] ?? 0)
-    const equippedCount = slotArr.filter(s => s === item.id).length
-    const pct = kind === "laser" ? laserPerfectPct(eq, item.id) : 0
+    const qty = kind === "laser" ? eq.lasers.filter(l => l.type === item.id).length : (eq.shields[item.id] ?? 0)
+    const equippedCount = slotArr.filter(s => !!s && (kind === "laser" ? getLaserInstance(eq, s)?.type : s) === item.id).length
+    const pct = kind === "laser"
+      ? Math.max(0, ...eq.lasers.filter(l => l.type === item.id).map(l => l.perfection))
+      : 0
     const perfect = pct >= 100
     const afford = gs.save.coins >= item.price
     const next = kind === "laser"
@@ -330,7 +332,8 @@ function drawItemList(
     ctx.fillText(item.desc, cx + 12, cy + 42)
     ctx.fillStyle = "#cccccc"; ctx.font = "bold 10px monospace"
     if (kind === "laser") {
-      const mult = singleLaserMult(eq, item.id).toFixed(2)
+      const inst = eq.lasers.filter(l => l.type === item.id)[0]
+      const mult = inst ? singleLaserMult(eq, inst.uid).toFixed(2) : (item.dmgMult ?? 1).toFixed(2)
       ctx.fillText(`Daño x${mult}`, cx + 12, cy + 58)
     } else {
       ctx.fillText(`HP x${item.hpMult} · Dur +${Math.round((item.durMult! - 1) * 100)}%`, cx + 12, cy + 58)
@@ -360,14 +363,9 @@ function drawItemList(
       else if (qty > 0) buttons.push({ label: "EQUIPAR", color: item.color, text: "#0a100a", action: `${kind}:equip:${item.id}` })
       else buttons.push({ label: "NO TIENES", color: "#333", text: "#666", action: `${kind}:none` })
     } else {
-      // Tienda: comprar / fusionar / perfección
+      // Tienda: comprar / fusionar (la perfección se mejora por individual en el hangar)
       buttons.push({ label: `🪙 ${item.price}`, color: afford ? item.color : "#33241a", text: afford ? "#101400" : "#887766", action: `${kind}:buy:${item.id}` })
       if (qty >= FUSION_COUNT && next) buttons.push({ label: `FUSION ${Math.round(fusionChance(item.tier) * 100)}%`, color: "#aa77ff", text: "#12001e", action: `${kind}:fuse:${item.id}` })
-      if (kind === "laser" && qty > 0 && !perfect) {
-        const cost = perfectBuyCost(pct)
-        const pcAfford = gs.save.coins >= cost
-        buttons.push({ label: `PERF +${PERFECT_BUY_STEP}% · ${cost}`, color: pcAfford ? "#ffee44" : "#443c1a", text: pcAfford ? "#201400" : "#887744", action: `${kind}:perf:${item.id}` })
-      }
     }
 
     for (let b = 0; b < buttons.length && b < 3; b++) {
@@ -396,38 +394,65 @@ function drawInventoryList(
   const lo = getLoadout(eq, ship.id)
   const slotArr = kind === "laser" ? lo.lasers : lo.shields
   const cardW = W - 40, cx = 20
-  const rowH = 62, gap = 6
-  const btnW = 96, btnH = 34
+  const rowH = kind === "laser" ? 84 : 62, gap = 6
+  const btnW = 96, btnH = 32
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]
-    const qty = kind === "laser" ? (eq.lasers[item.id] ?? 0) : (eq.shields[item.id] ?? 0)
-    const equippedCount = slotArr.filter(s => s === item.id).length
+  // Para láseres: una fila por INSTANCIA individual (se mejoran por separado)
+  // Para escudos: una fila por tipo (Record)
+  const rows = kind === "laser"
+    ? eq.lasers.map(inst => ({
+        key: inst.uid, type: inst.type, name: laserDef(inst.type).name,
+        color: laserDef(inst.type).color, qty: 1, perfection: inst.perfection,
+        equipped: slotArr.includes(inst.uid),
+      }))
+    : items.map(item => ({
+        key: item.id, type: item.id, name: item.name, color: item.color,
+        qty: eq.shields[item.id] ?? 0, perfection: 0,
+        equipped: slotArr.filter(s => s === item.id).length > 0,
+      }))
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
     const cy = top + i * (rowH + gap)
+    const perfect = row.perfection >= 100
 
-    ctx.fillStyle = equippedCount > 0 ? item.color + "22" : qty > 0 ? "#1a241a" : "#16161c"
+    ctx.fillStyle = row.equipped ? row.color + "22" : row.qty > 0 ? "#1a241a" : "#16161c"
     ctx.beginPath(); ctx.roundRect(cx, cy, cardW, rowH, 8); ctx.fill()
-    ctx.strokeStyle = equippedCount > 0 ? item.color : qty > 0 ? "#2a4a3a" : "#333"; ctx.lineWidth = equippedCount > 0 ? 2 : 1
+    ctx.strokeStyle = row.equipped ? row.color : row.qty > 0 ? "#2a4a3a" : "#333"; ctx.lineWidth = row.equipped ? 2 : 1
     ctx.beginPath(); ctx.roundRect(cx, cy, cardW, rowH, 8); ctx.stroke()
 
-    // Nombre + cantidad
+    // Nombre
     ctx.textAlign = "left"; ctx.textBaseline = "middle"
-    ctx.fillStyle = item.color; ctx.font = "bold 12px monospace"
-    ctx.fillText(shortItemName(item.name), cx + 14, cy + 24)
-    ctx.fillStyle = qty > 0 ? item.color : "#555"; ctx.font = "bold 12px monospace"
-    ctx.fillText(qty > 0 ? `×${qty}` : "—", cx + cardW - btnW - 24, cy + 24)
+    ctx.fillStyle = row.color; ctx.font = "bold 12px monospace"
+    ctx.fillText(shortItemName(row.name), cx + 14, cy + (kind === "laser" ? 22 : 24))
+    // Perfección individual (láser)
+    if (kind === "laser") {
+      ctx.fillStyle = perfect ? "#ffee44" : "#ccc"; ctx.font = "bold 10px monospace"
+      ctx.fillText(perfect ? "★ PERFECTO" : `Perf ${Math.floor(row.perfection)}%`, cx + 14, cy + 46)
+    }
 
     // Botón equipar/quitar
-    const btnX = cx + cardW - btnW - 10, btnY = cy + (rowH - btnH) / 2
+    const btnX = cx + cardW - btnW - 10, btnY = cy + (kind === "laser" ? 6 : (rowH - btnH) / 2)
     let label: string, color: string, text: string, action: string
-    if (equippedCount > 0) { label = "QUITAR"; color = "#445566"; text = "#eef3f8"; action = `${kind}:unequip:${item.id}` }
-    else if (qty > 0) { label = "EQUIPAR"; color = item.color; text = "#0a100a"; action = `${kind}:equip:${item.id}` }
+    if (row.equipped) { label = "QUITAR"; color = "#445566"; text = "#eef3f8"; action = `${kind}:unequip:${row.key}` }
+    else if (row.qty > 0) { label = "EQUIPAR"; color = row.color; text = "#0a100a"; action = `${kind}:equip:${row.key}` }
     else { label = "NO TIENES"; color = "#333"; text = "#666"; action = `${kind}:none` }
     gs.equipBtns.push({ action, x: btnX, y: btnY, w: btnW, h: btnH })
     ctx.fillStyle = color
     ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 6); ctx.fill()
     ctx.fillStyle = text; ctx.font = "bold 10px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
     ctx.fillText(label, btnX + btnW / 2, btnY + btnH / 2)
+
+    // Botón mejorar perfección (láser individual, solo si no está perfecto)
+    if (kind === "laser" && !perfect && row.perfection < 100) {
+      const pBtnX = btnX, pBtnY = btnY + btnH + 6
+      const cost = perfectBuyCost(row.perfection)
+      gs.equipBtns.push({ action: `laser:perf:${row.key}`, x: pBtnX, y: pBtnY, w: btnW, h: btnH })
+      ctx.fillStyle = "#ffee4433"
+      ctx.beginPath(); ctx.roundRect(pBtnX, pBtnY, btnW, btnH, 6); ctx.fill()
+      ctx.fillStyle = "#ffee44"; ctx.font = "bold 9px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText(`MEJORAR 🪙${cost}`, pBtnX + btnW / 2, pBtnY + btnH / 2)
+    }
   }
 }
 

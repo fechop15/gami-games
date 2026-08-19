@@ -1,8 +1,14 @@
 import { CONFIG, SHIELD_MAX_HP, SHIELD_DURATION, SHIELD_COOLDOWN, PERFECT_BONUS, PERFECT_BONUS_PER_STEP } from "./constants"
 import { DEFAULT_LASER_ID, DEFAULT_SHIELD_ID } from "./save"
-import type { EquipmentState, ShipLoadout, ShipUpgrades, StarSave } from "./save"
+import type { EquipmentState, ShipLoadout, ShipUpgrades, StarSave, LaserInstance } from "./save"
 import type { GS } from "./types"
 import { SHIP_DEFS, getShip } from "./ships"
+
+// Contador global para generar uids únicos de instancias de láser
+let laserUidCounter = 0
+export function nextLaserUid(type: string): string {
+  return type + "_" + (++laserUidCounter)
+}
 
 export interface LaserDef {
   id: string; name: string; tier: number; price: number
@@ -22,14 +28,20 @@ export const SHIELD_DEFS: ShieldDef[] = CONFIG.shields.map(s => ({ ...s }))
 export function laserDef(id: string): LaserDef { return LASER_DEFS.find(l => l.id === id) ?? LASER_DEFS[0] }
 export function shieldDef(id: string): ShieldDef { return SHIELD_DEFS.find(s => s.id === id) ?? SHIELD_DEFS[0] }
 
-// Perfección del láser: 0-100. Al 100% el láser es "perfecto" (bonus extra).
-export function laserPerfectPct(eq: EquipmentState, laserId: string): number {
-  return Math.min(100, eq.laserPerfection[laserId] ?? 0)
+// Busca una instancia de láser por su uid
+export function getLaserInstance(eq: EquipmentState, uid: string): LaserInstance | undefined {
+  return eq.lasers.find(l => l.uid === uid)
 }
-// Multiplicador de daño de UN láser (tier + perfección)
-export function singleLaserMult(eq: EquipmentState, laserId: string): number {
-  const def = laserDef(laserId)
-  const pct = laserPerfectPct(eq, laserId)
+// Perfección individual de una instancia de láser
+export function laserPerfectionOf(eq: EquipmentState, uid: string): number {
+  return Math.min(100, getLaserInstance(eq, uid)?.perfection ?? 0)
+}
+// Multiplicador de daño de UNA instancia (type + perfección individual)
+export function singleLaserMult(eq: EquipmentState, uid: string): number {
+  const inst = getLaserInstance(eq, uid)
+  if (!inst) return 0
+  const def = laserDef(inst.type)
+  const pct = Math.min(100, inst.perfection)
   let mult = def.dmgMult * (1 + pct * PERFECT_BONUS_PER_STEP)
   if (pct >= 100) mult *= (1 + PERFECT_BONUS)
   return mult
@@ -44,16 +56,23 @@ export function getLoadout(eq: EquipmentState, shipId: string): ShipLoadout {
   eq.loadouts[shipId] = lo
   return lo
 }
-// Rellena todos los loadouts con el item estándar donde haya huecos libres
+// Rellena todos los loadouts con items disponibles donde haya huecos libres
 export function ensureLoadouts(eq: EquipmentState) {
   for (const ship of SHIP_DEFS) {
     const lo = getLoadout(eq, ship.id)
-    for (let i = 0; i < lo.lasers.length; i++) if (!lo.lasers[i]) lo.lasers[i] = DEFAULT_LASER_ID
+    for (let i = 0; i < lo.lasers.length; i++) {
+      if (!lo.lasers[i]) {
+        // llena con el uid de una instancia disponible (o crea una estándar)
+        const available = eq.lasers[0]
+        if (available) lo.lasers[i] = available.uid
+        else { const inst = addLaserToInventory(eq, DEFAULT_LASER_ID); lo.lasers[i] = inst.uid }
+      }
+    }
     for (let i = 0; i < lo.shields.length; i++) if (!lo.shields[i]) lo.shields[i] = DEFAULT_SHIELD_ID
   }
 }
-// Láseres equipados en la nave actual (ids no-null)
-export function equippedLaserIds(gs: GS): string[] {
+// Uids de láseres equipados en la nave actual
+export function equippedLaserUids(gs: GS): string[] {
   const ship = getShip(gs.save)
   const lo = getLoadout(gs.save.equipment, ship.id)
   return lo.lasers.filter((x): x is string => !!x)
@@ -63,10 +82,10 @@ export function equippedShieldIds(gs: GS): string[] {
   const lo = getLoadout(gs.save.equipment, ship.id)
   return lo.shields.filter((x): x is string => !!x)
 }
-// Daño total: proporcional a la cantidad de láseres equipados (suma de sus mult)
+// Daño total: proporcional a la cantidad de láseres equipados (suma de sus mult individuales)
 export function totalLaserMult(gs: GS): number {
-  const ids = equippedLaserIds(gs)
-  return ids.reduce((acc, id) => acc + singleLaserMult(gs.save.equipment, id), 0)
+  const uids = equippedLaserUids(gs)
+  return uids.reduce((acc, uid) => acc + singleLaserMult(gs.save.equipment, uid), 0)
 }
 // Escudo: proporcional a la cantidad de escudos equipados
 export function totalShieldHpMult(gs: GS): number {
@@ -89,17 +108,19 @@ export function effShieldDur(gs: GS): number {
 export function upShieldDur(u: ShipUpgrades): number { return SHIELD_DURATION + u.shieldDur }
 export function upShieldCd(u: ShipUpgrades): number { return Math.max(3, SHIELD_COOLDOWN - u.shieldCd) }
 
-// Total de láseres en el inventario (todos los tipos)
+// Total de instancias de láser en el inventario
 export function inventoryLaserTotal(eq: EquipmentState): number {
-  return Object.values(eq.lasers).reduce((a, b) => a + b, 0)
+  return eq.lasers.length
 }
-// Gasta un láser del inventario (del primer tipo con stock). Devuelve true si pudo.
+// Gasta un láser del inventario: elimina una instancia (la primera). Devuelve true si pudo.
 export function spendLaserFromInventory(eq: EquipmentState): boolean {
-  for (const id of Object.keys(eq.lasers)) {
-    if ((eq.lasers[id] ?? 0) > 0) { eq.lasers[id] = (eq.lasers[id] ?? 0) - 1; return true }
-  }
-  return false
+  if (eq.lasers.length === 0) return false
+  eq.lasers.splice(0, 1)
+  return true
 }
-export function addLaserToInventory(eq: EquipmentState, id: string, n = 1) {
-  eq.lasers[id] = (eq.lasers[id] ?? 0) + n
+// Agrega una instancia de láser al inventario
+export function addLaserToInventory(eq: EquipmentState, type: string, perfection = 0): LaserInstance {
+  const inst: LaserInstance = { uid: nextLaserUid(type), type, perfection }
+  eq.lasers.push(inst)
+  return inst
 }
