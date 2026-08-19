@@ -1,17 +1,19 @@
-import type { GS, EquipTab, AmmoType } from "./types"
+import type { GS, EquipTab } from "./types"
 import type { ShipUpgrades } from "./save"
 import {
-  W, H, HUD_H, AMMO_COLORS, AMMO_ICONS, AMMO_NAMES,
+  W, H, HUD_H, AMMO_COLORS, AMMO_ICONS, AMMO_NAMES, AMMO_BUY,
   perfectBuyCost, REPAIR_BOT_PRICE, REPAIR_BOT_HEAL,
   FUSION_COUNT, fusionChance,
 } from "./constants"
 import {
-  LASER_DEFS, SHIELD_DEFS, laserDef, shieldDef, singleLaserMult, getLaserInstance,
+  LASER_DEFS, SHIELD_DEFS, UAV_DEFS, laserDef, shieldDef, uavDef, singleLaserMult, getLaserInstance,
   getLoadout, totalLaserMult, effShieldMaxHP, inventoryLaserTotal,
+  equippedLaserTier, equippedShieldTier, equippedShieldIds,
 } from "./items"
 import { SHIP_DEFS, getShip } from "./ships"
 import { WORLDS } from "./worlds"
 import { transitionTo } from "./engine"
+import { drawItemIcon, type IconKind } from "./icons"
 import {
   drawShipShape, drawBossShip, drawPlayerShip, drawEnemyShip, drawBullet, drawDrop,
   drawBackground, drawStars, drawHUD, drawParticle, drawTrail, drawFloaters, drawShockwaves, drawMuteBtn,
@@ -108,14 +110,16 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   const lo = getLoadout(eq, ship.id)
 
   if (gs.hangarTab === "inventory") {
+    gs.slotAreas = []
+    gs.itemAreas = []
     // Inventario: slots de la nave actual + listas compactas de láseres y escudos
     ctx.fillStyle = "#cccccc"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
     ctx.fillText(`Nave: ${ship.name} · Daño x${totalLaserMult(gs).toFixed(2)} · Escudo HP ${effShieldMaxHP(gs)}`, W / 2, listTop)
-    drawSlotChips(ctx, lo.lasers, ship.laserSlots, laserDef, listTop + 16, "LÁSERES EQUIPADOS")
-    drawSlotChips(ctx, lo.shields, ship.shieldSlots, shieldDef, listTop + 58, "ESCUDOS EQUIPADOS")
+    drawSlotChips(ctx, gs, lo.lasers, lo.lasers.length, laserDef, listTop + 12, "LÁSERES EQUIPADOS", "laser")
+    drawSlotChips(ctx, gs, lo.shields, lo.shields.length, shieldDef, listTop + 84, "ESCUDOS EQUIPADOS", "shield")
 
     // Listas compactas del inventario
-    const invTop = listTop + 104
+    const invTop = listTop + 156
     ctx.fillStyle = "#44ff88"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
     ctx.fillText("INVENTARIO — LÁSERES", 16, invTop - 4)
     drawInventoryList(ctx, gs, LASER_DEFS, invTop, "laser")
@@ -123,6 +127,26 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     ctx.fillStyle = "#44aaff"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
     ctx.fillText("INVENTARIO — ESCUDOS", 16, shieldTop - 4)
     drawInventoryList(ctx, gs, SHIELD_DEFS, shieldTop, "shield")
+
+    // Item arrastrado siguiendo el dedo
+    if (gs.dragItem) {
+      const dk = gs.dragItem.kind
+      let color = "#ffffff"
+      if (dk === "laser") {
+        const inst = getLaserInstance(eq, gs.dragItem.id)
+        color = inst ? laserDef(inst.type).color : "#ffee00"
+      } else {
+        color = shieldDef(gs.dragItem.id).color
+      }
+      const dSize = 44
+      ctx.globalAlpha = 0.85
+      ctx.fillStyle = color + "33"
+      ctx.fillRect(gs.dragX - dSize / 2, gs.dragY - dSize / 2, dSize, dSize)
+      ctx.strokeStyle = color; ctx.lineWidth = 2
+      ctx.strokeRect(gs.dragX - dSize / 2, gs.dragY - dSize / 2, dSize, dSize)
+      drawItemIcon(ctx, dk, color, gs.dragX, gs.dragY, dSize - 8)
+      ctx.globalAlpha = 1
+    }
   } else {
     // Mejoras permanentes (lo que antes era el hangar)
     const cardH = 92, cardW = W - 40, cx = 20
@@ -258,29 +282,62 @@ function shortItemName(name: string): string {
   return name.replace(/^(Láser|Escudo)\s+/i, "")
 }
 
+// Cuadrado con el icono SVG del item y su tier en la esquina
+function drawItemTile(ctx: CanvasRenderingContext2D, kind: IconKind, color: string, x: number, y: number, size: number, tier?: number) {
+  ctx.fillStyle = color + "1f"
+  ctx.fillRect(x, y, size, size)
+  ctx.strokeStyle = color + "aa"; ctx.lineWidth = 1.5
+  ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1)
+  drawItemIcon(ctx, kind, color, x + size / 2, y + size / 2, size - 10)
+  if (tier) {
+    ctx.fillStyle = color; ctx.font = "bold 9px monospace"; ctx.textAlign = "right"; ctx.textBaseline = "bottom"
+    ctx.fillText(String(tier), x + size - 2, y + size - 1)
+  }
+}
+
+function pointInRect(x: number, y: number, rx: number, ry: number, rw: number, rh: number): boolean {
+  return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
+}
+
 function drawSlotChips(
   ctx: CanvasRenderingContext2D,
+  gs: GS,
   slots: (string | null)[],
   count: number,
   defName: (id: string) => { name: string; color: string },
   top: number,
   label: string,
+  kind: "laser" | "shield",
 ) {
   ctx.fillStyle = "#888"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
   ctx.fillText(label, 16, top)
-  const chipW = 66, chipH = 24, gap = 8
+  const size = 40, gap = 9
   for (let i = 0; i < count; i++) {
     const id = slots[i]
     const def = id ? defName(id) : null
-    const cx2 = 16 + i * (chipW + gap)
-    const cy2 = top + 18
+    const cx2 = 16 + i * (size + gap)
+    const cy2 = top + 16
+    const isDropTarget = !!gs.dragItem && gs.dragItem.kind === kind &&
+      pointInRect(gs.dragX, gs.dragY, cx2, cy2, size, size)
+    // Cuadrado del slot
     ctx.fillStyle = def ? def.color + "22" : "rgba(255,255,255,0.06)"
-    ctx.beginPath(); ctx.roundRect(cx2, cy2, chipW, chipH, 6); ctx.fill()
-    ctx.strokeStyle = def ? def.color + "99" : "#444"; ctx.lineWidth = 1
-    ctx.beginPath(); ctx.roundRect(cx2, cy2, chipW, chipH, 6); ctx.stroke()
-    ctx.fillStyle = def ? def.color : "#666"
-    ctx.font = "bold 10px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
-    ctx.fillText(id ? shortItemName(def!.name) : "VACÍO", cx2 + chipW / 2, cy2 + chipH / 2)
+    ctx.fillRect(cx2, cy2, size, size)
+    ctx.strokeStyle = isDropTarget ? "#ffffff" : def ? def.color + "aa" : "#444"
+    ctx.lineWidth = isDropTarget ? 3 : 1.5
+    if (isDropTarget) { ctx.shadowColor = "#ffffff"; ctx.shadowBlur = 12 }
+    ctx.strokeRect(cx2 + 0.5, cy2 + 0.5, size - 1, size - 1)
+    ctx.shadowBlur = 0
+    if (def) {
+      drawItemIcon(ctx, kind, def.color, cx2 + size / 2, cy2 + size / 2, size - 8)
+    } else {
+      ctx.fillStyle = "#555"; ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText("·", cx2 + size / 2, cy2 + size / 2)
+    }
+    // Número del slot debajo
+    ctx.fillStyle = "#777"; ctx.font = "9px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+    ctx.fillText(String(i + 1), cx2 + size / 2, cy2 + size + 2)
+    // Área de drop para drag & drop
+    gs.slotAreas.push({ kind, index: i, x: cx2, y: cy2, w: size, h: size })
   }
 }
 
@@ -322,30 +379,35 @@ function drawItemList(
     ctx.strokeStyle = equippedCount > 0 ? item.color : qty > 0 ? "#2a4a3a" : afford ? item.color + "66" : "#333"; ctx.lineWidth = equippedCount > 0 ? 2.5 : 1.5
     ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.stroke()
 
-    // Info izquierda
+    // Cuadrado con el icono SVG del item
+    const tileSize = 46, tileX = cx + 12, tileY = cy + (cardH - tileSize) / 2
+    drawItemTile(ctx, kind, item.color, tileX, tileY, tileSize, item.tier)
+
+    // Info (a la derecha del cuadrado)
+    const infoX = cx + tileSize + 22
     ctx.textAlign = "left"; ctx.textBaseline = "top"
     ctx.fillStyle = item.color; ctx.font = "bold 14px monospace"
-    ctx.fillText(item.name, cx + 12, cy + 8)
+    ctx.fillText(item.name, infoX, cy + 8)
     ctx.fillStyle = "#666"; ctx.font = "10px monospace"
-    ctx.fillText(`NIVEL ${item.tier}`, cx + 12, cy + 26)
+    ctx.fillText(`NIVEL ${item.tier}`, infoX, cy + 26)
     ctx.fillStyle = "#aaaaaa"; ctx.font = "10px monospace"
-    ctx.fillText(item.desc, cx + 12, cy + 42)
+    ctx.fillText(item.desc, infoX, cy + 42)
     ctx.fillStyle = "#cccccc"; ctx.font = "bold 10px monospace"
     if (kind === "laser") {
       const inst = eq.lasers.filter(l => l.type === item.id)[0]
       const mult = inst ? singleLaserMult(eq, inst.uid).toFixed(2) : (item.dmgMult ?? 1).toFixed(2)
-      ctx.fillText(`Daño x${mult}`, cx + 12, cy + 58)
+      ctx.fillText(`Daño x${mult}`, infoX, cy + 58)
     } else {
-      ctx.fillText(`HP x${item.hpMult} · Dur +${Math.round((item.durMult! - 1) * 100)}%`, cx + 12, cy + 58)
+      ctx.fillText(`HP x${item.hpMult} · Dur +${Math.round((item.durMult! - 1) * 100)}%`, infoX, cy + 58)
     }
 
     // Cantidad en inventario
     ctx.fillStyle = qty > 0 ? item.color : "#555"; ctx.font = "bold 13px monospace"
-    ctx.fillText(qty > 0 ? `×${qty}` : "—", cx + 12, cy + 74)
+    ctx.fillText(qty > 0 ? `×${qty}` : "—", infoX, cy + 74)
 
     // Barra de perfección (solo láseres)
     if (kind === "laser" && pct > 0) {
-      const barX = cx + 12, barY = cy + 94, barW = 150, barH = 6
+      const barX = infoX, barY = cy + 94, barW = 150, barH = 6
       ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(barX, barY, barW, barH)
       ctx.fillStyle = perfect ? "#ffee44" : pct > 50 ? "#44ff88" : "#ffaa44"
       ctx.fillRect(barX, barY, barW * pct / 100, barH)
@@ -421,14 +483,25 @@ function drawInventoryList(
     ctx.strokeStyle = row.equipped ? row.color : row.qty > 0 ? "#2a4a3a" : "#333"; ctx.lineWidth = row.equipped ? 2 : 1
     ctx.beginPath(); ctx.roundRect(cx, cy, cardW, rowH, 8); ctx.stroke()
 
-    // Nombre
+    // Cuadrado con el icono del item (origen de drag)
+    const tileSize = 40
+    const tileX = cx + 14, tileY = cy + (rowH - tileSize) / 2
+    drawItemTile(ctx, kind, row.color, tileX, tileY, tileSize)
+
+    // Nombre (a la derecha del cuadrado)
+    const infoX = cx + tileSize + 26
     ctx.textAlign = "left"; ctx.textBaseline = "middle"
     ctx.fillStyle = row.color; ctx.font = "bold 12px monospace"
-    ctx.fillText(shortItemName(row.name), cx + 14, cy + (kind === "laser" ? 22 : 24))
+    ctx.fillText(shortItemName(row.name), infoX, cy + (kind === "laser" ? 22 : 24))
     // Perfección individual (láser)
     if (kind === "laser") {
       ctx.fillStyle = perfect ? "#ffee44" : "#ccc"; ctx.font = "bold 10px monospace"
-      ctx.fillText(perfect ? "★ PERFECTO" : `Perf ${Math.floor(row.perfection)}%`, cx + 14, cy + 46)
+      ctx.fillText(perfect ? "★ PERFECTO" : `Perf ${Math.floor(row.perfection)}%`, infoX, cy + 46)
+    }
+
+    // Área arrastrable: del cuadrado al borde izquierdo de los botones
+    if (row.equipped || row.qty > 0) {
+      gs.itemAreas.push({ kind, id: row.key, x: cx + 14, y: cy + 4, w: cardW - 14 - 8 - btnW - 18, h: rowH - 8 })
     }
 
     // Botón equipar/quitar
@@ -470,9 +543,10 @@ function drawEquipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     { id: "shields", label: "🛡 ESCUDO", color: "#44aaff" },
     { id: "bots", label: "🤖 ROBOTS", color: "#44ff88" },
     { id: "ammo", label: "📦 MUNICIÓN", color: "#cc88ff" },
+    { id: "uav", label: "🛸 UAV", color: "#ff88cc" },
   ]
   gs.equipBtns = []
-  const tabW = W / 4, tabH = 34, tabY = 82
+  const tabW = W / tabs.length, tabH = 34, tabY = 82
   for (let i = 0; i < tabs.length; i++) {
     const t = tabs[i]
     const tx = i * tabW
@@ -527,32 +601,89 @@ function drawEquipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     ctx.fillStyle = afford ? "#0a1a0a" : "#446655"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
     ctx.fillText(`🪙 ${REPAIR_BOT_PRICE}`, 0, 0)
     ctx.restore()
-  } else {
+  } else if (gs.equipTab === "ammo") {
     // Munición: el láser vive en el inventario, spread/missile bancados
     ctx.fillStyle = "#888"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
     ctx.fillText("Munición recolectada que se guarda entre partidas", W / 2, listTop)
     const banked = gs.save.bankedAmmo ?? {}
-    const rows: Array<{ ammo: AmmoType; n: number }> = [
+    const rows: Array<{ ammo: "laser" | "spread" | "missile"; n: number }> = [
       { ammo: "laser", n: inventoryLaserTotal(eq) },
       { ammo: "spread", n: banked.spread ?? 0 },
       { ammo: "missile", n: banked.missile ?? 0 },
     ]
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i]
-      const cy = listTop + 24 + i * 56
-      gs.equipBtns.push({ action: `ammo:card:${r.ammo}`, x: cx, y: cy, w: cardW, h: 48 })
-      ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.beginPath(); ctx.roundRect(cx, cy, cardW, 48, 8); ctx.fill()
-      ctx.strokeStyle = AMMO_COLORS[r.ammo] + "44"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(cx, cy, cardW, 48, 8); ctx.stroke()
+      const cy = listTop + 24 + i * 60
+      ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.beginPath(); ctx.roundRect(cx, cy, cardW, 52, 8); ctx.fill()
+      ctx.strokeStyle = AMMO_COLORS[r.ammo] + "44"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(cx, cy, cardW, 52, 8); ctx.stroke()
       ctx.textAlign = "left"; ctx.textBaseline = "middle"
       ctx.fillStyle = AMMO_COLORS[r.ammo]; ctx.font = "bold 16px monospace"
-      ctx.fillText(AMMO_ICONS[r.ammo], cx + 18, cy + 24)
+      ctx.fillText(AMMO_ICONS[r.ammo], cx + 18, cy + 26)
       ctx.fillStyle = "#ffffff"; ctx.font = "bold 13px monospace"
-      ctx.fillText(AMMO_NAMES[r.ammo], cx + 40, cy + 24)
-      ctx.fillStyle = "#cccccc"; ctx.font = "bold 13px monospace"; ctx.textAlign = "right"
-      ctx.fillText(`x${r.n}`, cx + cardW - 16, cy + 24)
+      ctx.fillText(AMMO_NAMES[r.ammo], cx + 40, cy + 26)
+      ctx.fillStyle = "#cccccc"; ctx.font = "bold 11px monospace"
+      ctx.fillText(`x${r.n}`, cx + 40, cy + 40)
+
+      // Botón de compra
+      const buy = AMMO_BUY[r.ammo]
+      const afford = gs.save.coins >= buy.price
+      const btnW2 = 96, btnH2 = 32
+      const btnX2 = cx + cardW - btnW2 - 10, btnY2 = cy + (52 - btnH2) / 2
+      gs.equipBtns.push({ action: `ammo:buy:${r.ammo}`, x: btnX2, y: btnY2, w: btnW2, h: btnH2 })
+      ctx.fillStyle = afford ? AMMO_COLORS[r.ammo] : "#33241a"
+      ctx.beginPath(); ctx.roundRect(btnX2, btnY2, btnW2, btnH2, 6); ctx.fill()
+      ctx.fillStyle = afford ? "#101400" : "#887766"; ctx.font = "bold 10px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText(`🪙 ${buy.price} · +${buy.amount}`, btnX2 + btnW2 / 2, btnY2 + btnH2 / 2)
     }
     ctx.fillStyle = "#666"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
-    ctx.fillText("El láser se guarda en el inventario; se gasta al disparar.", W / 2, listTop + 24 + 3 * 56 + 20)
+    ctx.fillText("El láser se guarda en el inventario; se gasta al disparar.", W / 2, listTop + 24 + 3 * 60 + 18)
+  } else {
+    // UAVs: comprar y equipar drones que dan slots extra
+    ctx.fillStyle = "#888"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+    const uavsEq = eq.uavsEquipped ?? []
+    const bonus = uavsEq.reduce((acc, id) => acc + uavDef(id).slotsBonus, 0)
+    ctx.fillText(`UAVs equipados: ${uavsEq.length} (+${bonus} slots)`, W / 2, listTop)
+    const cardH3 = 104
+    for (let i = 0; i < UAV_DEFS.length; i++) {
+      const u = UAV_DEFS[i]
+      const owned = (eq.uavsOwned ?? []).includes(u.id)
+      const equipped = uavsEq.includes(u.id)
+      const afford = gs.save.coins >= u.price
+      const cy = listTop + 24 + i * (cardH3 + 8)
+      ctx.fillStyle = equipped ? u.color + "33" : owned ? "#24242e" : afford ? u.color + "14" : "#16161c"
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH3, 10); ctx.fill()
+      ctx.strokeStyle = equipped ? u.color : owned ? "#4a4a5a" : afford ? u.color + "66" : "#333"; ctx.lineWidth = equipped ? 2.5 : 1.5
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH3, 10); ctx.stroke()
+
+      // Icono cuadrado del dron
+      drawItemTile(ctx, "uav", u.color, cx + 14, cy + (cardH3 - 44) / 2, 44)
+
+      const uInfoX = cx + 74
+      ctx.textAlign = "left"; ctx.textBaseline = "top"
+      ctx.fillStyle = u.color; ctx.font = "bold 14px monospace"
+      ctx.fillText(u.name, uInfoX, cy + 12)
+      ctx.fillStyle = "#aaaaaa"; ctx.font = "10px monospace"
+      ctx.fillText(u.desc, uInfoX, cy + 32)
+      ctx.fillStyle = "#cccccc"; ctx.font = "bold 11px monospace"
+      ctx.fillText(`${u.kind === "laser" ? "🔫" : "🛡"} +${u.slotsBonus} slot${u.slotsBonus > 1 ? "s" : ""}`, uInfoX, cy + 56)
+      if (!owned) {
+        ctx.fillStyle = "#888"; ctx.font = "10px monospace"
+        ctx.fillText("🛸 COMPRA Y EQUIPA", uInfoX, cy + 78)
+      }
+
+      // Botón comprar / equipar / desequipar
+      const bW = 92, bH = 32
+      const bX = cx + cardW - bW - 10, bY = cy + (cardH3 - bH) / 2
+      let label: string, col: string, txt: string, action: string
+      if (equipped) { label = "QUITAR"; col = "#445566"; txt = "#eef3f8"; action = `uav:unequip:${u.id}` }
+      else if (owned) { label = "EQUIPAR"; col = u.color; txt = "#100a10"; action = `uav:equip:${u.id}` }
+      else { label = `🪙 ${u.price}`; col = afford ? u.color : "#33241a"; txt = afford ? "#101400" : "#887766"; action = `uav:buy:${u.id}` }
+      gs.equipBtns.push({ action, x: bX, y: bY, w: bW, h: bH })
+      ctx.fillStyle = col
+      ctx.beginPath(); ctx.roundRect(bX, bY, bW, bH, 6); ctx.fill()
+      ctx.fillStyle = txt; ctx.font = "bold 10px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText(label, bX + bW / 2, bY + bH / 2)
+    }
   }
 
   // Mensaje flash (feedback de compras/equipos/fusiones)
@@ -824,7 +955,9 @@ export function draw(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   for (const d of gs.drops) drawDrop(ctx, d, time)
   for (const e of gs.enemies) drawEnemyShip(ctx, e)
   if (gs.boss?.alive) drawBossShip(ctx, gs.boss, time)
-  for (const b of gs.bullets) drawBullet(ctx, b)
+
+  const laserTier = equippedLaserTier(gs)
+  for (const b of gs.bullets) drawBullet(ctx, b, laserTier)
   for (const b of gs.enemyBullets) drawBullet(ctx, b)
   drawShockwaves(ctx, gs)
 
@@ -840,10 +973,17 @@ export function draw(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     ctx.shadowBlur = 0
   }
 
+  const shieldTier = equippedShieldTier(gs)
+  const sIds = equippedShieldIds(gs)
+  const shieldColor = sIds.length > 0 ? shieldDef(sIds[0]).color : "#4488ff"
+  const uavs = gs.save.equipment.uavsEquipped ?? []
+  const uavColor = uavs.length > 0 ? uavDef(uavs[0]).color : "#44ff88"
+
   drawPlayerShip(
     ctx, gs.playerX, gs.playerY, getShip(gs.save), gs.invTimer,
     gs.shieldActive, gs.shieldHP, gs.shieldMaxHP,
     gs.shieldCooldown, gs.shieldCdMax, time,
+    shieldTier, shieldColor, uavs.length, uavColor,
   )
 
   drawFloaters(ctx, gs)

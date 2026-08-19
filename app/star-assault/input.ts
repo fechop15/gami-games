@@ -1,10 +1,10 @@
 import type { GS, EquipTab } from "./types"
 import {
-  H, MUTE_BTN, AMMO_NAMES, PERFECT_BUY_STEP, perfectBuyCost,
+  H, MUTE_BTN, AMMO_NAMES, AMMO_BUY, PERFECT_BUY_STEP, perfectBuyCost,
   FUSION_COUNT, fusionChance, REPAIR_BOT_PRICE,
 } from "./constants"
 import {
-  LASER_DEFS, SHIELD_DEFS, laserDef, shieldDef, getLaserInstance,
+  LASER_DEFS, SHIELD_DEFS, laserDef, shieldDef, uavDef, getLaserInstance,
   getLoadout, inventoryLaserTotal, addLaserToInventory,
 } from "./items"
 import { SHIP_DEFS, getShip } from "./ships"
@@ -90,6 +90,86 @@ function fuseItem(gs: GS, kind: "laser" | "shield", id: string) {
     SFX.shieldBreak()
   }
   writeStarSave(gs.save)
+}
+
+/* ── DRAG & DROP del hangar ── */
+
+// Inicia el arrastre si el punto toca un item del inventario o un slot ocupado.
+// Devuelve true si se inició el drag (el tap NO debe disparar handleTap).
+export function hangarDragStart(gs: GS, x: number, y: number): boolean {
+  if (gs.phase !== "hangar" || gs.hangarTab !== "inventory") return false
+  // Ítems del inventario primero
+  for (const a of gs.itemAreas) {
+    if (x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) {
+      gs.dragItem = { kind: a.kind, id: a.id }
+      gs.dragX = x; gs.dragY = y
+      return true
+    }
+  }
+  // Slots de la nave (solo si tienen item)
+  for (const a of gs.slotAreas) {
+    if (x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) {
+      const ship = getShip(gs.save)
+      const lo = getLoadout(gs.save.equipment, ship.id)
+      const arr = a.kind === "laser" ? lo.lasers : lo.shields
+      const id = arr[a.index]
+      if (!id) return true  // slot vacío: traga el toque para no disparar botones
+      gs.dragItem = { kind: a.kind, id }
+      gs.dragX = x; gs.dragY = y
+      return true
+    }
+  }
+  return false
+}
+
+export function hangarDragMove(gs: GS, x: number, y: number): void {
+  if (!gs.dragItem) return
+  gs.dragX = x; gs.dragY = y
+}
+
+// Resuelve el drop: equipar en slot vacío, intercambiar/reemplazar, o desequipar fuera.
+export function hangarDragEnd(gs: GS, x: number, y: number): void {
+  const drag = gs.dragItem
+  if (!drag) return
+  const eq = gs.save.equipment
+  const ship = getShip(gs.save)
+  const lo = getLoadout(eq, ship.id)
+  const slotArr = drag.kind === "laser" ? lo.lasers : lo.shields
+  const equipped = drag.kind === "laser" ? lo.lasers.includes(drag.id) : lo.shields.includes(drag.id)
+
+  // Slot objetivo bajo el dedo
+  let targetSlot = -1
+  for (const a of gs.slotAreas) {
+    if (a.kind !== drag.kind) continue
+    if (x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) { targetSlot = a.index; break }
+  }
+
+  if (targetSlot === -1) {
+    // Soltó fuera de los slots: si venía equipado, desequipar
+    if (equipped) {
+      for (let i = 0; i < slotArr.length; i++) if (slotArr[i] === drag.id) slotArr[i] = null
+      writeStarSave(gs.save)
+      const nm = drag.kind === "laser" ? laserDef(getLaserInstance(eq, drag.id)?.type ?? "laser_std").name : shieldDef(drag.id).name
+      gs.flashMsg = `${nm} desequipado`
+      gs.flashT = 1.2
+      SFX.pickup()
+    }
+    return
+  }
+
+  const occupant = slotArr[targetSlot]
+  if (equipped) {
+    // Viene de otro slot: se mueve (se quita de todos y se coloca en el objetivo)
+    for (let i = 0; i < slotArr.length; i++) if (slotArr[i] === drag.id) slotArr[i] = null
+  }
+  // Si el slot tenía otro item, ese vuelve al inventario (en ambos casos el item
+  // siempre vive en el inventario: los láseres por instancia y los escudos por Record).
+  slotArr[targetSlot] = drag.id
+  writeStarSave(gs.save)
+  const nm = drag.kind === "laser" ? laserDef(getLaserInstance(eq, drag.id)?.type ?? "laser_std").name : shieldDef(drag.id).name
+  gs.flashMsg = occupant && occupant !== drag.id ? `${nm} reemplazado` : `${nm} equipado`
+  gs.flashT = 1.2
+  SFX.pickup()
 }
 
 export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, scaleX: number, scaleY: number) {
@@ -258,6 +338,60 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
           gs.flashMsg = "+1 Robot de reparación"
           gs.flashT = 1.5; SFX.pickup()
         } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+        return
+      }
+      if (a.startsWith("ammo:buy:")) {
+        const ammo = a.slice("ammo:buy:".length) as "laser" | "spread" | "missile"
+        const buy = AMMO_BUY[ammo]
+        if (!buy) return
+        if (gs.save.coins >= buy.price) {
+          gs.save.coins -= buy.price
+          if (ammo === "laser") {
+            // Comprar 1 láser estándar: se agrega al inventario
+            addLaserToInventory(eq, "laser_std")
+            gs.ammo.laser = inventoryLaserTotal(eq)
+          } else {
+            gs.ammo[ammo] = (gs.ammo[ammo] ?? 0) + buy.amount
+            gs.save.bankedAmmo = { ...gs.save.bankedAmmo, [ammo]: gs.ammo[ammo] }
+          }
+          writeStarSave(gs.save)
+          gs.flashMsg = `+${buy.amount} ${AMMO_NAMES[ammo]}!`
+          gs.flashT = 1.5; SFX.worldClear()
+        } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+        return
+      }
+      if (a.startsWith("uav:buy:")) {
+        const id = a.slice("uav:buy:".length)
+        const def = uavDef(id)
+        if (gs.save.coins >= def.price) {
+          gs.save.coins -= def.price
+          eq.uavsOwned = eq.uavsOwned ?? []
+          eq.uavsOwned.push(id)
+          eq.uavsEquipped = eq.uavsEquipped ?? []
+          eq.uavsEquipped.push(id)
+          writeStarSave(gs.save)
+          gs.flashMsg = `¡${def.name} comprado y equipado!`
+          gs.flashT = 1.5; SFX.worldClear()
+        } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+        return
+      }
+      if (a.startsWith("uav:equip:")) {
+        const id = a.slice("uav:equip:".length)
+        eq.uavsEquipped = eq.uavsEquipped ?? []
+        if (!eq.uavsEquipped.includes(id)) {
+          eq.uavsEquipped.push(id)
+          writeStarSave(gs.save)
+          gs.flashMsg = `${uavDef(id).name} equipado (+${uavDef(id).slotsBonus} slots)`
+          gs.flashT = 1.4; SFX.pickup()
+        }
+        return
+      }
+      if (a.startsWith("uav:unequip:")) {
+        const id = a.slice("uav:unequip:".length)
+        eq.uavsEquipped = (eq.uavsEquipped ?? []).filter(x => x !== id)
+        writeStarSave(gs.save)
+        gs.flashMsg = `${uavDef(id).name} desequipado`
+        gs.flashT = 1.2; SFX.pickup()
         return
       }
       // Tarjetas (solo para UI, sin acción propia)

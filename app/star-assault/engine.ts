@@ -7,7 +7,7 @@ import {
 } from "./constants"
 import {
   laserDef, getLaserInstance, equippedLaserUids, equippedShieldIds, totalLaserMult,
-  effShieldMaxHP, effShieldDur, shieldDef, upShieldCd,
+  effShieldMaxHP, effShieldDur, shieldDef, upShieldCd, equippedLaserTier,
   inventoryLaserTotal, spendLaserFromInventory, addLaserToInventory, ensureLoadouts,
 } from "./items"
 import type { ShipDef } from "./ships"
@@ -129,6 +129,7 @@ export function makeGS(): GS {
     touchX: null, touchY: null, isTouching: false,
     ammoBtns: [], worldBtns: [], hangarBtns: [], shipBtns: [], equipBtns: [], introBtns: [],
     equipTab: "lasers", hangarTab: "inventory", repairBtn: null,
+    itemAreas: [], slotAreas: [], dragItem: null, dragX: 0, dragY: 0,
     save, flashMsg: "", flashT: 0,
     worldScroll: 0, worldDragStartY: null, worldDragBase: 0,
     bossLaserActive: false, bossLaserT: 0, bossLaserX: W / 2,
@@ -438,6 +439,8 @@ function updatePlayerFire(gs: GS, dt: number) {
 
 function updateBullets(gs: GS, dt: number) {
   // Player bullets
+  const laserTier = equippedLaserTier(gs)
+  const tierColor = laserTier >= 5 ? "#ff55dd" : laserTier >= 4 ? "#aa66ff" : "#44ccff"
   gs.bullets = gs.bullets.filter(b => {
     b.lifetime -= dt
     // Missile tracking
@@ -469,6 +472,13 @@ function updateBullets(gs: GS, dt: number) {
       gs.particles.push({
         x: b.x, y: b.y + 6, vx: (Math.random() - 0.5) * 20, vy: 40,
         life: 0.3, maxLife: 0.3, color: "#ff8800", r: 2 + Math.random() * 2,
+      })
+    }
+    // Estela de partículas según el tier del láser equipado
+    if (b.ammo !== "missile" && b.ammo !== "laser" && laserTier >= 4 && Math.random() < (laserTier >= 5 ? 0.5 : 0.3)) {
+      gs.particles.push({
+        x: b.x, y: b.y + b.radius * 0.8, vx: (Math.random() - 0.5) * 30, vy: 60,
+        life: 0.35, maxLife: 0.35, color: tierColor, r: 1.5 + Math.random() * 2,
       })
     }
     // World 4 gravity reversal

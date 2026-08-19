@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react"
 import { makeGS, update, activateShield, repairShip } from "./engine"
 import { draw, worldMaxScroll } from "./ui"
-import { handleTap } from "./input"
+import { handleTap, hangarDragStart, hangarDragMove, hangarDragEnd } from "./input"
 import { W, H, HUD_H, AMMO_NAMES } from "./constants"
 import type { GS, AmmoType } from "./types"
 
@@ -65,6 +65,11 @@ export default function StarAssaultGame() {
         gs.worldDragBase = gs.worldScroll
         return
       }
+      // Drag & drop del hangar (items y slots)
+      if (hangarDragStart(gs, tx, ty)) {
+        gs.dragX = tx; gs.dragY = ty
+        return
+      }
       // Solo mueve la nave si el toque está ENCIMA del HUD
       if (ty < H - HUD_H) { gs.touchX = tx; gs.touchY = ty }
       handleTap(gs, t.clientX, t.clientY, rect, sx, sx)
@@ -76,6 +81,7 @@ export default function StarAssaultGame() {
       const t = e.touches[0]
       const tx = (t.clientX - rect.left) * sx
       const ty = (t.clientY - rect.top) * sx
+      if (gs.dragItem) { hangarDragMove(gs, tx, ty); return }
       if (gs.phase === "world-select" && gs.worldDragStartY !== null) {
         gs.worldScroll = Math.max(0, Math.min(gs.worldDragBase + (gs.worldDragStartY - ty), worldMaxScroll()))
         if (Math.abs(tx - tapStartX) > 8 || Math.abs(ty - tapStartY) > 8) tapPending = null
@@ -87,6 +93,14 @@ export default function StarAssaultGame() {
 
     const onTouchEnd = (e: TouchEvent) => {
       e.preventDefault()
+      if (gs.dragItem) {
+        const { sx, rect } = getScale()
+        const t = e.changedTouches[0]
+        hangarDragEnd(gs, (t.clientX - rect.left) * sx, (t.clientY - rect.top) * sx)
+        gs.dragItem = null
+        gs.isTouching = false
+        return
+      }
       if (gs.phase === "world-select") {
         gs.worldDragStartY = null
         const { sx, rect } = getScale()
@@ -100,10 +114,18 @@ export default function StarAssaultGame() {
       if (e.touches.length === 0) { gs.touchX = null; gs.touchY = null }
     }
 
+    const onTouchCancel = (e: TouchEvent) => {
+      e.preventDefault()
+      if (gs.dragItem) gs.dragItem = null
+      gs.isTouching = false
+      if (e.touches.length === 0) { gs.touchX = null; gs.touchY = null }
+    }
+
     const onMouseMove = (e: MouseEvent) => {
       const { sx, sy, rect } = getScale()
       const mx = (e.clientX - rect.left) * sx
       const my = (e.clientY - rect.top) * sy
+      if (gs.dragItem) { hangarDragMove(gs, mx, my); return }
       if (gs.phase === "world-select" && gs.worldDragStartY !== null) {
         gs.worldScroll = Math.max(0, Math.min(gs.worldDragBase + (gs.worldDragStartY - my), worldMaxScroll()))
         if (Math.abs(mx - tapStartX) > 8 || Math.abs(my - tapStartY) > 8) tapPending = null
@@ -125,10 +147,20 @@ export default function StarAssaultGame() {
         gs.worldDragBase = gs.worldScroll
         return
       }
+      if (hangarDragStart(gs, mx, my)) {
+        gs.dragX = mx; gs.dragY = my
+        return
+      }
       handleTap(gs, e.clientX, e.clientY, rect, sx, sx)
     }
 
-    const onMouseUp = () => {
+    const onMouseUp = (e: MouseEvent) => {
+      if (gs.dragItem) {
+        const { sx, sy, rect } = getScale()
+        hangarDragEnd(gs, (e.clientX - rect.left) * sx, (e.clientY - rect.top) * sy)
+        gs.dragItem = null
+        return
+      }
       if (gs.phase === "world-select") {
         gs.worldDragStartY = null
         const { sx, rect } = getScale()
@@ -139,6 +171,16 @@ export default function StarAssaultGame() {
         return
       }
       gs.isTouching = false
+    }
+
+    // Suelta del mouse fuera del canvas durante un drag
+    const onWindowMouseUp = (e: MouseEvent) => {
+      if (gs.dragItem) {
+        const { sx, sy, rect } = getScale()
+        hangarDragEnd(gs, (e.clientX - rect.left) * sx, (e.clientY - rect.top) * sy)
+        gs.dragItem = null
+        gs.isTouching = false
+      }
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -166,9 +208,11 @@ export default function StarAssaultGame() {
     canvas.addEventListener("touchstart", onTouchStart, { passive: false })
     canvas.addEventListener("touchmove", onTouchMove, { passive: false })
     canvas.addEventListener("touchend", onTouchEnd, { passive: false })
+    canvas.addEventListener("touchcancel", onTouchCancel, { passive: false })
     canvas.addEventListener("mousemove", onMouseMove)
     canvas.addEventListener("mousedown", onMouseDown)
     canvas.addEventListener("mouseup", onMouseUp)
+    window.addEventListener("mouseup", onWindowMouseUp)
     window.addEventListener("keydown", onKeyDown)
 
     return () => {
@@ -177,9 +221,11 @@ export default function StarAssaultGame() {
       canvas.removeEventListener("touchstart", onTouchStart)
       canvas.removeEventListener("touchmove", onTouchMove)
       canvas.removeEventListener("touchend", onTouchEnd)
+      canvas.removeEventListener("touchcancel", onTouchCancel)
       canvas.removeEventListener("mousemove", onMouseMove)
       canvas.removeEventListener("mousedown", onMouseDown)
       canvas.removeEventListener("mouseup", onMouseUp)
+      window.removeEventListener("mouseup", onWindowMouseUp)
       window.removeEventListener("keydown", onKeyDown)
     }
   }, [])

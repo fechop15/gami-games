@@ -118,37 +118,107 @@ export function drawPlayerShip(
   ctx: CanvasRenderingContext2D, x: number, y: number, ship: ShipDef,
   invTimer: number, shieldActive: boolean, shieldHP: number, shieldMaxHP: number,
   shieldCooldown: number, shieldCdMax: number, time: number,
+  shieldTier = 1, shieldColor = "#4488ff", uavCount = 0, uavColor = "#44ff88",
 ) {
   if (invTimer > 0 && Math.floor(invTimer * 12) % 2 === 0) return  // blink
   ctx.save()
   ctx.translate(x, y)
 
-  // Escudo (se dibuja debajo de la nave)
+  // Escudo (se dibuja debajo de la nave) — el aspecto varía con el tier
   if (shieldActive) {
     const shieldPct = shieldHP / shieldMaxHP
     const pulse = 0.55 + Math.sin(time * 10) * 0.15
-    // Resplandor exterior
-    const shGlow = ctx.createRadialGradient(0, 0, 20, 0, 0, 48)
-    shGlow.addColorStop(0, `rgba(68,136,255,${pulse * 0.35})`)
-    shGlow.addColorStop(1, "rgba(68,136,255,0)")
-    ctx.fillStyle = shGlow
-    ctx.beginPath(); ctx.arc(0, 0, 48, 0, Math.PI * 2); ctx.fill()
-    // Hexágono de escudo (6 lados)
     const shR = 40
-    ctx.beginPath()
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 - Math.PI / 6 + time * 0.8
-      i === 0 ? ctx.moveTo(Math.cos(a) * shR, Math.sin(a) * shR)
-               : ctx.lineTo(Math.cos(a) * shR, Math.sin(a) * shR)
+    const drawHex = (r: number, rot: number) => {
+      ctx.beginPath()
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 - Math.PI / 6 + rot
+        i === 0 ? ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r)
+                 : ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r)
+      }
+      ctx.closePath()
     }
-    ctx.closePath()
-    const shieldColor = shieldPct > 0.5 ? "#4488ff" : shieldPct > 0.25 ? "#88aaff" : "#ff8844"
-    ctx.strokeStyle = shieldColor; ctx.lineWidth = 3
-    ctx.shadowColor = shieldColor; ctx.shadowBlur = 16
-    ctx.stroke()
-    ctx.fillStyle = `rgba(68,136,255,${pulse * 0.08 * shieldPct})`
-    ctx.fill()
-    ctx.shadowBlur = 0
+
+    if (shieldTier >= 5) {
+      // Aura dorada pulsante con partículas
+      const auraPulse = 0.6 + Math.sin(time * 6) * 0.25
+      const gold = ctx.createRadialGradient(0, 0, 10, 0, 0, 62)
+      gold.addColorStop(0, `rgba(255,220,80,${auraPulse * 0.3 * shieldPct})`)
+      gold.addColorStop(1, "rgba(255,220,80,0)")
+      ctx.fillStyle = gold
+      ctx.beginPath(); ctx.arc(0, 0, 62, 0, Math.PI * 2); ctx.fill()
+      drawHex(shR + 4, time * 0.6)
+      ctx.strokeStyle = "#ffee55"; ctx.lineWidth = 3.5
+      ctx.shadowColor = "#ffee55"; ctx.shadowBlur = 22
+      ctx.stroke()
+      ctx.shadowBlur = 0
+      // Partículas doradas orbitando
+      for (let i = 0; i < 6; i++) {
+        const a = time * 3 + (i / 6) * Math.PI * 2
+        const px = Math.cos(a) * (shR + 6), py = Math.sin(a) * (shR + 6) * 0.7
+        const tw = 0.5 + Math.sin(time * 10 + i) * 0.5
+        ctx.fillStyle = `rgba(255,230,120,${tw})`
+        ctx.beginPath(); ctx.arc(px, py, 2.4, 0, Math.PI * 2); ctx.fill()
+      }
+    } else if (shieldTier >= 4) {
+      // Anillo giratorio con púas/cristales
+      const shGlow = ctx.createRadialGradient(0, 0, 20, 0, 0, 52)
+      shGlow.addColorStop(0, hexToRgba(shieldColor, pulse * 0.35))
+      shGlow.addColorStop(1, hexToRgba(shieldColor, 0))
+      ctx.fillStyle = shGlow
+      ctx.beginPath(); ctx.arc(0, 0, 52, 0, Math.PI * 2); ctx.fill()
+      ctx.save(); ctx.rotate(time * 1.6)
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2
+        ctx.strokeStyle = shieldColor; ctx.lineWidth = 2.5
+        ctx.shadowColor = shieldColor; ctx.shadowBlur = 12
+        ctx.beginPath()
+        ctx.moveTo(Math.cos(a) * (shR - 6), Math.sin(a) * (shR - 6))
+        ctx.lineTo(Math.cos(a) * (shR + 9), Math.sin(a) * (shR + 9))
+        ctx.stroke()
+      }
+      ctx.restore()
+      ctx.shadowBlur = 0
+      drawHex(shR, 0)
+      ctx.strokeStyle = shieldColor; ctx.lineWidth = 3
+      ctx.shadowColor = shieldColor; ctx.shadowBlur = 16
+      ctx.stroke()
+      ctx.fillStyle = hexToRgba(shieldColor, pulse * 0.08 * shieldPct)
+      ctx.fill()
+      ctx.shadowBlur = 0
+    } else if (shieldTier >= 3) {
+      // Doble anillo + brillo
+      const shGlow = ctx.createRadialGradient(0, 0, 20, 0, 0, 50)
+      shGlow.addColorStop(0, hexToRgba(shieldColor, pulse * 0.35))
+      shGlow.addColorStop(1, hexToRgba(shieldColor, 0))
+      ctx.fillStyle = shGlow
+      ctx.beginPath(); ctx.arc(0, 0, 50, 0, Math.PI * 2); ctx.fill()
+      drawHex(shR + 3, time * 0.4)
+      ctx.strokeStyle = hexToRgba(shieldColor, 0.5); ctx.lineWidth = 2
+      ctx.stroke()
+      drawHex(shR - 3, time * 0.4)
+      ctx.strokeStyle = shieldColor; ctx.lineWidth = 3
+      ctx.shadowColor = shieldColor; ctx.shadowBlur = 18
+      ctx.stroke()
+      ctx.fillStyle = hexToRgba(shieldColor, pulse * 0.08 * shieldPct)
+      ctx.fill()
+      ctx.shadowBlur = 0
+    } else {
+      // Tier 1-2: hexágono básico (como siempre)
+      const shGlow = ctx.createRadialGradient(0, 0, 20, 0, 0, 48)
+      shGlow.addColorStop(0, `rgba(68,136,255,${pulse * 0.35})`)
+      shGlow.addColorStop(1, "rgba(68,136,255,0)")
+      ctx.fillStyle = shGlow
+      ctx.beginPath(); ctx.arc(0, 0, 48, 0, Math.PI * 2); ctx.fill()
+      drawHex(shR, time * 0.8)
+      const shieldColor2 = shieldPct > 0.5 ? "#4488ff" : shieldPct > 0.25 ? "#88aaff" : "#ff8844"
+      ctx.strokeStyle = shieldColor2; ctx.lineWidth = 3
+      ctx.shadowColor = shieldColor2; ctx.shadowBlur = 16
+      ctx.stroke()
+      ctx.fillStyle = `rgba(68,136,255,${pulse * 0.08 * shieldPct})`
+      ctx.fill()
+      ctx.shadowBlur = 0
+    }
   }
 
     drawShipShape(ctx, ship)
@@ -160,6 +230,29 @@ export function drawPlayerShip(
     ctx.beginPath()
     ctx.arc(0, 0, 30, -Math.PI / 2, -Math.PI / 2 + cdPct * Math.PI * 2)
     ctx.stroke()
+  }
+
+  // UAVs equipados orbitando alrededor de la nave
+  if (uavCount > 0) {
+    for (let i = 0; i < uavCount; i++) {
+      const a = time * 2.2 + (i / uavCount) * Math.PI * 2
+      const r = 36 + (i % 3) * 7
+      const dx = Math.cos(a) * r
+      const dy = Math.sin(a) * r * 0.62
+      ctx.save()
+      ctx.translate(dx, dy)
+      ctx.fillStyle = uavColor
+      ctx.shadowColor = uavColor; ctx.shadowBlur = 10
+      // Pequeño dron: núcleo + rotores en X
+      ctx.strokeStyle = uavColor; ctx.lineWidth = 1.5
+      ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(5, 5); ctx.moveTo(5, -5); ctx.lineTo(-5, 5); ctx.stroke()
+      ctx.fillStyle = uavColor
+      ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = "#ffffff"
+      ctx.beginPath(); ctx.arc(0, 0, 1.8, 0, Math.PI * 2); ctx.fill()
+      ctx.shadowBlur = 0
+      ctx.restore()
+    }
   }
 
   ctx.restore()
@@ -593,10 +686,62 @@ export function drawBossShip(ctx: CanvasRenderingContext2D, boss: Boss, time: nu
   ctx.restore()
 }
 
-export function drawBullet(ctx: CanvasRenderingContext2D, b: Bullet) {
+export function drawBullet(ctx: CanvasRenderingContext2D, b: Bullet, laserTier = 1) {
   ctx.save()
   if (b.fromPlayer) {
     const color = AMMO_COLORS[b.ammo]
+    const high = laserTier >= 3
+    if (high) {
+      // Bala mejorada según el tier del láser equipado
+      const tScale = 1 + (laserTier - 1) * 0.22
+      ctx.shadowColor = color
+      ctx.shadowBlur = 14 + laserTier * 5
+      if (b.ammo === "laser") {
+        // Haz doble/trazo según tier
+        if (laserTier >= 4) {
+          ctx.strokeStyle = hexToRgba(color, 0.55); ctx.lineWidth = 5
+          ctx.beginPath(); ctx.moveTo(b.x - 3, b.y); ctx.lineTo(b.x - 3, b.y + 30 * tScale); ctx.stroke()
+          ctx.beginPath(); ctx.moveTo(b.x + 3, b.y); ctx.lineTo(b.x + 3, b.y + 30 * tScale); ctx.stroke()
+        }
+        ctx.strokeStyle = color; ctx.lineWidth = 6 + laserTier
+        ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y + 30 * tScale); ctx.stroke()
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2
+        ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y + 30 * tScale); ctx.stroke()
+      } else if (b.ammo === "missile") {
+        ctx.fillStyle = color
+        ctx.beginPath(); ctx.moveTo(b.x, b.y - 12 * tScale); ctx.lineTo(b.x - 5 * tScale, b.y + 8 * tScale); ctx.lineTo(b.x + 5 * tScale, b.y + 8 * tScale); ctx.closePath(); ctx.fill()
+        ctx.fillStyle = "#ffffff"
+        ctx.beginPath(); ctx.arc(b.x, b.y - 3 * tScale, 2, 0, Math.PI * 2); ctx.fill()
+        ctx.fillStyle = "#ff8800"; ctx.globalAlpha = 0.6
+        ctx.beginPath(); ctx.ellipse(b.x, b.y + 14 * tScale, 4 * tScale, 7 * tScale, 0, 0, Math.PI * 2); ctx.fill()
+        ctx.globalAlpha = 1
+      } else {
+        // Estela + cuerpo + núcleo
+        ctx.fillStyle = hexToRgba(color, 0.4)
+        ctx.beginPath(); ctx.ellipse(b.x, b.y + b.radius * 1.6, b.radius * 0.6, b.radius * 1.9 * tScale, 0, 0, Math.PI * 2); ctx.fill()
+        if (laserTier >= 4) {
+          ctx.fillStyle = hexToRgba(color, 0.45)
+          ctx.beginPath(); ctx.ellipse(b.x + 4, b.y, b.radius * 0.5, b.radius * 1.2 * tScale, 0, 0, Math.PI * 2); ctx.fill()
+          ctx.beginPath(); ctx.ellipse(b.x - 4, b.y, b.radius * 0.5, b.radius * 1.2 * tScale, 0, 0, Math.PI * 2); ctx.fill()
+        }
+        ctx.fillStyle = color
+        ctx.beginPath(); ctx.ellipse(b.x, b.y, b.radius * 0.85 * tScale, b.radius * 1.3 * tScale, 0, 0, Math.PI * 2); ctx.fill()
+        ctx.fillStyle = "#ffffff"
+        ctx.beginPath(); ctx.ellipse(b.x, b.y, b.radius * 0.4, b.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill()
+      }
+      if (laserTier >= 5) {
+        // Aura intensa de color
+        const aura = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.radius * 4)
+        aura.addColorStop(0, hexToRgba(color, 0.5))
+        aura.addColorStop(1, hexToRgba(color, 0))
+        ctx.fillStyle = aura
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.radius * 4, 0, Math.PI * 2); ctx.fill()
+      }
+      ctx.shadowBlur = 0
+      ctx.restore()
+      return
+    }
+    // Tier 1-2: aspecto básico (como siempre)
     if (b.ammo === "laser") {
       ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.shadowColor = color; ctx.shadowBlur = 12
       ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y + 28); ctx.stroke()

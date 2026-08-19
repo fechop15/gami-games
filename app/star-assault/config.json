@@ -25,6 +25,16 @@
     "price": 150,
     "healPct": 0.4
   },
+  "ammoBuy": {
+    "laser":   { "price": 100, "amount": 1 },
+    "spread":  { "price": 80,  "amount": 20 },
+    "missile": { "price": 120, "amount": 10 }
+  },
+  "uavs": [
+    { "id": "uav_drone",    "name": "Dron de Apoyo",  "price": 400,  "desc": "Dron ligero: +1 slot de láser.", "kind": "laser",  "slotsBonus": 1, "color": "#44ff88" },
+    { "id": "uav_sentinel", "name": "Centinela UAV",  "price": 1000, "desc": "Vigía armado: +2 slots de láser.", "kind": "laser",  "slotsBonus": 2, "color": "#88ff44" },
+    { "id": "uav_shield",   "name": "Dron Defensor",  "price": 1200, "desc": "Guardia protectora: +2 slots de escudo.", "kind": "shield", "slotsBonus": 2, "color": "#44aaff" }
+  ],
   "balance": {
     "playerSpeed": 300,
     "playerVertMult": 0.9,

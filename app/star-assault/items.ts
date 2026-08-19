@@ -22,11 +22,17 @@ export interface ShieldDef {
   desc: string
   color: string
 }
+export interface UAVDef {
+  id: string; name: string; price: number; desc: string
+  kind: "laser" | "shield"; slotsBonus: number; color: string
+}
 export const LASER_DEFS: LaserDef[] = CONFIG.lasers.map(l => ({ ...l }))
 export const SHIELD_DEFS: ShieldDef[] = CONFIG.shields.map(s => ({ ...s }))
+export const UAV_DEFS: UAVDef[] = CONFIG.uavs.map(u => ({ ...u }))
 
 export function laserDef(id: string): LaserDef { return LASER_DEFS.find(l => l.id === id) ?? LASER_DEFS[0] }
 export function shieldDef(id: string): ShieldDef { return SHIELD_DEFS.find(s => s.id === id) ?? SHIELD_DEFS[0] }
+export function uavDef(id: string): UAVDef { return UAV_DEFS.find(u => u.id === id) ?? UAV_DEFS[0] }
 
 // Busca una instancia de láser por su uid
 export function getLaserInstance(eq: EquipmentState, uid: string): LaserInstance | undefined {
@@ -47,12 +53,38 @@ export function singleLaserMult(eq: EquipmentState, uid: string): number {
   return mult
 }
 
-// Loadout de una nave: garantiza que los slots tengan la longitud correcta
+// Bonus de slots que aportan los UAVs equipados de un tipo
+export function uavSlotBonus(eq: EquipmentState, kind: "laser" | "shield"): number {
+  return (eq.uavsEquipped ?? []).reduce((acc, id) => acc + (uavDef(id).kind === kind ? uavDef(id).slotsBonus : 0), 0)
+}
+// Tier efectivo de láser: máximo tier de los láseres equipados (o 1 si no hay)
+export function equippedLaserTier(gs: GS): number {
+  const uids = equippedLaserUids(gs)
+  let tier = 1
+  for (const uid of uids) {
+    const inst = getLaserInstance(gs.save.equipment, uid)
+    if (inst) tier = Math.max(tier, laserDef(inst.type).tier)
+  }
+  return tier
+}
+// Tier efectivo de escudo: máximo tier de los escudos equipados (o 1 si no hay)
+export function equippedShieldTier(gs: GS): number {
+  const ids = equippedShieldIds(gs)
+  if (ids.length === 0) return 1
+  return Math.max(...ids.map(id => shieldDef(id).tier))
+}
+
+// Loadout de una nave: garantiza que los slots tengan la longitud correcta.
+// Los UAVs equipados suman slots extra (laser/shield según su kind).
 export function getLoadout(eq: EquipmentState, shipId: string): ShipLoadout {
   const ship = getShip({ shipId } as StarSave)
+  const laserTarget = ship.laserSlots + uavSlotBonus(eq, "laser")
+  const shieldTarget = ship.shieldSlots + uavSlotBonus(eq, "shield")
   const lo = eq.loadouts[shipId] ?? { lasers: [], shields: [] }
-  while (lo.lasers.length < ship.laserSlots) lo.lasers.push(null)
-  while (lo.shields.length < ship.shieldSlots) lo.shields.push(null)
+  while (lo.lasers.length < laserTarget) lo.lasers.push(null)
+  if (lo.lasers.length > laserTarget) lo.lasers = lo.lasers.slice(0, laserTarget)
+  while (lo.shields.length < shieldTarget) lo.shields.push(null)
+  if (lo.shields.length > shieldTarget) lo.shields = lo.shields.slice(0, shieldTarget)
   eq.loadouts[shipId] = lo
   return lo
 }

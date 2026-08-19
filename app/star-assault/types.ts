@@ -17,7 +17,7 @@ export type AmmoType = "basic" | "laser" | "spread" | "missile"
 export type EnemyType = "scout" | "grunt" | "tank" | "stealth" | "shooter" | "kamikaze" | "splitter" | "mini"
 export type PowerupKind = "magnet" | "overdrive" | "bomb"
 export type DropKind = AmmoType | PowerupKind | "core"
-export type EquipTab = "lasers" | "shields" | "bots" | "ammo"
+export type EquipTab = "lasers" | "shields" | "bots" | "ammo" | "uav"
 
 export interface Bullet {
   id: number; x: number; y: number; vx: number; vy: number
@@ -71,6 +71,8 @@ export interface Star {
 
 export interface BtnArea { x: number; y: number; w: number; h: number }
 
+export interface DragItem { kind: "laser" | "shield"; id: string }
+
 export interface GS {
   phase: Phase
   playerX: number; playerY: number; playerHP: number; playerMaxHP: number; invTimer: number
@@ -109,4 +111,9 @@ export interface GS {
   magnetT: number; overdriveT: number
   runCoins: number; lastRunCoins: number
   isEndless: boolean; endlessWave: number
+  // Drag & drop del hangar
+  itemAreas: Array<BtnArea & { kind: "laser" | "shield"; id: string }>
+  slotAreas: Array<BtnArea & { kind: "laser" | "shield"; index: number }>
+  dragItem: DragItem | null
+  dragX: number; dragY: number
 }

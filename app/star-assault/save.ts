@@ -27,6 +27,8 @@ export interface EquipmentState {
   shields: Record<string, number>       // inventario de escudos: { shieldId: cantidad }
   repairBots: number                    // robots de reparación disponibles (un solo uso)
   loadouts: Record<string, ShipLoadout> // loadout por nave (slots equipados)
+  uavsOwned: string[]                   // ids de UAVs comprados
+  uavsEquipped: string[]                // ids de UAVs equipados (dan slots extra)
 }
 
 export interface StarSave {
@@ -59,6 +61,8 @@ function defaultEquipment(): EquipmentState {
     shields: { [DEFAULT_SHIELD_ID]: 1 },
     repairBots: 0,
     loadouts: {},
+    uavsOwned: [],
+    uavsEquipped: [],
   }
 }
 
@@ -149,6 +153,8 @@ export function loadStarSave(): StarSave {
         shields,
         repairBots: eq.repairBots ?? 0,
         loadouts,
+        uavsOwned: Array.isArray(eq.uavsOwned) ? eq.uavsOwned : [],
+        uavsEquipped: Array.isArray(eq.uavsEquipped) ? eq.uavsEquipped : [],
       },
       bankedAmmo: { ...DEFAULT_BANKED, ...(p.bankedAmmo ?? {}) },
     }

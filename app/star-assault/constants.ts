@@ -10,8 +10,14 @@ interface CfgShip {
   hull: string; hull2: string; hull3: string; wing: string; accent: string; engine: string
   passive?: { magnet?: boolean }
 }
+interface CfgUav {
+  id: string; name: string; price: number; desc: string
+  kind: "laser" | "shield"; slotsBonus: number; color: string
+}
 type GameConfig = {
   lasers: CfgLaser[]; shields: CfgShield[]; ships: CfgShip[]
+  uavs: CfgUav[]
+  ammoBuy: Record<"laser" | "spread" | "missile", { price: number; amount: number }>
   repairRobot: { price: number; healPct: number }
   balance: {
     playerSpeed: number; playerVertMult: number
@@ -83,5 +89,7 @@ export const PERFECT_BONUS_PER_STEP = CONFIG.balance.perfection.stepBonus
 
 export const REPAIR_BOT_PRICE = CONFIG.repairRobot.price
 export const REPAIR_BOT_HEAL = CONFIG.repairRobot.healPct
+
+export const AMMO_BUY: Record<"laser" | "spread" | "missile", { price: number; amount: number }> = CONFIG.ammoBuy
 
 export const MUTE_BTN = { x: W - 54, y: 6, w: 48, h: 28 }
