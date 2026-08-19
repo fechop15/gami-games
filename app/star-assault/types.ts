@@ -1,4 +1,4 @@
-import type { StarSave, ShipUpgrades } from "./save"
+import type { StarSave } from "./save"
 
 export type Phase =
   | "intro"
@@ -88,10 +88,11 @@ export interface GS {
   touchX: number | null; touchY: number | null; isTouching: boolean
   ammoBtns: Array<BtnArea & { ammo: AmmoType }>
   worldBtns: Array<BtnArea & { worldId: number }>
-  hangarBtns: Array<BtnArea & { key: keyof ShipUpgrades }>
+  hangarBtns: Array<BtnArea & { key: string }>
   shipBtns: Array<BtnArea & { shipId: string }>
   equipBtns: Array<BtnArea & { action: string }>
   equipTab: EquipTab
+  hangarTab: "inventory" | "upgrades"
   repairBtn: BtnArea | null
   introBtns: Array<BtnArea & { action: string }>
   save: StarSave

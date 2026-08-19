@@ -7,7 +7,7 @@ import {
 } from "./constants"
 import {
   LASER_DEFS, SHIELD_DEFS, laserDef, shieldDef, laserPerfectPct, singleLaserMult,
-  getLoadout, totalLaserMult, effShieldMaxHP, effShieldDur, inventoryLaserTotal,
+  getLoadout, totalLaserMult, effShieldMaxHP, inventoryLaserTotal,
 } from "./items"
 import { SHIP_DEFS, getShip } from "./ships"
 import { WORLDS } from "./worlds"
@@ -50,7 +50,7 @@ function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   mkBtn("▶  CAMPAÑA", "campaign", H / 2 + 20, "#00e5ff", "#001020")
   mkBtn("♾  ENDLESS", "endless", H / 2 + 78, "#ff44aa", "#20000f")
   mkBtn("🔧  HANGAR", "hangar", H / 2 + 136, "#ffcc44", "#201400")
-  mkBtn("🛠  EQUIPAMIENTO", "equip", H / 2 + 194, "#ff8844", "#201000")
+  mkBtn("🛒  TIENDA", "equip", H / 2 + 194, "#ff8844", "#201000")
   mkBtn("🚀  NAVES", "ships", H / 2 + 252, "#44ff88", "#001405")
 
   // Récord endless
@@ -77,53 +77,91 @@ export const UPGRADE_DEFS: UpgradeDef[] = [
 function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillRect(0, 0, W, H)
   ctx.fillStyle = "#ffcc44"; ctx.font = "bold 26px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
-  ctx.fillText("🔧 HANGAR", W / 2, 28)
-  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 16px monospace"
-  ctx.fillText(`🪙 ${gs.save.coins.toLocaleString()} monedas`, W / 2, 62)
+  ctx.fillText("🔧 HANGAR", W / 2, 24)
+  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 14px monospace"
+  ctx.fillText(`🪙 ${gs.save.coins.toLocaleString()} monedas`, W / 2, 56)
 
+  // Pestañas: Inventario | Mejoras
   gs.hangarBtns = []
-  const cardH = 96, cardW = W - 40, cx = 20
-  for (let i = 0; i < UPGRADE_DEFS.length; i++) {
-    const def = UPGRADE_DEFS[i]
-    const lvl = gs.save.upgrades[def.key]
-    const maxed = lvl >= def.max
-    const cost = def.cost(lvl)
-    const afford = gs.save.coins >= cost
-    const cy = 96 + i * (cardH + 8)
-    gs.hangarBtns.push({ key: def.key, x: cx, y: cy, w: cardW, h: cardH })
+  const tabs: Array<{ id: "inventory" | "upgrades"; label: string; color: string }> = [
+    { id: "inventory", label: "🎒 INVENTARIO", color: "#44ff88" },
+    { id: "upgrades", label: "⬆ MEJORAS", color: "#ffcc44" },
+  ]
+  const tabW = W / 2, tabH = 34, tabY = 82
+  for (let i = 0; i < tabs.length; i++) {
+    const t = tabs[i]
+    const tx = i * tabW
+    gs.hangarBtns.push({ key: t.id, x: tx, y: tabY, w: tabW, h: tabH })
+    const active = gs.hangarTab === t.id
+    ctx.fillStyle = active ? t.color + "33" : "rgba(255,255,255,0.05)"
+    ctx.fillRect(tx, tabY, tabW, tabH)
+    ctx.fillStyle = active ? t.color : "#666"
+    ctx.strokeStyle = active ? t.color : "#333"; ctx.lineWidth = active ? 2 : 1
+    ctx.strokeRect(tx + 0.5, tabY + 0.5, tabW - 1, tabH - 1)
+    ctx.font = active ? "bold 12px monospace" : "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText(t.label, tx + tabW / 2, tabY + tabH / 2)
+  }
 
-    // Card
-    ctx.fillStyle = maxed ? "#1a2a1a" : afford ? "#ffcc4422" : "#1a1a22"
-    ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.fill()
-    ctx.strokeStyle = maxed ? "#44ff88" : afford ? "#ffcc4488" : "#333"; ctx.lineWidth = 1.5
-    ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.stroke()
+  const listTop = tabY + tabH + 6
+  const eq = gs.save.equipment
+  const ship = getShip(gs.save)
+  const lo = getLoadout(eq, ship.id)
 
-    // Nombre + desc
-    ctx.textAlign = "left"; ctx.textBaseline = "top"
-    ctx.fillStyle = "#ffffff"; ctx.font = "bold 17px monospace"
-    ctx.fillText(def.name, cx + 16, cy + 14)
-    ctx.fillStyle = "#aaaaaa"; ctx.font = "12px monospace"
-    ctx.fillText(def.desc, cx + 16, cy + 38)
+  if (gs.hangarTab === "inventory") {
+    // Inventario: slots de la nave actual + listas compactas de láseres y escudos
+    ctx.fillStyle = "#cccccc"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+    ctx.fillText(`Nave: ${ship.name} · Daño x${totalLaserMult(gs).toFixed(2)} · Escudo HP ${effShieldMaxHP(gs)}`, W / 2, listTop)
+    drawSlotChips(ctx, lo.lasers, ship.laserSlots, laserDef, listTop + 16, "LÁSERES EQUIPADOS")
+    drawSlotChips(ctx, lo.shields, ship.shieldSlots, shieldDef, listTop + 58, "ESCUDOS EQUIPADOS")
 
-    // Nivel (pips)
-    for (let p = 0; p < def.max; p++) {
-      ctx.fillStyle = p < lvl ? "#44ff88" : "#444"
-      ctx.beginPath(); ctx.arc(cx + 20 + p * 16, cy + 68, 5, 0, Math.PI * 2); ctx.fill()
-    }
+    // Listas compactas del inventario
+    const invTop = listTop + 104
+    ctx.fillStyle = "#44ff88"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
+    ctx.fillText("INVENTARIO — LÁSERES", 16, invTop - 4)
+    drawInventoryList(ctx, gs, LASER_DEFS, invTop, "laser")
+    const shieldTop = invTop + LASER_DEFS.length * 68
+    ctx.fillStyle = "#44aaff"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
+    ctx.fillText("INVENTARIO — ESCUDOS", 16, shieldTop - 4)
+    drawInventoryList(ctx, gs, SHIELD_DEFS, shieldTop, "shield")
+  } else {
+    // Mejoras permanentes (lo que antes era el hangar)
+    const cardH = 92, cardW = W - 40, cx = 20
+    for (let i = 0; i < UPGRADE_DEFS.length; i++) {
+      const def = UPGRADE_DEFS[i]
+      const lvl = gs.save.upgrades[def.key]
+      const maxed = lvl >= def.max
+      const cost = def.cost(lvl)
+      const afford = gs.save.coins >= cost
+      const cy = listTop + 6 + i * (cardH + 8)
+      gs.hangarBtns.push({ key: def.key, x: cx, y: cy, w: cardW, h: cardH })
 
-    // Botón de costo / estado
-    ctx.textAlign = "right"; ctx.textBaseline = "middle"
-    if (maxed) {
-      ctx.fillStyle = "#44ff88"; ctx.font = "bold 14px monospace"
-      ctx.fillText("MÁX ✓", cx + cardW - 16, cy + cardH / 2)
-    } else {
-      const pulse = afford ? 1 + Math.sin(time * 4 + i) * 0.05 : 1
-      ctx.save(); ctx.translate(cx + cardW - 58, cy + cardH / 2); ctx.scale(pulse, pulse)
-      ctx.fillStyle = afford ? "#ffcc44" : "#443311"
-      ctx.beginPath(); ctx.roundRect(-52, -18, 104, 36, 8); ctx.fill()
-      ctx.fillStyle = afford ? "#201400" : "#776644"; ctx.font = "bold 13px monospace"; ctx.textAlign = "center"
-      ctx.fillText(`🪙 ${cost}`, 0, 0)
-      ctx.restore()
+      ctx.fillStyle = maxed ? "#1a2a1a" : afford ? "#ffcc4422" : "#1a1a22"
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.fill()
+      ctx.strokeStyle = maxed ? "#44ff88" : afford ? "#ffcc4488" : "#333"; ctx.lineWidth = 1.5
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 10); ctx.stroke()
+
+      ctx.textAlign = "left"; ctx.textBaseline = "top"
+      ctx.fillStyle = "#ffffff"; ctx.font = "bold 16px monospace"
+      ctx.fillText(def.name, cx + 16, cy + 12)
+      ctx.fillStyle = "#aaaaaa"; ctx.font = "11px monospace"
+      ctx.fillText(def.desc, cx + 16, cy + 36)
+      for (let p = 0; p < def.max; p++) {
+        ctx.fillStyle = p < lvl ? "#44ff88" : "#444"
+        ctx.beginPath(); ctx.arc(cx + 20 + p * 16, cy + 62, 5, 0, Math.PI * 2); ctx.fill()
+      }
+      ctx.textAlign = "right"; ctx.textBaseline = "middle"
+      if (maxed) {
+        ctx.fillStyle = "#44ff88"; ctx.font = "bold 13px monospace"
+        ctx.fillText("MÁX ✓", cx + cardW - 16, cy + cardH / 2)
+      } else {
+        const pulse = afford ? 1 + Math.sin(time * 4 + i) * 0.05 : 1
+        ctx.save(); ctx.translate(cx + cardW - 56, cy + cardH / 2); ctx.scale(pulse, pulse)
+        ctx.fillStyle = afford ? "#ffcc44" : "#443311"
+        ctx.beginPath(); ctx.roundRect(-50, -16, 100, 32, 8); ctx.fill()
+        ctx.fillStyle = afford ? "#201400" : "#776644"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center"
+        ctx.fillText(`🪙 ${cost}`, 0, 0)
+        ctx.restore()
+      }
     }
   }
 
@@ -246,13 +284,15 @@ function drawSlotChips(
   }
 }
 
-// Lista de items del inventario (láser o escudo) con sus botones de acción
+// Lista de items del inventario (láser o escudo) con sus botones de acción.
+// mode "manage" = hangar (equipar/quitar de los slots); "store" = tienda (comprar/fusionar/perfección)
 function drawItemList(
   ctx: CanvasRenderingContext2D,
   gs: GS,
   items: EquipItem[],
   top: number,
   kind: "laser" | "shield",
+  mode: "manage" | "store",
 ) {
   const eq = gs.save.equipment
   const ship = getShip(gs.save)
@@ -310,18 +350,24 @@ function drawItemList(
       ctx.fillText(perfect ? "★ PERFECTO ★" : `${Math.floor(pct)}%`, barX + barW + 6, barY + barH / 2)
     }
 
-    // Botones de acción (hasta 3 apilados a la derecha)
+    // Botones de acción (hasta 3 apilados a la derecha), según modo
     const btnX = cx + cardW - btnW - 10
     const btnTop = cy + 10
     const buttons: Array<{ label: string; color: string; text: string; action: string }> = []
-    if (equippedCount > 0) buttons.push({ label: "QUITAR", color: "#445566", text: "#eef3f8", action: `${kind}:unequip:${item.id}` })
-    if (qty === 0) buttons.push({ label: `🪙 ${item.price}`, color: afford ? item.color : "#33241a", text: afford ? "#101400" : "#887766", action: `${kind}:buy:${item.id}` })
-    if (qty > 0 && equippedCount === 0) buttons.push({ label: "EQUIPAR", color: item.color, text: "#0a100a", action: `${kind}:equip:${item.id}` })
-    if (qty >= FUSION_COUNT && next) buttons.push({ label: `FUSION ${Math.round(fusionChance(item.tier) * 100)}%`, color: "#aa77ff", text: "#12001e", action: `${kind}:fuse:${item.id}` })
-    if (kind === "laser" && equippedCount > 0 && !perfect) {
-      const cost = perfectBuyCost(pct)
-      const pcAfford = gs.save.coins >= cost
-      buttons.push({ label: `PERF +${PERFECT_BUY_STEP}% · ${cost}`, color: pcAfford ? "#ffee44" : "#443c1a", text: pcAfford ? "#201400" : "#887744", action: `${kind}:perf:${item.id}` })
+    if (mode === "manage") {
+      // Hangar: equipar/quitar items del inventario en los slots
+      if (equippedCount > 0) buttons.push({ label: "QUITAR", color: "#445566", text: "#eef3f8", action: `${kind}:unequip:${item.id}` })
+      else if (qty > 0) buttons.push({ label: "EQUIPAR", color: item.color, text: "#0a100a", action: `${kind}:equip:${item.id}` })
+      else buttons.push({ label: "NO TIENES", color: "#333", text: "#666", action: `${kind}:none` })
+    } else {
+      // Tienda: comprar / fusionar / perfección
+      buttons.push({ label: `🪙 ${item.price}`, color: afford ? item.color : "#33241a", text: afford ? "#101400" : "#887766", action: `${kind}:buy:${item.id}` })
+      if (qty >= FUSION_COUNT && next) buttons.push({ label: `FUSION ${Math.round(fusionChance(item.tier) * 100)}%`, color: "#aa77ff", text: "#12001e", action: `${kind}:fuse:${item.id}` })
+      if (kind === "laser" && qty > 0 && !perfect) {
+        const cost = perfectBuyCost(pct)
+        const pcAfford = gs.save.coins >= cost
+        buttons.push({ label: `PERF +${PERFECT_BUY_STEP}% · ${cost}`, color: pcAfford ? "#ffee44" : "#443c1a", text: pcAfford ? "#201400" : "#887744", action: `${kind}:perf:${item.id}` })
+      }
     }
 
     for (let b = 0; b < buttons.length && b < 3; b++) {
@@ -336,13 +382,62 @@ function drawItemList(
   }
 }
 
-/* Pantalla de EQUIPAMIENTO — inventario + loadout por nave */
+// Lista compacta del inventario del hangar: cada item en una fila con su cantidad
+// y botón EQUIPAR/QUITAR. Soporta scroll si no cabe (gs.invScroll).
+function drawInventoryList(
+  ctx: CanvasRenderingContext2D,
+  gs: GS,
+  items: EquipItem[],
+  top: number,
+  kind: "laser" | "shield",
+) {
+  const eq = gs.save.equipment
+  const ship = getShip(gs.save)
+  const lo = getLoadout(eq, ship.id)
+  const slotArr = kind === "laser" ? lo.lasers : lo.shields
+  const cardW = W - 40, cx = 20
+  const rowH = 62, gap = 6
+  const btnW = 96, btnH = 34
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    const qty = kind === "laser" ? (eq.lasers[item.id] ?? 0) : (eq.shields[item.id] ?? 0)
+    const equippedCount = slotArr.filter(s => s === item.id).length
+    const cy = top + i * (rowH + gap)
+
+    ctx.fillStyle = equippedCount > 0 ? item.color + "22" : qty > 0 ? "#1a241a" : "#16161c"
+    ctx.beginPath(); ctx.roundRect(cx, cy, cardW, rowH, 8); ctx.fill()
+    ctx.strokeStyle = equippedCount > 0 ? item.color : qty > 0 ? "#2a4a3a" : "#333"; ctx.lineWidth = equippedCount > 0 ? 2 : 1
+    ctx.beginPath(); ctx.roundRect(cx, cy, cardW, rowH, 8); ctx.stroke()
+
+    // Nombre + cantidad
+    ctx.textAlign = "left"; ctx.textBaseline = "middle"
+    ctx.fillStyle = item.color; ctx.font = "bold 12px monospace"
+    ctx.fillText(shortItemName(item.name), cx + 14, cy + 24)
+    ctx.fillStyle = qty > 0 ? item.color : "#555"; ctx.font = "bold 12px monospace"
+    ctx.fillText(qty > 0 ? `×${qty}` : "—", cx + cardW - btnW - 24, cy + 24)
+
+    // Botón equipar/quitar
+    const btnX = cx + cardW - btnW - 10, btnY = cy + (rowH - btnH) / 2
+    let label: string, color: string, text: string, action: string
+    if (equippedCount > 0) { label = "QUITAR"; color = "#445566"; text = "#eef3f8"; action = `${kind}:unequip:${item.id}` }
+    else if (qty > 0) { label = "EQUIPAR"; color = item.color; text = "#0a100a"; action = `${kind}:equip:${item.id}` }
+    else { label = "NO TIENES"; color = "#333"; text = "#666"; action = `${kind}:none` }
+    gs.equipBtns.push({ action, x: btnX, y: btnY, w: btnW, h: btnH })
+    ctx.fillStyle = color
+    ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 6); ctx.fill()
+    ctx.fillStyle = text; ctx.font = "bold 10px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText(label, btnX + btnW / 2, btnY + btnH / 2)
+  }
+}
+
+/* Pantalla de TIENDA DE EQUIPAMIENTO — inventario + loadout por nave */
 function drawEquipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillRect(0, 0, W, H)
-  ctx.fillStyle = "#ff8844"; ctx.font = "bold 26px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
-  ctx.fillText("🛠 EQUIPAMIENTO", W / 2, 24)
-  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 15px monospace"
-  ctx.fillText(`🪙 ${gs.save.coins.toLocaleString()} monedas`, W / 2, 58)
+  ctx.fillStyle = "#ff8844"; ctx.font = "bold 24px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+  ctx.fillText("🛒 TIENDA DE EQUIPAMIENTO", W / 2, 24)
+  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 14px monospace"
+  ctx.fillText(`🪙 ${gs.save.coins.toLocaleString()} monedas`, W / 2, 54)
 
   // Pestañas
   const tabs: Array<{ id: EquipTab; label: string; color: string }> = [
@@ -352,7 +447,7 @@ function drawEquipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     { id: "ammo", label: "📦 MUNICIÓN", color: "#cc88ff" },
   ]
   gs.equipBtns = []
-  const tabW = W / 4, tabH = 36, tabY = 84
+  const tabW = W / 4, tabH = 34, tabY = 82
   for (let i = 0; i < tabs.length; i++) {
     const t = tabs[i]
     const tx = i * tabW
@@ -367,18 +462,18 @@ function drawEquipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     ctx.fillText(t.label, tx + tabW / 2, tabY + tabH / 2)
   }
 
-  const listTop = tabY + tabH + 8
+  const listTop = tabY + tabH + 6
   const eq = gs.save.equipment
-  const ship = getShip(gs.save)
-  const lo = getLoadout(eq, ship.id)
   const cardW = W - 32, cx = 16
 
   if (gs.equipTab === "lasers") {
-    drawSlotChips(ctx, lo.lasers, ship.laserSlots, laserDef, listTop, `LÁSERES EQUIPADOS · Daño x${totalLaserMult(gs).toFixed(2)}`)
-    drawItemList(ctx, gs, LASER_DEFS, listTop + 52, "laser")
+    ctx.fillStyle = "#888"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+    ctx.fillText(`Tienes ${inventoryLaserTotal(eq)} láser(es) en el inventario`, W / 2, listTop)
+    drawItemList(ctx, gs, LASER_DEFS, listTop + 22, "laser", "store")
   } else if (gs.equipTab === "shields") {
-    drawSlotChips(ctx, lo.shields, ship.shieldSlots, shieldDef, listTop, `ESCUDOS EQUIPADOS · HP ${effShieldMaxHP(gs)} · ${effShieldDur(gs).toFixed(1)}s`)
-    drawItemList(ctx, gs, SHIELD_DEFS, listTop + 52, "shield")
+    ctx.fillStyle = "#888"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
+    ctx.fillText(`Tienes ${Object.values(eq.shields).reduce((a, b) => a + b, 0)} escudo(s) en el inventario`, W / 2, listTop)
+    drawItemList(ctx, gs, SHIELD_DEFS, listTop + 22, "shield", "store")
   } else if (gs.equipTab === "bots") {
     const bots = eq.repairBots
     ctx.fillStyle = "#888"; ctx.font = "11px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"

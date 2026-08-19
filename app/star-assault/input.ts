@@ -239,23 +239,79 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
 
   if (gs.phase === "hangar") {
     if (y > H - 42) { gs.phase = "intro"; gs.phaseTimer = 0; return }
+
+    // Pestañas del hangar (inventory / upgrades)
     for (const btn of gs.hangarBtns) {
-      if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
-        const def = UPGRADE_DEFS.find(d => d.key === btn.key)!
-        const lvl = gs.save.upgrades[btn.key]
-        if (lvl >= def.max) { gs.flashMsg = "Ya está al máximo"; gs.flashT = 1; return }
-        const cost = def.cost(lvl)
-        if (gs.save.coins >= cost) {
-          gs.save.coins -= cost
-          gs.save.upgrades[btn.key] = lvl + 1
-          writeStarSave(gs.save)
-          SFX.pickup()
-        } else {
-          gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1
-          SFX.shieldOff()
+      if (!(x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h)) continue
+      if (btn.key === "inventory") { gs.hangarTab = "inventory"; return }
+      if (btn.key === "upgrades") { gs.hangarTab = "upgrades"; return }
+    }
+
+    if (gs.hangarTab === "inventory") {
+      // Inventario: equipar / quitar items de los slots
+      for (let i = gs.equipBtns.length - 1; i >= 0; i--) {
+        const btn = gs.equipBtns[i]
+        if (!(x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h)) continue
+        const a = btn.action
+        if (a.startsWith("laser:equip:")) {
+          const id = a.slice("laser:equip:".length)
+          if (equipSlot(gs, "laser", id)) {
+            writeStarSave(gs.save)
+            gs.flashMsg = `${laserDef(id).name} equipado`
+            gs.flashT = 1.2; SFX.pickup()
+          } else { gs.flashMsg = "Sin slots libres"; gs.flashT = 1; SFX.shieldOff() }
+          return
+        }
+        if (a.startsWith("laser:unequip:")) {
+          const id = a.slice("laser:unequip:".length)
+          if (unequipSlot(gs, "laser", id)) {
+            writeStarSave(gs.save)
+            gs.flashMsg = `${laserDef(id).name} desequipado`
+            gs.flashT = 1.2; SFX.pickup()
+          }
+          return
+        }
+        if (a.startsWith("shield:equip:")) {
+          const id = a.slice("shield:equip:".length)
+          if (equipSlot(gs, "shield", id)) {
+            writeStarSave(gs.save)
+            gs.flashMsg = `${shieldDef(id).name} equipado`
+            gs.flashT = 1.2; SFX.pickup()
+          } else { gs.flashMsg = "Sin slots libres"; gs.flashT = 1; SFX.shieldOff() }
+          return
+        }
+        if (a.startsWith("shield:unequip:")) {
+          const id = a.slice("shield:unequip:".length)
+          if (unequipSlot(gs, "shield", id)) {
+            writeStarSave(gs.save)
+            gs.flashMsg = `${shieldDef(id).name} desequipado`
+            gs.flashT = 1.2; SFX.pickup()
+          }
+          return
         }
         return
       }
+      return
+    }
+
+    // Mejoras permanentes
+    for (const btn of gs.hangarBtns) {
+      if (!(x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h)) continue
+      const def = UPGRADE_DEFS.find(d => d.key === btn.key)
+      if (!def) continue
+      const lvl = gs.save.upgrades[def.key]
+      if (lvl >= def.max) { gs.flashMsg = "Ya está al máximo"; gs.flashT = 1; return }
+      const cost = def.cost(lvl)
+      if (gs.save.coins >= cost) {
+        gs.save.coins -= cost
+        gs.save.upgrades[def.key] = lvl + 1
+        writeStarSave(gs.save)
+        SFX.pickup()
+      } else {
+        gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1
+        SFX.shieldOff()
+      }
+      return
     }
     return
   }

@@ -128,7 +128,7 @@ export function makeGS(): GS {
     stars, lastTime: 0, phaseTimer: 0, nextId: 0,
     touchX: null, touchY: null, isTouching: false,
     ammoBtns: [], worldBtns: [], hangarBtns: [], shipBtns: [], equipBtns: [], introBtns: [],
-    equipTab: "lasers", repairBtn: null,
+    equipTab: "lasers", hangarTab: "inventory", repairBtn: null,
     save, flashMsg: "", flashT: 0,
     worldScroll: 0, worldDragStartY: null, worldDragBase: 0,
     bossLaserActive: false, bossLaserT: 0, bossLaserX: W / 2,
