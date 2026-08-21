@@ -184,9 +184,9 @@ export function applyDamageToPlayer(gs: GS, raw: number): void {
     const absorbed = Math.min(p.shieldHp, raw * SHIELD_ABSORB)
     p.shieldHp -= absorbed
     remaining = raw - absorbed
+    gs.shieldFlashT = 0.35
     if (p.shieldHp <= 0) {
       p.shieldHp = 0
-      p.shieldCooldown = p.shieldCdMax
       sfx.error()
       pushFloater(gs, p.x, p.y - 30, "ESCUDO ROTO", "#ff5533", 14)
     }

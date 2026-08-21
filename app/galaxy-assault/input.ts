@@ -1,7 +1,7 @@
 // Input: joystick floating + tap para elegir objetivo + botón disparo + barra de munición.
 import type { GS } from "./core/types"
 import {
-  W, H, JOY_RADIUS, MUTE_BTN, MINIMAP_BTN, FIRE_BTN, REPAIR_BTN,
+  W, H, JOY_RADIUS, JOY_ZONE_X, MUTE_BTN, MINIMAP_BTN, FIRE_BTN, REPAIR_BTN,
   AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, CONFIG, inRect,
 } from "./core/constants"
 import { startRun, saveProgress } from "./engine"
@@ -11,7 +11,7 @@ import { AMMO_ORDER, weaponDef } from "./data/ammo"
 import { toggleMute, unlockAudio, sfx } from "../lib/sound"
 
 // ── Roles por dedo (multitouch) ──
-type Role = "joystick" | "fire" | "none"
+type Role = "joystick" | "fire" | "tap" | "none"
 const touchRole = new Map<number, Role>()
 const tapStart = new Map<number, { x: number; y: number }>()
 
@@ -102,21 +102,36 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   // Zonas muertas del HUD: no joystick
   if (isUiDeadZone(x, y)) return
 
-  // Joystick floating: aparece donde toques
+  // Joystick solo en la zona izquierda; en la derecha un tap selecciona objetivo (sin joystick)
   if (!touchRole.has(id)) {
-    touchRole.set(id, "joystick")
-    tapStart.set(id, { x, y })
-    gs.joystick.active = true
-    gs.joystick.baseX = x
-    gs.joystick.baseY = y
-    gs.joystick.dx = 0
-    gs.joystick.dy = 0
-    joystickInput(gs, 0, 0)
+    if (x < JOY_ZONE_X) {
+      touchRole.set(id, "joystick")
+      tapStart.set(id, { x, y })
+      gs.joystick.active = true
+      gs.joystick.baseX = x
+      gs.joystick.baseY = y
+      gs.joystick.dx = 0
+      gs.joystick.dy = 0
+      joystickInput(gs, 0, 0)
+    } else {
+      touchRole.set(id, "tap")
+      tapStart.set(id, { x, y })
+    }
   }
 }
 
 export function onTouchMove(gs: GS, id: number, x: number, y: number): void {
-  if (touchRole.get(id) !== "joystick") return
+  const role = touchRole.get(id)
+  if (role !== "joystick") {
+    // Si un tap se convierte en arrastre, se cancela (no seleccionar por error)
+    if (role === "tap") {
+      const start = tapStart.get(id)
+      if (start && (Math.abs(x - start.x) > 14 || Math.abs(y - start.y) > 14)) {
+        tapStart.delete(id)
+      }
+    }
+    return
+  }
   const start = tapStart.get(id)
   if (start && (Math.abs(x - start.x) > 12 || Math.abs(y - start.y) > 12)) {
     tapStart.delete(id) // es arrastre, no tap
@@ -144,6 +159,23 @@ export function onTouchEnd(gs: GS, id: number, x: number, y: number): void {
     gs.firing = false
     tapStart.delete(id)
     return
+  }
+
+  if (role === "tap") {
+    // Tap en la zona derecha: elegir o soltar objetivo (sin joystick)
+    const start = tapStart.get(id)
+    tapStart.delete(id)
+    if (start && Math.abs(x - start.x) <= 14 && Math.abs(y - start.y) <= 14) {
+      const target = enemyAtScreen(gs, x, y, 70)
+      setTarget(gs, target)
+      if (target) {
+        sfx.click()
+        gs.flashMsg = "Objetivo marcado · 🔫 para disparar"
+        gs.flashT = 1.4
+      } else {
+        setTarget(gs, null)
+      }
+    }
   }
 
   if (role === "joystick") {

@@ -66,6 +66,11 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] El casco repara cuando el escudo está completo (el escudo se prioriza)
 - [x] Barra de escudo sobre la nave muestra el progreso hacia la regeneración
 
+## Fase 14 — Ajustes de control y límites (v1.5)
+- [x] Joystick restringido a la zona izquierda; el tap en otras zonas selecciona objetivo sin crear joystick
+- [x] Efecto visual del escudo al recibir ataque (destello) y al regenerarse (anillo giratorio)
+- [x] Tope global de NPCs vivos en el mapa (`balance.maxNpcsOnMap` = 26) para no sobrepoblar
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable

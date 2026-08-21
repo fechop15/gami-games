@@ -1,7 +1,7 @@
 // Enemigos y jefes: IA (patrulla/aggro), spawn infinito por timers + caps, mecánicas de jefe.
 import type { GS, Enemy } from "../core/types"
 import {
-  CONFIG, BASE_X, BASE_Y, SAFE_RADIUS, PLAYABLE_MIN, PLAYABLE_MAX,
+  CONFIG, BASE_X, BASE_Y, SAFE_RADIUS, PLAYABLE_MIN, PLAYABLE_MAX, MAX_NPCS_ON_MAP,
 } from "../core/constants"
 import { rand, clamp, angleTo, angleLerp, dist } from "../../lib/math"
 import type { CfgNpc, CfgBoss } from "../core/constants"
@@ -64,14 +64,17 @@ function spawnPosition(gs: GS, minDistFromBase: number, minDistFromPlayer: numbe
 }
 
 export function updateSpawners(gs: GS, dt: number): void {
-  // NPCs
-  for (const type of Object.keys(CONFIG.npcs)) {
-    const cfg = CONFIG.npcs[type]
-    const alive = gs.enemies.filter(e => e.type === type && e.alive).length
-    gs.spawnTimers[type] = (gs.spawnTimers[type] ?? 0) + dt * 1000
-    if (alive < cfg.maxCount && gs.spawnTimers[type] >= cfg.spawnInterval) {
-      gs.spawnTimers[type] = 0
-      gs.enemies.push(makeEnemy(gs, type, "npc", cfg))
+  // NPCs — con tope GLOBAL en el mapa para no sobrepoblar
+  const npcsAlive = gs.enemies.filter(e => e.kind === "npc" && e.alive).length
+  if (npcsAlive < MAX_NPCS_ON_MAP) {
+    for (const type of Object.keys(CONFIG.npcs)) {
+      const cfg = CONFIG.npcs[type]
+      const alive = gs.enemies.filter(e => e.type === type && e.alive).length
+      gs.spawnTimers[type] = (gs.spawnTimers[type] ?? 0) + dt * 1000
+      if (alive < cfg.maxCount && gs.spawnTimers[type] >= cfg.spawnInterval) {
+        gs.spawnTimers[type] = 0
+        gs.enemies.push(makeEnemy(gs, type, "npc", cfg))
+      }
     }
   }
   // Jefes (cap 1 c/u)

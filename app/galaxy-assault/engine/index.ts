@@ -81,6 +81,7 @@ export function makeGS(): GS {
     isTouching: false,
     respawnT: 0,
     lastHitT: 0,
+    shieldFlashT: 0,
   }
 }
 
@@ -124,6 +125,7 @@ export function update(gs: GS, dt: number): void {
   gs.time += dt
   if (gs.flashT > 0) gs.flashT -= dt
   if (gs.shake > 0) gs.shake = Math.max(0, gs.shake - dt * 30)
+  if (gs.shieldFlashT > 0) gs.shieldFlashT -= dt
 
   if (gs.phase === "playing") {
     updatePlayer(gs, dt)

@@ -111,7 +111,7 @@ interface GameConfig {
   crates: { spawnInterval: number; maxOnField: number; life: number; minDistFromBase: number }
   drops: Record<string, CfgDrop>
   repairBot: { healPct: number }
-  balance: { coinsPerKill: number; coinsPerBossKill: number; bossKillsToUnlockNext: number }
+  balance: { coinsPerKill: number; coinsPerBossKill: number; bossKillsToUnlockNext: number; maxNpcsOnMap: number }
 }
 
 export const CONFIG = cfg as GameConfig
@@ -148,10 +148,12 @@ export const REGEN_SHIELD_PER_SEC = CONFIG.player.regen.shieldPerSec
 export const REGEN_HP_PER_SEC = CONFIG.player.regen.hpPerSec
 export const REGEN_SAFE_SHIELD_PER_SEC = CONFIG.player.regen.safeShieldPerSec
 export const REGEN_SAFE_HP_PER_SEC = CONFIG.player.regen.safeHpPerSec
+export const MAX_NPCS_ON_MAP = CONFIG.balance.maxNpcsOnMap
 
-// ── Joystick ──
+// ── Joystick (zona izquierda fija) ──
 export const JOY_RADIUS = 70
 export const JOY_DEADZONE = 12
+export const JOY_ZONE_X = W * 0.5
 
 // ── Zonas táctiles del HUD ──
 export const MUTE_BTN: BtnRect = { x: W - 54, y: 8, w: 44, h: 44 }

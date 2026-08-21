@@ -196,4 +196,5 @@ export interface GS {
   isTouching: boolean
   respawnT: number
   lastHitT: number
+  shieldFlashT: number
 }

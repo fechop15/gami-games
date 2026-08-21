@@ -128,8 +128,65 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
 
   // Escudo visual
   if (p.shieldHp > 0) {
-    const a = 0.45 + 0.15 * Math.sin(time * 3)
-    drawSprite(ctx, imgs, "shield", sx, sy, 96, 0, a)
+    const base = 0.45 + 0.15 * Math.sin(time * 3)
+    const flashing = gs.shieldFlashT > 0
+    const flashA = flashing ? Math.min(1, gs.shieldFlashT * 3.5) : 0
+    // Burbuja base
+    drawSprite(ctx, imgs, "shield", sx, sy, 96, 0, base)
+
+    // Efecto al recibir ataque: destello blanco/cian que crece y se apaga
+    if (flashing) {
+      ctx.save()
+      ctx.strokeStyle = `rgba(220,255,255,${flashA})`
+      ctx.lineWidth = 2 + flashA * 3
+      ctx.shadowColor = "rgba(120,220,255,0.9)"
+      ctx.shadowBlur = 20
+      const grow = 96 + (1 - flashA) * 34
+      ctx.beginPath()
+      ctx.arc(sx, sy, grow / 2, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+      ctx.fillStyle = `rgba(200,240,255,${flashA * 0.25})`
+      ctx.beginPath()
+      ctx.arc(sx, sy, 48, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    // Efecto de regeneración: anillo giratorio tenue
+    const regenActive = p.shieldHp < p.shieldMaxHp && (gs.inSafeZone || gs.time - gs.lastHitT >= REGEN_IDLE_TIME)
+    if (regenActive) {
+      ctx.save()
+      ctx.strokeStyle = "rgba(80,200,255,0.6)"
+      ctx.lineWidth = 2
+      ctx.setLineDash([6, 10])
+      ctx.lineDashOffset = -time * 40
+      ctx.beginPath()
+      ctx.arc(sx, sy, 60, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+      // Rayo de reparación ascendente
+      ctx.save()
+      ctx.strokeStyle = "rgba(80,220,255,0.8)"
+      ctx.lineWidth = 3
+      ctx.translate(sx, sy)
+      ctx.rotate(-time * 1.6)
+      ctx.beginPath()
+      ctx.moveTo(-18, 60)
+      ctx.lineTo(18, 60)
+      ctx.stroke()
+      ctx.restore()
+    }
+  } else if (gs.inSafeZone || gs.time - gs.lastHitT >= REGEN_IDLE_TIME) {
+    // Escudo vacío pero regenerándose: pulso azul de "cargando"
+    const pulse = 0.25 + 0.2 * Math.sin(time * 4)
+    ctx.strokeStyle = `rgba(80,180,255,${pulse})`
+    ctx.lineWidth = 2
+    ctx.setLineDash([4, 8])
+    ctx.lineDashOffset = -time * 30
+    ctx.beginPath()
+    ctx.arc(sx, sy, 54, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.setLineDash([])
   }
 
   drawShipBars(ctx, gs, sx, sy)

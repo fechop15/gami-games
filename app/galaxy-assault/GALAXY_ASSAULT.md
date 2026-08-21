@@ -106,7 +106,7 @@ El casco repara solo cuando el escudo ya está completo (el escudo se prioriza).
 | Scout | 40 | 140 | 1700ms | 8 | 50 | 6000ms | 22 |
 | Tank | 130 | 75 | 2100ms | 14 | 120 | 9000ms | 10 |
 
-Spawner: cada tipo tiene `spawnInterval` + `maxCount`; si hay menos del cap y venció el timer → spawn aleatorio a distancia mínima de base y jugador. Nunca sobrepoblan.
+Spawner: cada tipo tiene `spawnInterval` + `maxCount`; si hay menos del cap y venció el timer → spawn aleatorio a distancia mínima de base y jugador. Además hay un **tope global** de NPCs vivos en el mapa (`balance.maxNpcsOnMap`, 26) para no sobrepoblar.
 
 ### Jefes (2, cap 1, respawn por timer largo)
 - **Centinela Carmesí** (60000ms): mecánica `cone` — ráfaga en cono (3→5 en fase 2).
@@ -155,8 +155,8 @@ Se guarda cada 5s durante el juego y al cambiar de fase. Munición no se persist
 
 | Acción | Gesto / Tecla |
 |---|---|
-| Mover nave | Toca y arrastra en cualquier parte (joystick floating). La punta de la nave apunta hacia donde va (giro suave) |
-| Elegir objetivo | Toca un enemigo (retícula + barra HP resaltada). Tocar vacío lo desmarca |
+| Mover nave | Joystick en la zona izquierda (toca y arrastra). La punta de la nave apunta hacia donde va (giro suave) |
+| Elegir objetivo | Toca un enemigo en cualquier zona (retícula + aro rojo pulsante). Tocar vacío lo desmarca |
 | Disparar | Mantén el botón 🔫 DISPARAR. Dispara la munición activa hacia el objetivo; la nave apunta con el frente al objetivo |
 | Cambiar arma | Barra rápida de munición (cuadros abajo-centro) o teclas 1-5 |
 | Reparar | Botón 🤖 REPARAR o tecla R |
@@ -165,7 +165,7 @@ Se guarda cada 5s durante el juego y al cambiar de fase. Munición no se persist
 | Silenciar | Botón 🔊 |
 | Menú base → volver | Botón SALIR AL MAPA o tecla Esc |
 
-Multitouch: puedes mover (joystick) y mantener disparo (botón 🔫) a la vez con dos dedos.
+Multitouch: puedes mover (joystick) y mantener disparo (botón 🔫) a la vez con dos dedos. El joystick solo se activa en la zona izquierda; tocar en el resto no lo interrumpe.
 
 ---
 

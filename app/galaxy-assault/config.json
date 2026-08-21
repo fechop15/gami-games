@@ -86,5 +86,10 @@
     "repairBot": { "chance": 0.03 }
   },
   "repairBot": { "healPct": 0.4 },
-  "balance": { "coinsPerKill": 2, "coinsPerBossKill": 60, "bossKillsToUnlockNext": 3 }
+  "balance": {
+    "coinsPerKill": 2,
+    "coinsPerBossKill": 60,
+    "bossKillsToUnlockNext": 3,
+    "maxNpcsOnMap": 26
+  }
 }
