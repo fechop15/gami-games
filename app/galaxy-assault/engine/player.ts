@@ -5,7 +5,7 @@ import {
   JOY_RADIUS, JOY_DEADZONE, BASE_X, BASE_Y, SAFE_RADIUS, EVASION_CAP,
 } from "../core/constants"
 import { shipSpeedMult } from "../data/ships"
-import { circleCollide, clamp, dist } from "../../lib/math"
+import { circleCollide, clamp, dist, angleLerp } from "../../lib/math"
 
 /** Actualiza el estado del joystick a partir del input táctil (dx,dy en px). */
 export function joystickInput(gs: GS, dx: number, dy: number): void {
@@ -56,8 +56,21 @@ export function updatePlayer(gs: GS, dt: number): void {
   // Velocidad actual (para evasión)
   p.speed = Math.hypot(p.vx, p.vy)
 
-  // Ángulo apuntando a donde nos movemos
-  if (p.speed > 8) p.angle = Math.atan2(p.vy, p.vx)
+// Orientación: al disparar, la nave apunta con el frente al objetivo marcado;
+  // en ausencia de combate, apunta hacia donde el joystick quiere ir
+  // (y sin input, hacia la dirección de la velocidad). Giro suave.
+  let aim: number | null = null
+  if (gs.firing && gs.targetId !== null) {
+    const target = gs.enemies.find(e => e.id === gs.targetId && e.alive)
+    if (target) aim = Math.atan2(target.y - p.y, target.x - p.x)
+  }
+  if (aim === null && gs.joystick.active && (jx !== 0 || jy !== 0)) {
+    aim = Math.atan2(jy, jx)
+  }
+  if (aim === null && p.speed > 8) aim = Math.atan2(p.vy, p.vx)
+  if (aim !== null) {
+    p.angle = angleLerp(p.angle, aim, Math.min(1, dt * 10))
+  }
 
   // Inmunidad post-daño
   if (p.invulnT > 0) p.invulnT -= dt

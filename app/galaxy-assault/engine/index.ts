@@ -12,7 +12,7 @@ import { clamp } from "../../lib/math"
 import { updatePlayer, evasionChance } from "./player"
 import { updateSpawners, updateEnemies, bossLaserStep } from "./enemies"
 import {
-  updateAutoFire, updateBullets, rechargeShield, laserHitsPlayer, applyDamageToPlayer,
+  updateManualFire, updateBullets, rechargeShield, laserHitsPlayer, applyDamageToPlayer,
   pushFloater, pushParticles,
 } from "./combat"
 import { updateCrates, updateDrops } from "./crates"
@@ -55,6 +55,7 @@ export function makeGS(): GS {
     player,
     joystick: { active: false, baseX: 0, baseY: 0, dx: 0, dy: 0 },
     targetId: null,
+    firing: false,
     activeWeapon: "x1",
     ammo,
     enemies: [],
@@ -95,6 +96,7 @@ export function startRun(gs: GS): void {
   gs.crateTimer = 0
   gs.kills = 0
   gs.targetId = null
+  gs.firing = false
   gs.activeWeapon = "x1"
   gs.ammo = defaultAmmo()
   const map = currentMap()
@@ -130,7 +132,7 @@ export function update(gs: GS, dt: number): void {
     for (const e of gs.enemies) if (e.alive && e.kind === "boss") bossLaserStep(gs, e, dt)
     updateCrates(gs, dt)
     updateDrops(gs, dt)
-    updateAutoFire(gs, dt)
+    updateManualFire(gs, dt)
     updateBullets(gs, dt)
     rechargeShield(gs)
 

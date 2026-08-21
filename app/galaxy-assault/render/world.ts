@@ -1,7 +1,7 @@
 // Render del mundo: fondo, grid, cinturón de asteroides, base, entidades y marcadores.
 import type { GS } from "../core/types"
 import { W, H, CONFIG, BASE_X, BASE_Y, SAFE_RADIUS } from "../core/constants"
-import { drawSprite, type SpriteKey } from "../core/sprites"
+import { drawSprite, dirToAngle, type SpriteKey } from "../core/sprites"
 import { bulletSprite } from "../data/ammo"
 import { shipSprite } from "../data/ships"
 import { font, rgba, roundRectPath } from "../../lib/gameKit"
@@ -106,7 +106,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
   const flame = 10 + p.speed * 0.05 + Math.sin(time * 20) * 3
   ctx.save()
   ctx.translate(sx, sy)
-  ctx.rotate(p.angle)
+  ctx.rotate(dirToAngle(p.angle))
   ctx.fillStyle = "rgba(0,229,255,0.5)"
   ctx.beginPath()
   ctx.moveTo(-10, 14)
@@ -117,12 +117,12 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
   ctx.restore()
 
   // Cuerpo
-  drawSprite(ctx, imgs, shipSprite(gs.save) as SpriteKey, sx, sy, 58, p.angle)
+  drawSprite(ctx, imgs, shipSprite(gs.save) as SpriteKey, sx, sy, 58, dirToAngle(p.angle))
 
   // Parpadeo de inmunidad
   if (p.invulnT > 0 && Math.floor(time * 12) % 2 === 0) {
     ctx.globalAlpha = 0.4
-    drawSprite(ctx, imgs, shipSprite(gs.save) as SpriteKey, sx, sy, 58, p.angle)
+    drawSprite(ctx, imgs, shipSprite(gs.save) as SpriteKey, sx, sy, 58, dirToAngle(p.angle))
     ctx.globalAlpha = 1
   }
 
@@ -130,6 +130,50 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
   if (p.shieldHp > 0) {
     const a = 0.45 + 0.15 * Math.sin(time * 3)
     drawSprite(ctx, imgs, "shield", sx, sy, 96, 0, a)
+  }
+
+  drawShipBars(ctx, gs, sx, sy)
+}
+
+// Barras de vida y escudo sobre la nave del jugador
+function drawShipBars(ctx: CanvasRenderingContext2D, gs: GS, sx: number, sy: number): void {
+  const p = gs.player
+  const w = 96
+  const hpBarY = sy - 46
+  // HP
+  const hpPct = Math.max(0, p.hp / p.maxHp)
+  ctx.fillStyle = "rgba(0,0,0,0.6)"
+  roundRectPath(ctx, sx - w / 2, hpBarY, w, 8, 4)
+  ctx.fill()
+  const g = ctx.createLinearGradient(sx - w / 2, 0, sx + w / 2, 0)
+  g.addColorStop(0, hpPct > 0.5 ? "#7CFF5A" : hpPct > 0.25 ? "#ffcc44" : "#ff5533")
+  g.addColorStop(1, hpPct > 0.5 ? "#22aa44" : hpPct > 0.25 ? "#aa7722" : "#aa2222")
+  ctx.fillStyle = g
+  roundRectPath(ctx, sx - w / 2 + 1, hpBarY + 1, Math.max(4, (w - 2) * hpPct), 6, 3)
+  ctx.fill()
+  ctx.fillStyle = "#ffffff"
+  ctx.font = "800 9px system-ui, sans-serif"
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.fillText(`❤ ${Math.ceil(p.hp)}/${p.maxHp}`, sx, hpBarY - 6)
+  ctx.textAlign = "left"
+  ctx.textBaseline = "alphabetic"
+
+  // Escudo
+  const shPct = p.shieldHp / p.shieldMaxHp
+  const shY = hpBarY + 12
+  ctx.fillStyle = "rgba(0,0,0,0.6)"
+  roundRectPath(ctx, sx - w / 2, shY, w, 6, 3)
+  ctx.fill()
+  if (p.shieldHp > 0) {
+    ctx.fillStyle = "#44aaff"
+    roundRectPath(ctx, sx - w / 2 + 1, shY + 1, Math.max(4, (w - 2) * shPct), 4, 2)
+    ctx.fill()
+  } else if (p.shieldCooldown > 0) {
+    const cdPct = 1 - p.shieldCooldown / p.shieldCdMax
+    ctx.fillStyle = "rgba(68,170,255,0.35)"
+    roundRectPath(ctx, sx - w / 2 + 1, shY + 1, Math.max(4, (w - 2) * cdPct), 4, 2)
+    ctx.fill()
   }
 }
 
@@ -141,7 +185,7 @@ export function drawEnemies(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): 
     if (sx < -120 || sx > W + 120 || sy < -120 || sy > H + 120) continue
     const key = enemySprite(e.type) as SpriteKey
     const size = e.size * 1.6
-    drawSprite(ctx, imgs, key, sx, sy, size, e.angle)
+    drawSprite(ctx, imgs, key, sx, sy, size, dirToAngle(e.angle))
 
     // Hit flash
     if (e.hitFlash > 0) {
@@ -153,19 +197,23 @@ export function drawEnemies(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): 
       ctx.globalAlpha = 1
     }
 
-    // Barra de HP del objetivo o jefes
+    // Barra de HP sobre el enemigo (todos)
     const isTarget = gs.targetId === e.id
-    if (isTarget || e.kind === "boss") {
-      const bw = e.kind === "boss" ? 70 : 44
-      const bx = sx - bw / 2
-      const by = sy - size / 2 - 12
-      ctx.fillStyle = "rgba(0,0,0,0.55)"
-      roundRectPath(ctx, bx, by, bw, 6, 3)
-      ctx.fill()
-      const pct = Math.max(0, e.hp / e.maxHp)
-      ctx.fillStyle = pct > 0.5 ? "#7CFF5A" : pct > 0.25 ? "#ffcc44" : "#ff5533"
-      roundRectPath(ctx, bx, by, Math.max(2, bw * pct), 6, 3)
-      ctx.fill()
+    const bw = e.kind === "boss" ? 70 : 44
+    const bx = sx - bw / 2
+    const by = sy - size / 2 - 12
+    ctx.fillStyle = "rgba(0,0,0,0.55)"
+    roundRectPath(ctx, bx, by, bw, 6, 3)
+    ctx.fill()
+    const pct = Math.max(0, e.hp / e.maxHp)
+    ctx.fillStyle = pct > 0.5 ? "#7CFF5A" : pct > 0.25 ? "#ffcc44" : "#ff5533"
+    roundRectPath(ctx, bx, by, Math.max(2, bw * pct), 6, 3)
+    ctx.fill()
+    if (isTarget) {
+      ctx.strokeStyle = "#ff5533"
+      ctx.lineWidth = 1.5
+      roundRectPath(ctx, bx - 2, by - 2, bw + 4, 10, 5)
+      ctx.stroke()
     }
   }
 }
@@ -187,7 +235,7 @@ export function drawBullets(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): 
     if (sx < -60 || sx > W + 60 || sy < -60 || sy > H + 60) continue
     if (b.fromPlayer) {
       const wKey = b.weapon ? bulletSprite(b.weapon) : "laser_x1"
-      drawSprite(ctx, imgs, wKey as SpriteKey, sx, sy, b.radius * 6, Math.atan2(b.vy, b.vx))
+      drawSprite(ctx, imgs, wKey as SpriteKey, sx, sy, b.radius * 6, dirToAngle(Math.atan2(b.vy, b.vx)))
     } else {
       ctx.fillStyle = b.color
       ctx.shadowColor = b.color

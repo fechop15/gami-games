@@ -2,7 +2,7 @@
 import type { GS } from "../core/types"
 import { W, H, CONFIG } from "../core/constants"
 import { font, drawButton, drawPanel, glowText } from "../../lib/gameKit"
-import { drawSprite, type SpriteKey } from "../core/sprites"
+import { drawSprite, dirToAngle, type SpriteKey } from "../core/sprites"
 import { ITEMS } from "../data/items"
 import { SHIP_DEFS } from "../data/ships"
 
@@ -31,9 +31,10 @@ export function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): vo
   ctx.fillText(`${CONFIG.map.name} · 2 NPCs · 2 Jefes · ${CONFIG.map.size}×${CONFIG.map.size}`, W / 2, H / 2 - 18)
   ctx.textBaseline = "alphabetic"
 
-  // Nave del jugador flotando
+  // Nave del jugador flotando (apunta hacia arriba = dirección -π/2)
   const p = gs.save
-  drawSprite(ctx, imgs, (SHIP_DEFS.find(s => s.id === p.shipId)?.sprite ?? "player") as SpriteKey, W / 2, H / 2 + 60, 90, -Math.PI / 2 + Math.sin(gs.time * 2) * 0.1)
+  const drift = Math.sin(gs.time * 2) * 0.12
+  drawSprite(ctx, imgs, (SHIP_DEFS.find(s => s.id === p.shipId)?.sprite ?? "player") as SpriteKey, W / 2, H / 2 + 60, 90, dirToAngle(-Math.PI / 2 + drift))
   drawSprite(ctx, imgs, "shield", W / 2, H / 2 + 60, 150, 0, 0.25 + Math.sin(gs.time * 2) * 0.08)
 
   // Botones
@@ -44,7 +45,7 @@ export function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): vo
   ctx.font = font(13, 600)
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
-  ctx.fillText("Joystick izquierdo · Auto-disparo · Minimapa arriba-derecha", W / 2, H / 2 + 235)
+  ctx.fillText("Toca y arrastra para mover · Auto-disparo al objetivo · Minimapa arriba", W / 2, H / 2 + 235)
   ctx.textBaseline = "alphabetic"
 }
 

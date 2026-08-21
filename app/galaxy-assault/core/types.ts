@@ -170,6 +170,7 @@ export interface GS {
     dy: number
   }
   targetId: number | null
+  firing: boolean
   activeWeapon: AmmoType
   ammo: Record<AmmoType, number>
   enemies: Enemy[]

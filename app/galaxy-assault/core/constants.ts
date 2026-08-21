@@ -144,8 +144,21 @@ export const JOY_DEADZONE = 12
 // ── Zonas táctiles del HUD ──
 export const MUTE_BTN: BtnRect = { x: W - 54, y: 8, w: 44, h: 44 }
 export const MINIMAP_BTN: BtnRect = { x: W - 54, y: 60, w: 44, h: 44 }
-export const WEAPON_BTN: BtnRect = { x: W - 200, y: H - 70, w: 190, h: 56 }
-export const REPAIR_BTN: BtnRect = { x: 16, y: H - 70, w: 170, h: 56 }
+export const REPAIR_BTN: BtnRect = { x: 16, y: H - 78, w: 170, h: 58 }
+export const FIRE_BTN: BtnRect = { x: W - 200, y: H - 170, w: 150, h: 150 }
+
+// ── Barra rápida de munición (cuadros abajo-centro) ──
+export const AMMO_SQUARE = 62
+export const AMMO_GAP = 10
+export const AMMO_BAR_Y = H - 78
+export const AMMO_COUNT = 5
+export function ammoBarX(i: number): number {
+  const total = AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
+  return W / 2 - total / 2 + i * (AMMO_SQUARE + AMMO_GAP)
+}
+export function ammoRect(i: number): BtnRect {
+  return { x: ammoBarX(i), y: AMMO_BAR_Y, w: AMMO_SQUARE, h: AMMO_SQUARE }
+}
 
 export interface BtnRect { x: number; y: number; w: number; h: number }
 

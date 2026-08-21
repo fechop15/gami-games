@@ -148,14 +148,17 @@ Se guarda cada 5s durante el juego y al cambiar de fase. Munición no se persist
 
 | Acción | Gesto / Tecla |
 |---|---|
-| Mover nave | Joystick dinámico (mitad izquierda) / WASD no soportado (tap-mantener) |
-| Disparar | Automático al objetivo |
-| Cambiar arma | Botón 🔁 o teclas 1-5 |
+| Mover nave | Toca y arrastra en cualquier parte (joystick floating). La punta de la nave apunta hacia donde va (giro suave) |
+| Elegir objetivo | Toca un enemigo (retícula + barra HP resaltada). Tocar vacío lo desmarca |
+| Disparar | Mantén el botón 🔫 DISPARAR. Dispara la munición activa hacia el objetivo; la nave apunta con el frente al objetivo |
+| Cambiar arma | Barra rápida de munición (cuadros abajo-centro) o teclas 1-5 |
 | Reparar | Botón 🤖 REPARAR o tecla R |
 | Abrir base | Botón ⚓ BASE (zona segura) o tecla B |
 | Minimapa | Botón 🗺 o tecla M |
 | Silenciar | Botón 🔊 |
 | Menú base → volver | Botón SALIR AL MAPA o tecla Esc |
+
+Multitouch: puedes mover (joystick) y mantener disparo (botón 🔫) a la vez con dos dedos.
 
 ---
 

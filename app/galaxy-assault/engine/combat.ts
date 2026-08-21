@@ -1,7 +1,8 @@
-// Combate: targeting (auto-bloqueo), auto-fire, balas, daño (evasión → escudo → casco).
+// Combate: targeting manual (tap para elegir objetivo), disparo al pulsar, balas,
+// daño (evasión → escudo → casco).
 import type { GS, Enemy, Bullet, DropId } from "../core/types"
 import {
-  FIRE_RANGE, SHIELD_ABSORB, PLAYER_RADIUS, INVULN_AFTER_HIT, CONFIG,
+  SHIELD_ABSORB, PLAYER_RADIUS, INVULN_AFTER_HIT, CONFIG,
 } from "../core/constants"
 import { weaponDef, weaponDamageForShip, defaultAmmo } from "../data/ammo"
 import { shipBaseDamage } from "../data/ships"
@@ -9,39 +10,51 @@ import { angleTo, dist, clamp, chance, rand } from "../../lib/math"
 import { evasionChance } from "./player"
 import { sfx } from "../../lib/sound"
 
-/** Selecciona el enemigo más cercano al jugador dentro del rango de tiro. */
-export function acquireTarget(gs: GS): Enemy | null {
-  const p = gs.player
+/** Devuelve el enemigo vivo más cercano a (sx, sy) en coordenadas de pantalla.
+ * Usado para elegir objetivo con un tap. Devuelve null si no hay ninguno cerca. */
+export function enemyAtScreen(gs: GS, sx: number, sy: number, tolerance = 60): Enemy | null {
+  const wx = gs.camX + sx
+  const wy = gs.camY + sy
   let best: Enemy | null = null
-  let bestD = FIRE_RANGE
+  let bestD = tolerance
   for (const e of gs.enemies) {
     if (!e.alive) continue
-    const d = dist(p.x, p.y, e.x, e.y)
-    if (d <= FIRE_RANGE && d < bestD) {
+    const d = dist(wx, wy, e.x, e.y)
+    if (d < bestD) {
       best = e
       bestD = d
     }
   }
-  gs.targetId = best ? best.id : null
   return best
 }
 
-/** Auto-disparo con la munición activa hacia el objetivo. */
-export function updateAutoFire(gs: GS, dt: number): void {
+/** Establece el objetivo marcado (retícula). Devuelve true si hay objetivo. */
+export function setTarget(gs: GS, e: Enemy | null): boolean {
+  gs.targetId = e ? e.id : null
+  return !!e
+}
+
+/** Disparo manual: solo dispara si hay objetivo marcado y gs.firing está activo. */
+export function updateManualFire(gs: GS, dt: number): void {
   const p = gs.player
   const w = weaponDef(gs.activeWeapon)
 
   p.fireTimer -= dt * 1000
+  if (!gs.firing) return
 
-  // Si no hay munición, pausar
+  // Mantener el objetivo (si murió, se pierde)
+  const target = gs.enemies.find(e => e.id === gs.targetId && e.alive)
+  if (!target) {
+    gs.targetId = null
+    return
+  }
+
+  // Si no hay munición, avisar
   if (gs.ammo[gs.activeWeapon] <= 0) {
     gs.flashMsg = "¡Sin munición! Recoge cajas"
     gs.flashT = Math.max(gs.flashT, 0.8)
     return
   }
-
-  const target = acquireTarget(gs)
-  if (!target) return
 
   const a = angleTo(p.x, p.y, target.x, target.y)
   p.angle = a

@@ -1,15 +1,21 @@
-// Input: joystick dinámico (mitad izquierda), botones del HUD, cambio de arma, teclado.
+// Input: joystick floating + tap para elegir objetivo + botón disparo + barra de munición.
 import type { GS } from "./core/types"
 import {
-  W, H, JOY_RADIUS, MUTE_BTN, MINIMAP_BTN, WEAPON_BTN, REPAIR_BTN, inRect,
+  W, H, JOY_RADIUS, MUTE_BTN, MINIMAP_BTN, FIRE_BTN, REPAIR_BTN,
+  AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, CONFIG, inRect,
 } from "./core/constants"
 import { startRun, saveProgress } from "./engine"
-import { repairShip } from "./engine/combat"
+import { repairShip, enemyAtScreen, setTarget } from "./engine/combat"
 import { joystickInput } from "./engine/player"
 import { AMMO_ORDER, weaponDef } from "./data/ammo"
 import { toggleMute, unlockAudio, sfx } from "../lib/sound"
 
-export function onTouchStart(gs: GS, x: number, y: number): void {
+// ── Roles por dedo (multitouch) ──
+type Role = "joystick" | "fire" | "none"
+const touchRole = new Map<number, Role>()
+const tapStart = new Map<number, { x: number; y: number }>()
+
+export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   unlockAudio()
   gs.isTouching = true
 
@@ -31,7 +37,6 @@ export function onTouchStart(gs: GS, x: number, y: number): void {
   }
 
   if (gs.phase === "base-menu") {
-    // Cualquier botón del menú
     for (const b of gs.btns) {
       if (inRect(b, x, y)) {
         sfx.click()
@@ -49,9 +54,21 @@ export function onTouchStart(gs: GS, x: number, y: number): void {
   // Botón de minimapa
   if (inRect(MINIMAP_BTN, x, y)) { gs.minimapHidden = !gs.minimapHidden; sfx.click(); return }
 
-  // Cambiar arma
-  if (inRect(WEAPON_BTN, x, y)) {
-    cycleWeapon(gs)
+  // Barra rápida de munición (cuadros abajo-centro)
+  const ammoIdx = ammoSquareAt(x, y)
+  if (ammoIdx !== -1) {
+    gs.activeWeapon = AMMO_ORDER[ammoIdx]
+    const w = weaponDef(gs.activeWeapon)
+    gs.flashMsg = w.name + (gs.ammo[gs.activeWeapon] <= 0 ? " (sin munición)" : "")
+    gs.flashT = 1.2
+    sfx.click()
+    return
+  }
+
+  // Botón de disparo (mantener)
+  if (inRect(FIRE_BTN, x, y)) {
+    gs.firing = true
+    touchRole.set(id, "fire")
     return
   }
 
@@ -62,33 +79,38 @@ export function onTouchStart(gs: GS, x: number, y: number): void {
     return
   }
 
-  // Abrir menú de base (solo dentro de zona segura)
-  if (gs.inSafeZone && gs.phase === "playing") {
-    // Botón de base flotante
-    if (baseBtn(gs, x, y)) {
-      gs.phase = "base-menu"
-      gs.baseMenuOpen = true
-      sfx.click()
-      return
-    }
+  // Abrir menú de base
+  if (gs.inSafeZone && gs.phase === "playing" && baseBtn(gs, x, y)) {
+    gs.phase = "base-menu"
+    gs.baseMenuOpen = true
+    sfx.click()
+    return
   }
 
-  // Joystick: mitad izquierda de la pantalla
-  if (x < W * 0.55) {
+  // Zonas muertas del HUD: no joystick
+  if (isUiDeadZone(x, y)) return
+
+  // Joystick floating: aparece donde toques
+  if (!touchRole.has(id)) {
+    touchRole.set(id, "joystick")
+    tapStart.set(id, { x, y })
     gs.joystick.active = true
     gs.joystick.baseX = x
     gs.joystick.baseY = y
     gs.joystick.dx = 0
     gs.joystick.dy = 0
-    onTouchMove(gs, x, y)
+    joystickInput(gs, 0, 0)
   }
 }
 
-export function onTouchMove(gs: GS, x: number, y: number): void {
-  if (!gs.joystick.active) return
+export function onTouchMove(gs: GS, id: number, x: number, y: number): void {
+  if (touchRole.get(id) !== "joystick") return
+  const start = tapStart.get(id)
+  if (start && (Math.abs(x - start.x) > 12 || Math.abs(y - start.y) > 12)) {
+    tapStart.delete(id) // es arrastre, no tap
+  }
   const dx = x - gs.joystick.baseX
   const dy = y - gs.joystick.baseY
-  // Clamp al radio del joystick
   const mag = Math.hypot(dx, dy)
   if (mag > JOY_RADIUS) {
     const nx = dx / mag
@@ -99,21 +121,67 @@ export function onTouchMove(gs: GS, x: number, y: number): void {
   }
 }
 
-export function onTouchEnd(gs: GS): void {
-  gs.isTouching = false
-  gs.joystick.active = false
-  gs.joystick.dx = 0
-  gs.joystick.dy = 0
+export function onTouchEnd(gs: GS, id: number, x: number, y: number): void {
+  const role = touchRole.get(id)
+  touchRole.delete(id)
+  tapStart.delete(id)
+
+  if (role === "fire") {
+    gs.firing = false
+    return
+  }
+
+  if (role === "joystick") {
+    // Si fue un tap (sin arrastre): elegir o soltar objetivo
+    const start = tapStart.get(id)
+    if (start && Math.abs(x - start.x) <= 12 && Math.abs(y - start.y) <= 12) {
+      const target = enemyAtScreen(gs, x, y, 70)
+      setTarget(gs, target)
+      if (target) {
+        sfx.click()
+        gs.flashMsg = "Objetivo marcado · 🔫 para disparar"
+        gs.flashT = 1.4
+      } else {
+        setTarget(gs, null)
+      }
+    }
+    gs.joystick.active = false
+    gs.joystick.dx = 0
+    gs.joystick.dy = 0
+    if ([...touchRole.values()].includes("joystick")) gs.joystick.active = true
+  }
+
+  if (touchRole.size === 0) gs.isTouching = false
 }
 
-export function cycleWeapon(gs: GS): void {
-  const idx = AMMO_ORDER.indexOf(gs.activeWeapon)
-  const next = (idx + 1) % AMMO_ORDER.length
-  gs.activeWeapon = AMMO_ORDER[next]
-  const w = weaponDef(gs.activeWeapon)
-  gs.flashMsg = w.name + (gs.ammo[gs.activeWeapon] <= 0 ? " (sin munición)" : "")
-  gs.flashT = 1.2
-  sfx.click()
+export function resetTouch(): void {
+  touchRole.clear()
+  tapStart.clear()
+}
+
+// Zonas de UI donde el toque NO inicia el joystick (HUD)
+function isUiDeadZone(x: number, y: number): boolean {
+  if (inRect(REPAIR_BTN, x, y)) return true
+  if (inRect(FIRE_BTN, x, y)) return true
+  // Panel del minimapa (arriba-izquierda)
+  const mm = CONFIG.minimap
+  if (x >= mm.offsetX && x <= mm.offsetX + mm.size && y >= mm.offsetY && y <= mm.offsetY + mm.size) return true
+  // Barra de munición
+  const ammoStart = W / 2 - (AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP) / 2
+  if (x >= ammoStart && x <= ammoStart + AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
+      && y >= AMMO_BAR_Y && y <= AMMO_BAR_Y + AMMO_SQUARE) return true
+  return false
+}
+
+function ammoSquareAt(x: number, y: number): number {
+  if (y < AMMO_BAR_Y || y > AMMO_BAR_Y + AMMO_SQUARE) return -1
+  const total = AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
+  const start = W / 2 - total / 2
+  for (let i = 0; i < AMMO_COUNT; i++) {
+    const sx = start + i * (AMMO_SQUARE + AMMO_GAP)
+    if (x >= sx && x <= sx + AMMO_SQUARE) return i
+  }
+  return -1
 }
 
 export function onKeyDown(gs: GS, e: KeyboardEvent): void {
@@ -153,7 +221,7 @@ export function onKeyDown(gs: GS, e: KeyboardEvent): void {
 }
 
 function baseBtn(gs: GS, x: number, y: number): boolean {
-  // Botón "⚓ BASE" cuando se está dentro de zona segura
+  void gs
   const bw = 140
   const bh = 44
   return x >= W / 2 - bw / 2 && x <= W / 2 + bw / 2 && y >= H - 120 && y <= H - 120 + bh

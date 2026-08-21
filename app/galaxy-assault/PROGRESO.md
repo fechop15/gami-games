@@ -49,6 +49,18 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Botón de mute activo durante la carga; tap ignorado hasta terminar
 - [x] Transición automática a intro cuando los sprites están listos
 
+## Fase 11 — Mejora de movimiento (v1.2)
+- [x] Joystick floating: toca y arrastra en cualquier parte (fuera de botones/HUD)
+- [x] La punta de la nave siempre apunta hacia la dirección de movimiento (giro suave con angleLerp)
+- [x] Enemigos también orientan su frente hacia donde se mueven (dirToAngle en render)
+
+## Fase 12 — Combate manual y HUD nuevo (v1.3)
+- [x] Barra rápida de munición en cuadros abajo-centro (toca para elegir arma, teclas 1-5)
+- [x] Barra de vida y escudo sobre la nave del jugador; barra de HP sobre todos los enemigos
+- [x] Ataque manual: tap en enemigo = elegir objetivo; botón 🔫 DISPARAR (mantener) = disparar hacia él
+- [x] La nave apunta con el frente al objetivo mientras dispara (prioridad sobre el movimiento)
+- [x] Multitouch: joystick y disparo a la vez con dos dedos
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable

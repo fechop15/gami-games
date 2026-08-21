@@ -69,24 +69,31 @@ export default function GalaxyAssaultGame() {
     const onTouchStartHandler = (e: TouchEvent) => {
       e.preventDefault()
       const { sx, rect } = getScale()
-      const t = e.touches[0]
-      const x = (t.clientX - rect.left) * sx
-      const y = (t.clientY - rect.top) * sx
-      onTouchStart(gs, x, y)
+      for (const t of Array.from(e.changedTouches)) {
+        const x = (t.clientX - rect.left) * sx
+        const y = (t.clientY - rect.top) * sx
+        onTouchStart(gs, t.identifier, x, y)
+      }
     }
 
     const onTouchMoveHandler = (e: TouchEvent) => {
       e.preventDefault()
       const { sx, rect } = getScale()
-      const t = e.touches[0]
-      const x = (t.clientX - rect.left) * sx
-      const y = (t.clientY - rect.top) * sx
-      onTouchMove(gs, x, y)
+      for (const t of Array.from(e.changedTouches)) {
+        const x = (t.clientX - rect.left) * sx
+        const y = (t.clientY - rect.top) * sx
+        onTouchMove(gs, t.identifier, x, y)
+      }
     }
 
     const onTouchEndHandler = (e: TouchEvent) => {
       e.preventDefault()
-      onTouchEnd(gs)
+      const { sx, rect } = getScale()
+      for (const t of Array.from(e.changedTouches)) {
+        const x = (t.clientX - rect.left) * sx
+        const y = (t.clientY - rect.top) * sx
+        onTouchEnd(gs, t.identifier, x, y)
+      }
     }
 
     const onMouseDown = (e: MouseEvent) => {
@@ -94,7 +101,7 @@ export default function GalaxyAssaultGame() {
       const x = (e.clientX - rect.left) * sx
       const y = (e.clientY - rect.top) * sy
       gs.isTouching = true
-      onTouchStart(gs, x, y)
+      onTouchStart(gs, 999, x, y)
     }
 
     const onMouseMove = (e: MouseEvent) => {
@@ -102,13 +109,15 @@ export default function GalaxyAssaultGame() {
       const { sx, sy, rect } = getScale()
       const x = (e.clientX - rect.left) * sx
       const y = (e.clientY - rect.top) * sy
-      onTouchMove(gs, x, y)
+      onTouchMove(gs, 999, x, y)
     }
 
     const onMouseUp = (e: MouseEvent) => {
       void e
-      gs.isTouching = false
-      onTouchEnd(gs)
+      const { sx, sy, rect } = getScale()
+      const x = (e.clientX - rect.left) * sx
+      const y = (e.clientY - rect.top) * sy
+      onTouchEnd(gs, 999, x, y)
     }
 
     const onKeyDownHandler = (e: KeyboardEvent) => {

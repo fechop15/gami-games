@@ -79,3 +79,9 @@ export function drawSprite(
   ctx.drawImage(img, -size / 2, -size / 2, size, size)
   ctx.restore()
 }
+
+// Los sprites top-down se dibujan apuntando "arriba" (hacia -y). El ángulo de
+// movimiento usa la convención atan2 (0 = +x). Convierte dirección → rotación.
+export function dirToAngle(a: number): number {
+  return a + Math.PI / 2
+}
