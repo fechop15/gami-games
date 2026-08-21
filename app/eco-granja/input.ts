@@ -87,6 +87,7 @@ function runAction(gs: GS, action: string) {
       const t = parts[1] as Tool
       sfx.click()
       gs.pending = null
+      gs.queue = []
       if (t === gs.tool) { gs.tool = "hand"; gs.selOption = null }
       else {
         gs.tool = t

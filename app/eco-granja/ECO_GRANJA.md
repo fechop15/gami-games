@@ -31,8 +31,10 @@ app/eco-granja/
 La granja es un **mundo con scroll y cámara que sigue al granjero**. Todo se hace caminando hasta el lugar:
 
 - **👆 Toca el suelo** → el granjero camina (y **corre** si el punto está lejos).
-- El personaje tiene animación de caminar/correr (piernas, brazos, sombrero de paja), giro según la dirección y **animación de trabajo** (golpe de azada, regadera, martillo, caña…) al llegar a la parcela.
-- Las **herramientas** de la barra inferior definen la actividad; al tocar una parcela válida el personaje camina, trabaja y el efecto se aplica con partículas y marcador en la parcela.
+- El personaje tiene animación de caminar/correr con **inercia** (acelera y frena), giro según la dirección, **parpadeo** y **animación de trabajo** (azada, regadera, martillo, caña…) al llegar a la parcela.
+- Las **herramientas** de la barra inferior definen la actividad; al tocar varias parcelas se **encola el trabajo** (el granjero las hace en orden, mostrando marcadores brillantes/tenues en cada parcela y el contador `xN`).
+- El personaje **esquiva construcciones** al caminar y la cámara **anticipa** la dirección del movimiento.
+- **Ciclo día/noche**: el sol se mueve, al atardecer se tiñe de naranja y de noche aparecen luna, estrellas y una linterna cerca del granjero.
 
 ### Herramientas
 
@@ -61,7 +63,7 @@ Catálogo (se coloca en una parcela y el personaje la construye):
 
 | Construcción | Coste | Efecto |
 |---|---|---|
-| 🚧 Valla | $100 | Protege de zorros |
+| 🚧 Valla | $100 | Protege de zorros · se dibuja como valla real que conecta con las vecinas |
 | 🌊 Estanque | $60 | Permite pescar |
 | 🌿 Pastizal | $80 | Permite criar animales |
 | 🧙 Espantapájaros | $80 | Ahuyenta jabalíes |

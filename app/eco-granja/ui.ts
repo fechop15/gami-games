@@ -187,6 +187,20 @@ function drawToolbar(ctx: CanvasRenderingContext2D, gs: GS) {
     ctx.fillText(t.label, x + bw / 2, tbY + 66)
     addBtn(gs, `tool:${t.id}`, x, tbY, bw, TOOLBAR_H)
   }
+
+  // contador de trabajos encolados
+  const pendingCount = gs.queue.length + (gs.pending ? 1 : 0)
+  if (pendingCount > 0) {
+    const badge = { x: W - 52, y: tbY + 8, w: 36, h: 24 }
+    ctx.fillStyle = "#ffd54a"
+    roundRectPath(ctx, badge.x, badge.y, badge.w, badge.h, 12)
+    ctx.fill()
+    ctx.fillStyle = "#2a1e00"
+    ctx.font = font(13, 900)
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillText(`x${pendingCount}`, badge.x + badge.w / 2, badge.y + badge.h / 2 + 1)
+  }
 }
 
 // ---------------------------------------------------------------------------

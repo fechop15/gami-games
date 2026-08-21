@@ -1,5 +1,5 @@
 import {
-  W, H, CELL, GAP, COLS, GRID_MARGIN, WORLD_TOP,
+  W, H, CELL, GAP, COLS, GRID_MARGIN, WORLD_TOP, DAY_LENGTH,
   cropDef, animalDef, fishDef, weatherDef, BUILDINGS,
   tileWorldX, tileWorldY,
 } from "./constants"
@@ -39,16 +39,17 @@ export function drawWorld(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   ctx.fillStyle = grad
   ctx.fillRect(0, 0, W, H)
 
-  if (w.id === "soleado" || w.id === "calor") {
+  // sol con trayectoria según el día
+  const daylight = dayPhase(gs)
+  if (daylight.darkness < 0.55) {
+    const sunT = (gs.dayTime / DAY_LENGTH - 0.08) / 0.42  // 0..1 por el día
+    const sunX = 60 + Math.max(0, Math.min(1, sunT)) * (W - 120)
+    const sunY = 150 - Math.max(0, Math.min(1, sunT)) * 60
     ctx.save()
     ctx.shadowColor = "rgba(255,230,120,0.9)"; ctx.shadowBlur = 40
     ctx.fillStyle = "#ffe882"
-    ctx.beginPath(); ctx.arc(410, 66, 32, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(sunX, sunY, 30, 0, Math.PI * 2); ctx.fill()
     ctx.restore()
-  }
-  if (w.id === "helada") {
-    ctx.fillStyle = "rgba(255,255,255,0.85)"
-    ctx.beginPath(); ctx.arc(410, 66, 24, 0, Math.PI * 2); ctx.fill()
   }
 
   ctx.fillStyle = "rgba(255,255,255,0.35)"
@@ -62,10 +63,80 @@ export function drawWorld(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   ctx.fillRect(0, WORLD_TOP, W, H - WORLD_TOP)
 
   drawTiles(ctx, gs, time)
-  drawPlayer(ctx, gs)
+  drawPlayer(ctx, gs, time)
   drawMoveTarget(ctx, gs, time)
 
   drawWeatherFx(ctx, gs)
+  drawDayNight(ctx, gs)
+}
+
+// fase del día → oscuridad 0..1
+export function dayPhase(gs: GS): { darkness: number; dusk: boolean; night: boolean } {
+  const t = (gs.dayTime % DAY_LENGTH) / DAY_LENGTH
+  let darkness = 0
+  let dusk = false
+  let night = false
+  if (t >= 0.5 && t < 0.66) {
+    dusk = true
+    darkness = ((t - 0.5) / 0.16) * 0.85
+  } else if (t >= 0.66 && t < 0.9) {
+    night = true
+    darkness = 0.85
+  } else if (t >= 0.9 || t < 0.08) {
+    night = true
+    darkness = 0.85 * (1 - (t >= 0.9 ? t - 0.9 : t) / 0.18)
+  }
+  return { darkness, dusk, night }
+}
+
+// estrellas deterministas
+function drawStars(ctx: CanvasRenderingContext2D, a: number) {
+  ctx.fillStyle = `rgba(255,255,255,${a})`
+  for (let i = 0; i < 26; i++) {
+    const sx = (i * 73) % W
+    const sy = (i * 37) % 150
+    ctx.beginPath()
+    ctx.arc(sx, sy, i % 3 === 0 ? 1.6 : 1, 0, Math.PI * 2)
+    ctx.fill()
+  }
+}
+
+function drawDayNight(ctx: CanvasRenderingContext2D, gs: GS) {
+  const { darkness, dusk, night } = dayPhase(gs)
+  if (darkness <= 0.02) return
+
+  // luna
+  if (night && darkness > 0.25) {
+    ctx.save()
+    ctx.shadowColor = "rgba(255,255,255,0.8)"; ctx.shadowBlur = 26
+    ctx.fillStyle = "rgba(240,244,255,0.95)"
+    ctx.beginPath(); ctx.arc(380, 70, 22, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = "rgba(210,220,235,0.9)"
+    ctx.beginPath(); ctx.arc(373, 64, 18, 0, Math.PI * 2); ctx.fill()
+    ctx.restore()
+    drawStars(ctx, Math.min(0.9, darkness))
+  }
+
+  // tinte
+  if (dusk) {
+    ctx.fillStyle = `rgba(255,140,40,${(darkness * 0.8).toFixed(3)})`
+  } else if (night) {
+    ctx.fillStyle = `rgba(10,12,40,${(darkness * 0.8).toFixed(3)})`
+  } else {
+    ctx.fillStyle = `rgba(255,180,80,${(darkness * 0.5).toFixed(3)})`
+  }
+  ctx.fillRect(0, 0, W, H)
+
+  // luz cálida de linterna cerca del personaje en la noche
+  if (night && darkness > 0.4) {
+    const lx = sx(gs, gs.player.x)
+    const ly = sy(gs, gs.player.y)
+    const glow = ctx.createRadialGradient(lx, ly, 10, lx, ly, 90)
+    glow.addColorStop(0, `rgba(255,220,140,${0.22 * darkness})`)
+    glow.addColorStop(1, "rgba(255,220,140,0)")
+    ctx.fillStyle = glow
+    ctx.fillRect(0, 0, W, H)
+  }
 }
 
 function drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
@@ -99,30 +170,37 @@ function drawTiles(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
 
 function drawTile(ctx: CanvasRenderingContext2D, gs: GS, t: TileState, r: number, c: number, x: number, y: number, time: number) {
   if (t.building) {
-    drawBuildingTile(ctx, t, x, y, time)
-    return
-  }
-  switch (t.kind) {
-    case "grass":
-      drawGrass(ctx, t, x, y)
-      break
-    case "pond":
-      drawPond(ctx, gs, t, x, y, time)
-      break
-    case "pasture":
-      drawPasture(ctx, gs, t, x, y, time)
-      break
-    default:
-      drawSoil(ctx, t, x, y, time)
+    drawBuildingTile(ctx, gs, t, r, c, x, y, time)
+  } else {
+    switch (t.kind) {
+      case "grass":
+        drawGrass(ctx, t, x, y)
+        break
+      case "pond":
+        drawPond(ctx, gs, t, x, y, time)
+        break
+      case "pasture":
+        drawPasture(ctx, gs, t, x, y, time)
+        break
+      default:
+        drawSoil(ctx, t, x, y, time)
+    }
   }
 
-  // marcador de acción pendiente
+  // marcador de acción pendiente (brillante) y cola (tenue)
   if (gs.pending && gs.pending.r === r && gs.pending.c === c) {
     const pulse = 0.6 + Math.sin(time * 5) * 0.3
     ctx.strokeStyle = rgba("#ffd54a", 0.4 + pulse * 0.3)
     ctx.lineWidth = 3
     roundRectPath(ctx, x + 2, y + 2, CELL - 4, CELL - 4, 10)
     ctx.stroke()
+  } else if (gs.queue.some(q => q.r === r && q.c === c)) {
+    ctx.strokeStyle = "rgba(255,255,255,0.35)"
+    ctx.lineWidth = 2
+    ctx.setLineDash([5, 5])
+    roundRectPath(ctx, x + 3, y + 3, CELL - 6, CELL - 6, 10)
+    ctx.stroke()
+    ctx.setLineDash([])
   }
 }
 
@@ -145,13 +223,17 @@ function drawGrass(ctx: CanvasRenderingContext2D, t: TileState, x: number, y: nu
     ctx.lineTo(gx + 7, gy - 7)
     ctx.stroke()
   }
-  if (h < 14) {
+  if (h < 10) {
     ctx.textAlign = "center"; ctx.textBaseline = "middle"
     ctx.font = font(14, 700)
-    ctx.fillText("🍄", x + CELL * 0.3, y + CELL * 0.65)
-  } else if (h < 20) {
+    ctx.fillText("🍄", x + CELL * 0.3, y + CELL * 0.62)
+  } else if (h < 16) {
     ctx.fillStyle = "rgba(120,120,120,0.8)"
     ctx.beginPath(); ctx.ellipse(x + CELL * 0.7, y + CELL * 0.6, 7, 5, 0.4, 0, Math.PI * 2); ctx.fill()
+  } else if (h < 22) {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.font = font(13, 700)
+    ctx.fillText(h < 19 ? "🌼" : "🌸", x + CELL * 0.68, y + CELL * 0.66)
   }
   ctx.restore()
 }
@@ -175,6 +257,16 @@ function drawSoil(ctx: CanvasRenderingContext2D, t: TileState, x: number, y: num
     ctx.lineTo(lx + 5, y + CELL - 8)
     ctx.stroke()
   }
+  // textura: motas de tierra
+  ctx.fillStyle = "rgba(60,35,15,0.35)"
+  for (let i = 0; i < 6; i++) {
+    const h = (x * 31 + y * 17 + i * 13) % CELL
+    const hx = x + 10 + ((h * 7) % (CELL - 20))
+    const hy = y + 10 + ((h * 13) % (CELL - 20))
+    ctx.beginPath()
+    ctx.arc(hx, hy, 1.6, 0, Math.PI * 2)
+    ctx.fill()
+  }
   ctx.strokeStyle = rgba(SOIL_DARK, 0.8)
   roundRectPath(ctx, x + 2, y + 2, CELL - 4, CELL - 4, 10)
   ctx.stroke()
@@ -191,6 +283,14 @@ function drawCrop(ctx: CanvasRenderingContext2D, t: TileState, x: number, y: num
   const cy = y + CELL / 2 + 2
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
+
+  // montículo de tierra bajo la planta
+  if (p > 0) {
+    ctx.fillStyle = "rgba(60,35,15,0.45)"
+    ctx.beginPath()
+    ctx.ellipse(cx, y + CELL - 9, 13, 4.5, 0, 0, Math.PI * 2)
+    ctx.fill()
+  }
 
   if (p >= 1) {
     const pulse = 1 + Math.sin(time * 3) * 0.05
@@ -332,7 +432,11 @@ function drawPond(ctx: CanvasRenderingContext2D, gs: GS, t: TileState, x: number
   }
 }
 
-function drawBuildingTile(ctx: CanvasRenderingContext2D, t: TileState, x: number, y: number, time: number) {
+function drawBuildingTile(ctx: CanvasRenderingContext2D, gs: GS, t: TileState, r: number, c: number, x: number, y: number, time: number) {
+  if (t.building === "cerco") {
+    drawFence(ctx, gs, r, c, x, y)
+    return
+  }
   const b = BUILDINGS.find(bd => bd.id === t.building)
   // base
   ctx.fillStyle = t.kind === "pond" ? WATER_DEEP : t.kind === "pasture" ? GRASS_DARK : SOIL_DARK
@@ -349,7 +453,6 @@ function drawBuildingTile(ctx: CanvasRenderingContext2D, t: TileState, x: number
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
   if (t.kind === "pond") {
-    // estanque construido
     ctx.fillStyle = WATER
     ctx.beginPath()
     ctx.ellipse(x + CELL / 2, y + CELL / 2, CELL * 0.44, CELL * 0.42, 0, 0, Math.PI * 2)
@@ -378,6 +481,58 @@ function drawBuildingTile(ctx: CanvasRenderingContext2D, t: TileState, x: number
   }
 }
 
+const FENCE = "#9c6b34"
+const FENCE_DARK = "#6e4520"
+
+function isFence(gs: GS, r: number, c: number): boolean {
+  return !!gs.save.tiles[r]?.[c]?.building === true && gs.save.tiles[r]?.[c]?.building === "cerco"
+}
+
+function drawFence(ctx: CanvasRenderingContext2D, gs: GS, r: number, c: number, x: number, y: number) {
+  // césped
+  ctx.fillStyle = GRASS
+  roundRectPath(ctx, x + 1, y + 1, CELL - 2, CELL - 2, 9)
+  ctx.fill()
+
+  const up = isFence(gs, r - 1, c)
+  const down = isFence(gs, r + 1, c)
+  const left = isFence(gs, r, c - 1)
+  const right = isFence(gs, r, c + 1)
+
+  ctx.lineCap = "round"
+  // postes
+  const posts: Array<[number, number]> = [[x + 5, y + 5], [x + CELL - 5, y + 5], [x + 5, y + CELL - 5], [x + CELL - 5, y + CELL - 5]]
+  ctx.fillStyle = FENCE_DARK
+  for (const [px, py] of posts) {
+    roundRectPath(ctx, px - 3, py - 3, 6, 6, 2)
+    ctx.fill()
+  }
+
+  // rieles horizontales (si se une por los lados o está aislada)
+  if (left || right || (!up && !down && !left && !right)) {
+    ctx.strokeStyle = FENCE
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.moveTo(x + 4, y + CELL * 0.4)
+    ctx.lineTo(x + CELL - 4, y + CELL * 0.4)
+    ctx.moveTo(x + 4, y + CELL * 0.6)
+    ctx.lineTo(x + CELL - 4, y + CELL * 0.6)
+    ctx.stroke()
+  }
+  // rieles verticales (si se une arriba/abajo)
+  if (up || down) {
+    ctx.strokeStyle = FENCE
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.moveTo(x + CELL * 0.4, y + 4)
+    ctx.lineTo(x + CELL * 0.4, y + CELL - 4)
+    ctx.moveTo(x + CELL * 0.6, y + 4)
+    ctx.lineTo(x + CELL * 0.6, y + CELL - 4)
+    ctx.stroke()
+  }
+  ctx.lineCap = "butt"
+}
+
 // ---------------------------------------------------------------------------
 // Personaje
 // ---------------------------------------------------------------------------
@@ -395,104 +550,144 @@ function toolGlyph(tool: Tool): string {
   }
 }
 
-export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS) {
+export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   const p = gs.player
   const x = sx(gs, p.x)
   const y = sy(gs, p.y)
 
-  // sombra
-  ctx.fillStyle = "rgba(0,0,0,0.3)"
-  ctx.beginPath()
-  ctx.ellipse(x, y + 18, 16, 5, 0, 0, Math.PI * 2)
-  ctx.fill()
-
   const moving = p.moving
   const working = p.working
 
-  const facing = p.facing
-  const bobY = moving ? Math.abs(Math.sin(p.animT * 2)) * -3 : working ? Math.abs(Math.sin(p.animT)) * -2 : 0
-  const px = x
+  // sombra
+  ctx.fillStyle = "rgba(0,0,0,0.32)"
+  ctx.beginPath()
+  ctx.ellipse(x, y + 19, 15, 5, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  const idleBob = !moving && !working ? Math.sin(time * 2) * 1.2 : 0
+  const bobY = moving ? Math.abs(Math.sin(p.animT * 2)) * -3 : working ? Math.abs(Math.sin(p.animT)) * -2 : idleBob
   const py = y + bobY
 
-  ctx.save()
-  ctx.translate(px, py)
-  ctx.scale(facing, 1)
-
-  // piernas
-  ctx.fillStyle = "#4a3a2c"
   const legOff = moving ? Math.sin(p.animT * 2) * 5 : working ? Math.sin(p.animT) * 4 : 0
-  ctx.fillStyle = "#4a3a2c"
-  roundRectPath(ctx, -7, 8 + legOff * 0.4, 6, 10, 3)
+  const armSwing = moving ? -legOff * 0.7 : working ? -Math.sin(p.animT) * 5 : 0
+  const lean = moving ? Math.sin(p.animT * 2) * 2 : 0
+
+  ctx.save()
+  ctx.translate(x, py)
+  ctx.scale(p.facing, 1)
+  ctx.rotate(lean * 0.02)
+
+  // piernas (pantalón)
+  ctx.fillStyle = "#5b4632"
+  roundRectPath(ctx, -8, 8 + legOff * 0.4, 7, 11, 3)
   ctx.fill()
-  roundRectPath(ctx, 1, 8 - legOff * 0.4, 6, 10, 3)
+  roundRectPath(ctx, 1, 8 - legOff * 0.4, 7, 11, 3)
   ctx.fill()
   // botas
-  ctx.fillStyle = "#5b4632"
+  ctx.fillStyle = "#3d2f20"
   ctx.beginPath()
-  ctx.ellipse(-4, 19 + legOff * 0.5, 5, 3, 0, 0, Math.PI * 2)
-  ctx.ellipse(4, 19 - legOff * 0.5, 5, 3, 0, 0, Math.PI * 2)
+  ctx.ellipse(-4.5, 19 + legOff * 0.5, 5.5, 3.2, 0, 0, Math.PI * 2)
+  ctx.ellipse(4.5, 19 - legOff * 0.5, 5.5, 3.2, 0, 0, Math.PI * 2)
   ctx.fill()
 
-  // torso
-  const g = ctx.createLinearGradient(0, -16, 0, 10)
-  g.addColorStop(0, "#6fbf4f")
-  g.addColorStop(1, "#4f9a38")
+  // torso (camisa)
+  const g = ctx.createLinearGradient(0, -18, 0, 12)
+  g.addColorStop(0, "#8fd463")
+  g.addColorStop(1, "#5fae3f")
   ctx.fillStyle = g
-  roundRectPath(ctx, -11, -16, 22, 26, 8)
+  roundRectPath(ctx, -12, -18, 24, 29, 9)
+  ctx.fill()
+  // tirantes/pechera
+  ctx.fillStyle = "#4f8f35"
+  roundRectPath(ctx, -12, -14, 24, 10, 5)
   ctx.fill()
   // cinturón
   ctx.fillStyle = "#5b4632"
-  roundRectPath(ctx, -11, 4, 22, 4, 2)
+  roundRectPath(ctx, -12, 5, 24, 4, 2)
+  ctx.fill()
+  ctx.fillStyle = "#ffd54a"
+  roundRectPath(ctx, -2, 5, 4, 4, 1)
   ctx.fill()
 
-  // brazos
-  ctx.strokeStyle = "#6fbf4f"
-  ctx.lineWidth = 6
+  // brazos (mangas)
+  ctx.strokeStyle = "#8fd463"
+  ctx.lineWidth = 6.5
   ctx.lineCap = "round"
-  const armPhase = moving ? -legOff * 0.6 : working ? -Math.sin(p.animT) * 5 : 0
   ctx.beginPath()
-  ctx.moveTo(-8, -12)
-  ctx.lineTo(-13, -2 + armPhase)
+  ctx.moveTo(-9, -12)
+  ctx.lineTo(-14, -3 + armSwing)
   ctx.stroke()
   ctx.beginPath()
-  ctx.moveTo(8, -12)
-  ctx.lineTo(13, -2 - armPhase)
+  ctx.moveTo(9, -12)
+  ctx.lineTo(14, -3 - armSwing)
   ctx.stroke()
   // manos
   ctx.fillStyle = "#f1c27d"
   ctx.beginPath()
-  ctx.arc(-13, -2 + armPhase, 3, 0, Math.PI * 2)
-  ctx.arc(13, -2 - armPhase, 3, 0, Math.PI * 2)
+  ctx.arc(-14, -3 + armSwing, 3.2, 0, Math.PI * 2)
+  ctx.arc(14, -3 - armSwing, 3.2, 0, Math.PI * 2)
   ctx.fill()
 
   // cabeza
   ctx.fillStyle = "#f1c27d"
   ctx.beginPath()
-  ctx.arc(0, -22, 10, 0, Math.PI * 2)
+  ctx.arc(0, -24, 10.5, 0, Math.PI * 2)
+  ctx.fill()
+  // mejillas
+  ctx.fillStyle = "rgba(240,130,90,0.4)"
+  ctx.beginPath()
+  ctx.arc(-5, -21, 2.6, 0, Math.PI * 2)
+  ctx.arc(5, -21, 2.6, 0, Math.PI * 2)
   ctx.fill()
 
-  // sombrero de paja
-  ctx.fillStyle = "#e3b25e"
+  // ojos (parpadeo)
+  const blink = p.blinkT < 0.12
+  ctx.fillStyle = "#1f1f1f"
+  if (blink) {
+    ctx.lineWidth = 1.6
+    ctx.strokeStyle = "#1f1f1f"
+    ctx.beginPath()
+    ctx.moveTo(-5.5, -25)
+    ctx.lineTo(-2.5, -25)
+    ctx.moveTo(2.5, -25)
+    ctx.lineTo(5.5, -25)
+    ctx.stroke()
+  } else {
+    ctx.beginPath()
+    ctx.arc(-4, -25, 1.7, 0, Math.PI * 2)
+    ctx.arc(4, -25, 1.7, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  // sonrisa
+  ctx.strokeStyle = "#8a5a2b"
+  ctx.lineWidth = 1.4
   ctx.beginPath()
-  ctx.ellipse(0, -30, 15, 5, 0, 0, Math.PI * 2)
+  ctx.arc(0, -21, 3, 0.2, Math.PI - 0.2)
+  ctx.stroke()
+
+  // sombrero de paja
+  ctx.fillStyle = "#e9b95c"
+  ctx.beginPath()
+  ctx.ellipse(0, -33, 16, 5.5, 0, 0, Math.PI * 2)
   ctx.fill()
   ctx.fillStyle = "#d9a34a"
   ctx.beginPath()
-  ctx.arc(0, -30, 8, Math.PI, 0)
+  ctx.arc(0, -33, 9, Math.PI, 0)
   ctx.fill()
-  ctx.fillStyle = "#c68a35"
-  roundRectPath(ctx, -5, -33, 10, 4, 2)
+  // cinta
+  ctx.fillStyle = "#3f8f4f"
+  roundRectPath(ctx, -9, -34, 18, 3.5, 2)
   ctx.fill()
 
-  // herramienta al trabajar
+  // herramienta al trabajar (con arco de balanceo)
   if (working) {
     const glyph = toolGlyph(p.workTool)
     if (glyph) {
-      const swing = Math.sin(p.animT * 2) * 0.4
+      const swing = Math.sin(p.animT * 2) * 0.45
       ctx.save()
-      ctx.translate(16, -10)
+      ctx.translate(17, -12)
       ctx.rotate(swing)
-      ctx.font = font(20, 700)
+      ctx.font = font(22, 700)
       ctx.textAlign = "center"
       ctx.textBaseline = "middle"
       ctx.fillText(glyph, 0, 0)

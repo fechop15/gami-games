@@ -19,9 +19,12 @@ export interface PlayerState {
   y: number
   tx: number
   ty: number
+  vx: number
+  vy: number
   moving: boolean
   facing: 1 | -1
   animT: number
+  blinkT: number
   working: boolean
   workT: number
   workTool: Tool
@@ -76,6 +79,7 @@ export interface GS {
   tool: Tool
   selOption: string | null
   pending: PendingAction | null
+  queue: PendingAction[]
   menuTile: { r: number; c: number } | null
   breedTarget: { r: number; c: number } | null
   sheet: SheetKind

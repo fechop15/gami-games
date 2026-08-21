@@ -120,6 +120,7 @@ export function makeGS(): GS {
     tool: "hand",
     selOption: null,
     pending: null,
+    queue: [],
     menuTile: null,
     breedTarget: null,
     sheet: "none",
@@ -144,7 +145,7 @@ export function makeGS(): GS {
 }
 
 function makePlayer(x: number, y: number): PlayerState {
-  return { x, y, tx: x, ty: y, moving: false, facing: 1, animT: 0, working: false, workT: 0, workTool: "hand" }
+  return { x, y, tx: x, ty: y, vx: 0, vy: 0, moving: false, facing: 1, animT: 0, blinkT: 1.5, working: false, workT: 0, workTool: "hand" }
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +227,7 @@ export function update(gs: GS, dt: number) {
   }
 
   // auto day advance
-  if (gs.phase === "farm" && gs.modal === "none" && !gs.fishing.active && !gs.player.working && gs.dayTime >= DAY_LENGTH) {
+  if (gs.phase === "farm" && gs.modal === "none" && !gs.fishing.active && !gs.player.working && !gs.pending && gs.queue.length === 0 && gs.dayTime >= DAY_LENGTH) {
     gs.dayTime = 0
     endOfDay(gs)
   }
@@ -238,8 +239,19 @@ function updatePlayer(gs: GS, dt: number) {
   if (p.working) {
     p.animT += dt * 12
     p.workT -= dt
+    // partículas de la herramienta mientras trabaja
+    const fxX = p.x + p.facing * 20
+    const fxY = p.y - 10
+    const tool = p.workTool
+    if (tool === "plow" && chance(dt * 22)) pushSparks(gs, fxX, fxY, "#a06a3f", 1)
+    else if (tool === "water" && chance(dt * 18)) gs.sparks.push({ x: fxX, y: fxY, vx: rand(-14, 14), vy: rand(-70, -30), life: 0.5, maxLife: 0.5, color: "#7cc4ff", r: rand(1.5, 3) })
+    else if (tool === "harvest" && chance(dt * 16)) pushSparks(gs, fxX, fxY, "#ffd54a", 1)
+    else if (tool === "build" && chance(dt * 20)) pushSparks(gs, fxX, fxY, "#ffe9a0", 1)
+    else if (tool === "plant" && chance(dt * 14)) pushSparks(gs, fxX, fxY, "#8a5a2b", 1)
     if (p.workT <= 0) {
       p.working = false
+      p.vx = 0
+      p.vy = 0
       executePending(gs)
     }
     return
@@ -248,30 +260,49 @@ function updatePlayer(gs: GS, dt: number) {
   const dx = p.tx - p.x
   const dy = p.ty - p.y
   const dist = Math.hypot(dx, dy)
+
   if (dist > 3) {
     p.moving = true
-    const speed = dist > RUN_THRESHOLD ? RUN_SPEED : WALK_SPEED
-    const nx = dx / dist
-    const ny = dy / dist
-    p.x += nx * speed * dt
-    p.y += ny * speed * dt
-    if (nx !== 0) p.facing = nx > 0 ? 1 : -1
-    p.animT += dt * (speed / 60)
-    const ndx = p.tx - p.x
-    const ndy = p.ty - p.y
-    if (Math.hypot(ndx, ndy) <= 3) { p.x = p.tx; p.y = p.ty }
+    const speedMax = dist > RUN_THRESHOLD ? RUN_SPEED : WALK_SPEED
+    let ndx = dx / dist
+    let ndy = dy / dist
+    // esquivar construcciones
+    const steered = steer(gs, p, ndx, ndy)
+    ndx = steered.x
+    ndy = steered.y
+    // inercia suave hacia la dirección deseada; la velocidad objetivo se reduce al acercarse
+    const targetSpeed = dist < 30 ? speedMax * (dist / 30) : speedMax
+    const k = Math.min(1, dt * 6)
+    p.vx += (ndx * targetSpeed - p.vx) * k
+    p.vy += (ndy * targetSpeed - p.vy) * k
+    p.x += p.vx * dt
+    p.y += p.vy * dt
+    if (Math.abs(p.vx) > 0.02) p.facing = p.vx > 0 ? 1 : -1
+    p.animT += dt * (Math.hypot(p.vx, p.vy) / 60)
+    // polvillo al correr
+    if (speedMax > WALK_SPEED && chance(dt * 12)) {
+      gs.sparks.push({ x: p.x - ndx * 12, y: p.y + 16, vx: -ndx * 12 + rand(-8, 8), vy: rand(-30, -8), life: 0.4, maxLife: 0.4, color: "#b58a5a", r: rand(1.5, 3) })
+    }
+    // llegar (con margen de 6 px para no quedarse colgado)
+    if (Math.hypot(p.tx - p.x, p.ty - p.y) <= 6) { p.x = p.tx; p.y = p.ty; p.vx = 0; p.vy = 0 }
   } else if (p.moving) {
     p.moving = false
     p.x = p.tx
     p.y = p.ty
+    p.vx = 0
+    p.vy = 0
   }
+
+  // parpadeo al estar quieto
+  p.blinkT -= dt
+  if (p.blinkT < 0) p.blinkT = 2.4 + Math.random() * 3
 
   // si hay una acción pendiente y el personaje ya está en la parcela, empezar a trabajar
   if (!p.working && gs.pending) {
     const pd = gs.pending
     const wx = tileCenterWorldX(pd.c)
     const wy = tileCenterWorldY(pd.r)
-    if (Math.hypot(p.x - wx, p.y - wy) < 4) {
+    if (Math.hypot(p.x - wx, p.y - wy) < 5) {
       p.working = true
       p.workT = TOOL_WORK[pd.tool]
       p.workTool = pd.tool
@@ -280,12 +311,39 @@ function updatePlayer(gs: GS, dt: number) {
   }
 }
 
+// desvío simple: si la dirección apunta a una construcción, intenta laterales
+function steer(gs: GS, p: PlayerState, nx: number, ny: number): { x: number; y: number } {
+  const probe = 24
+  if (!blockedAt(gs, p.x + nx * probe, p.y + ny * probe)) return { x: nx, y: ny }
+  const tries = [
+    { x: -ny, y: nx },
+    { x: ny, y: -nx },
+    { x: -nx, y: -ny },
+  ]
+  for (const t of tries) {
+    if (!blockedAt(gs, p.x + t.x * probe, p.y + t.y * probe)) return t
+  }
+  return { x: nx, y: ny }
+}
+
+function blockedAt(gs: GS, wx: number, wy: number): boolean {
+  const c = Math.floor((wx - GRID_MARGIN) / TILE_STRIDE)
+  const r = Math.floor((wy - GRID_MARGIN) / TILE_STRIDE)
+  const tile = gs.save.tiles[r]?.[c]
+  if (!tile) return false
+  return !!tile.building
+}
+
 function updateCamera(gs: GS, dt: number) {
   const rows = gs.save.tiles.length
   const maxX = Math.max(0, worldW() - W)
   const maxY = Math.max(0, worldH(rows) - VIEW_H)
-  const targetX = Math.max(0, Math.min(gs.player.x - W / 2, maxX))
-  const targetY = Math.max(0, Math.min(gs.player.y - WORLD_TOP - VIEW_H / 2, maxY))
+  const p = gs.player
+  // anticipación hacia el punto de destino al moverse
+  const lookX = p.moving ? (p.tx - p.x) * 0.35 : 0
+  const lookY = p.moving ? (p.ty - p.y) * 0.35 : 0
+  const targetX = Math.max(0, Math.min(p.x + lookX - W / 2, maxX))
+  const targetY = Math.max(0, Math.min(p.y + lookY - WORLD_TOP - VIEW_H / 2, maxY))
   const k = Math.min(1, dt * 6)
   gs.camX += (targetX - gs.camX) * k
   gs.camY += (targetY - gs.camY) * k
@@ -301,9 +359,10 @@ export function requestMove(gs: GS, wx: number, wy: number) {
   const rows = gs.save.tiles.length
   const cols = gs.save.tiles[0]?.length ?? COLS
   const p = gs.player
+  gs.queue = []
+  gs.pending = null
   p.tx = Math.max(GRID_MARGIN - 8, Math.min(wx, GRID_MARGIN + cols * TILE_STRIDE - CELL + 8))
   p.ty = Math.max(GRID_MARGIN - 8, Math.min(wy, GRID_MARGIN + rows * TILE_STRIDE - CELL + 8))
-  gs.pending = null
 }
 
 export function requestAction(gs: GS, tool: Tool, wx: number, wy: number) {
@@ -342,10 +401,18 @@ export function requestAction(gs: GS, tool: Tool, wx: number, wy: number) {
   }
 
   // mover al centro de la parcela y encolar la acción
-  gs.pending = { r: tile.r, c: tile.c, tool, opt }
+  gs.queue.push({ r: tile.r, c: tile.c, tool, opt })
+  pumpQueue(gs)
+}
+
+// saca el siguiente trabajo de la cola y lo asigna como acción en curso
+export function pumpQueue(gs: GS) {
+  if (gs.pending || gs.queue.length === 0) return
+  const a = gs.queue.shift()!
+  gs.pending = a
   const p = gs.player
-  p.tx = tileCenterWorldX(tile.c)
-  p.ty = tileCenterWorldY(tile.r)
+  p.tx = tileCenterWorldX(a.c)
+  p.ty = tileCenterWorldY(a.r)
 }
 
 export function tileAt(gs: GS, wx: number, wy: number): { r: number; c: number } | null {
@@ -393,6 +460,7 @@ function executePending(gs: GS) {
   }
   gs.pending = null
   gs.sheet = "none"
+  pumpQueue(gs)
 }
 
 // ---------------------------------------------------------------------------
@@ -669,7 +737,7 @@ function drift(cur: number, target: number): number {
 // ---------------------------------------------------------------------------
 
 export function advanceDay(gs: GS) {
-  if (gs.phase !== "farm" || gs.modal !== "none" || gs.fishing.active || gs.player.working) return
+  if (gs.phase !== "farm" || gs.modal !== "none" || gs.fishing.active || gs.player.working || gs.pending || gs.queue.length > 0) return
   gs.dayTime = 0
   endOfDay(gs)
 }
@@ -1052,6 +1120,7 @@ export function resetFarm(gs: GS) {
   gs.modal = "none"
   gs.dayTime = 0
   gs.pending = null
+  gs.queue = []
   const rows = gs.save.tiles.length
   const cols = gs.save.tiles[0]?.length ?? COLS
   const px = tileCenterWorldX(Math.min(3, cols - 1))
