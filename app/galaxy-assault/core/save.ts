@@ -11,10 +11,12 @@ export interface GalaxySave {
   repairBots: number
   muted: boolean
   hud: Record<string, { x: number; y: number; minimized: boolean; orientation: "vertical" | "horizontal" }>
+  level: number
+  xp: number
 }
 
 const KEY = "galaxy-assault-save"
-const VERSION = 1
+const VERSION = 2
 export const DEFAULT_SHIP_ID = "star"
 
 function defaults(): GalaxySave {
@@ -31,6 +33,8 @@ function defaults(): GalaxySave {
     repairBots: 0,
     muted: false,
     hud: {},
+    level: 1,
+    xp: 0,
   }
 }
 
@@ -54,6 +58,8 @@ export function loadGalaxySave(): GalaxySave {
       repairBots: typeof p.repairBots === "number" ? p.repairBots : 0,
       muted: p.muted === true,
       hud: p.hud && typeof p.hud === "object" ? { ...(p.hud as GalaxySave["hud"]) } : {},
+      level: typeof p.level === "number" && p.level >= 1 ? p.level : d.level,
+      xp: typeof p.xp === "number" ? p.xp : d.xp,
     }
   } catch {
     return defaults()
@@ -63,4 +69,21 @@ export function loadGalaxySave(): GalaxySave {
 export function writeGalaxySave(d: GalaxySave): void {
   if (typeof window === "undefined") return
   try { localStorage.setItem(KEY, JSON.stringify(d)) } catch {}
+}
+
+// ── Experiencia y niveles ──
+export function xpForNextLevel(level: number): number {
+  return 100 + (level - 1) * 60
+}
+
+// Añade XP y gestiona subidas de nivel. Devuelve cuántos niveles se subieron.
+export function addXp(d: GalaxySave, amount: number): number {
+  d.xp += Math.max(0, Math.floor(amount))
+  let ups = 0
+  while (d.xp >= xpForNextLevel(d.level)) {
+    d.xp -= xpForNextLevel(d.level)
+    d.level += 1
+    ups += 1
+  }
+  return ups
 }

@@ -1,10 +1,11 @@
 // Pantallas: intro, menú de base (inventario + naves placeholder) y overlay de muerte.
 import type { GS } from "../core/types"
-import { W, H, CONFIG } from "../core/constants"
+import { W, H, CONFIG, AMMO_SHOP } from "../core/constants"
 import { font, drawButton, drawPanel, glowText } from "../../lib/gameKit"
 import { drawSprite, dirToAngle, type SpriteKey } from "../core/sprites"
 import { ITEMS } from "../data/items"
 import { SHIP_DEFS } from "../data/ships"
+import { weaponDef } from "../data/ammo"
 
 type Imgs = Record<string, HTMLImageElement>
 
@@ -73,7 +74,7 @@ export function drawBaseMenu(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs):
   ctx.fillRect(0, 0, W, H)
 
   const pw = 760
-  const ph = 560
+  const ph = 600
   const px = W / 2 - pw / 2
   const py = H / 2 - ph / 2
   drawPanel(ctx, px, py, pw, ph, 24)
@@ -120,17 +121,42 @@ export function drawBaseMenu(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs):
 
   // Botones de la base
   gs.btns = []
+  gs.shopBtns = []
   const close = drawButton(ctx, W / 2, py + ph - 70, 240, 50, "SALIR AL MAPA", { color: "#7CFF5A", fontSize: 17 })
   gs.btns.push({ x: close.x, y: close.y, w: close.w, h: close.h })
 
+  // ── Tienda de munición (x1/x2/x3) ──
+  ctx.fillStyle = "rgba(255,255,255,0.85)"
+  ctx.font = font(18, 800)
+  ctx.textAlign = "left"
+  ctx.textBaseline = "middle"
+  ctx.fillText("🛒 Tienda de munición", px + 40, py + 340)
+  ctx.textBaseline = "alphabetic"
+
+  const shop = AMMO_SHOP
+  const ammoBtns: Array<{ id: "x1" | "x2" | "x3" }> = [{ id: "x1" }, { id: "x2" }, { id: "x3" }]
+  ammoBtns.forEach((ab, idx) => {
+    const def = shop[ab.id]
+    const w = weaponDef(ab.id)
+    const cx = px + 60 + idx * 210
+    const cy = py + 380
+    const btn = drawButton(ctx, cx, cy, 190, 46, `${w.name} · ${def.amount} 🪙${def.price}`, { color: w.color, fontSize: 14 })
+    gs.shopBtns.push({ x: btn.x, y: btn.y, w: btn.w, h: btn.h, ammo: ab.id })
+    drawSprite(ctx, imgs, w.sprite as SpriteKey, cx - 82, cy, 26)
+    ctx.fillStyle = "rgba(255,255,255,0.6)"
+    ctx.font = font(12, 700)
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillText(`Tienes: ${gs.ammo[ab.id]}`, cx, cy + 34)
+    ctx.textBaseline = "alphabetic"
+  })
+
   // Placeholder naves (futuro)
-  const shipsBtn = drawButton(ctx, px + 340, py + 360, 220, 44, "🚀 NAVES (Próximamente)", { color: "#445566", fontSize: 13 })
-  gs.btns.push({ x: shipsBtn.x, y: shipsBtn.y, w: shipsBtn.w, h: shipsBtn.h })
   ctx.fillStyle = "rgba(255,255,255,0.4)"
   ctx.font = font(12, 600)
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
-  ctx.fillText("Comprar y cambiar naves llegará pronto", px + 340, py + 405)
+  ctx.fillText("🚀 Naves (próximamente)", px + 340, py + 455)
   ctx.textBaseline = "alphabetic"
 }
 

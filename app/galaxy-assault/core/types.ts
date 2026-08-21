@@ -180,6 +180,8 @@ export interface GS {
   targetId: number | null
   firing: boolean
   activeWeapon: AmmoType
+  missileWeapon: AmmoType | null
+  missileTimer: number
   ammo: Record<AmmoType, number>
   enemies: Enemy[]
   bullets: Bullet[]
@@ -197,6 +199,7 @@ export interface GS {
   baseMenuOpen: boolean
   minimapHidden: boolean
   btns: BtnArea[]
+  shopBtns: Array<BtnArea & { ammo: AmmoType }>
   flashMsg: string
   flashT: number
   shake: number

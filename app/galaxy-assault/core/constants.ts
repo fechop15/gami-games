@@ -112,6 +112,7 @@ interface GameConfig {
   crates: { spawnInterval: number; maxOnField: number; life: number; minDistFromBase: number }
   drops: Record<string, CfgDrop>
   repairBot: { healPct: number }
+  ammoShop: Record<string, { price: number; amount: number }>
   balance: { coinsPerKill: number; coinsPerBossKill: number; bossKillsToUnlockNext: number; maxNpcsOnMap: number }
 }
 
@@ -150,6 +151,7 @@ export const REGEN_HP_PER_SEC = CONFIG.player.regen.hpPerSec
 export const REGEN_SAFE_SHIELD_PER_SEC = CONFIG.player.regen.safeShieldPerSec
 export const REGEN_SAFE_HP_PER_SEC = CONFIG.player.regen.safeHpPerSec
 export const MAX_NPCS_ON_MAP = CONFIG.balance.maxNpcsOnMap
+export const AMMO_SHOP = CONFIG.ammoShop
 
 // ── Joystick (pad fijo en la izquierda, reposicionable al tocar dentro) ──
 export const JOY_RADIUS = CONFIG.joystick.radius

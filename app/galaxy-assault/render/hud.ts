@@ -24,7 +24,8 @@ function drawAmmoBar(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {
     const w = weaponDef(id)
     const ammo = gs.ammo[id]
     const x = start + i * (AMMO_SQUARE + AMMO_GAP)
-    const active = id === gs.activeWeapon
+    const isMissile = id === "missile_a" || id === "missile_b"
+    const active = isMissile ? gs.missileWeapon === id : id === gs.activeWeapon
     const empty = ammo <= 0
 
     // Cuadro
@@ -43,8 +44,16 @@ function drawAmmoBar(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {
     roundRectPath(ctx, x, AMMO_BAR_Y, AMMO_SQUARE, AMMO_SQUARE, 12)
     ctx.stroke()
 
+    // Indicador pequeño del láser activo (1-3) o misil paralelo (4-5)
+    ctx.fillStyle = active ? w.color : "rgba(255,255,255,0.25)"
+    ctx.font = font(9, 800)
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillText(isMissile ? "⇄" : "➤", x + AMMO_SQUARE / 2, AMMO_BAR_Y + 6)
+    ctx.textBaseline = "alphabetic"
+
     // Sprite del arma
-    drawSprite(ctx, imgs, w.sprite as SpriteKey, x + AMMO_SQUARE / 2, AMMO_BAR_Y + 22, 34)
+    drawSprite(ctx, imgs, w.sprite as SpriteKey, x + AMMO_SQUARE / 2, AMMO_BAR_Y + 24, 32)
 
     // Contador (sin texto de nombre)
     ctx.fillStyle = empty ? "#ff5533" : active ? w.color : "rgba(255,255,255,0.6)"

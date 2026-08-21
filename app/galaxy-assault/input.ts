@@ -2,13 +2,13 @@
 import type { GS, HudPanelId } from "./core/types"
 import {
   W, H, JOY_RADIUS, JOY_PAD_X, JOY_PAD_Y, JOY_PAD_SIZE, MUTE_BTN, MINIMAP_BTN, FIRE_BTN, EDIT_BTN,
-  AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, PANEL_HEADER_H, PANEL_MIN_BTN_W, CONFIG, inRect,
+  AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, PANEL_HEADER_H, PANEL_MIN_BTN_W, CONFIG, AMMO_SHOP, inRect,
 } from "./core/constants"
 import { startRun, saveProgress, saveHudLayout } from "./engine"
 import { enemyAtScreen, setTarget } from "./engine/combat"
 import { joystickInput } from "./engine/player"
 import { panelRect } from "./render/panels"
-import { AMMO_ORDER, weaponDef } from "./data/ammo"
+import { AMMO_ORDER, weaponDef, buyAmmo } from "./data/ammo"
 import { toggleMute, unlockAudio, sfx } from "../lib/sound"
 
 // ── Roles por dedo (multitouch) ──
@@ -62,6 +62,23 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   }
 
   if (gs.phase === "base-menu") {
+    // Botones de la tienda de munición (compra)
+    for (const b of gs.shopBtns) {
+      if (inRect(b, x, y)) {
+        if (buyAmmo(gs, b.ammo)) {
+          sfx.coin()
+          gs.flashMsg = `+${AMMO_SHOP[b.ammo].amount} ${weaponDef(b.ammo).name}`
+          gs.flashT = 1.4
+          saveProgress(gs)
+        } else {
+          sfx.error()
+          gs.flashMsg = "No tienes suficientes monedas"
+          gs.flashT = 1.2
+        }
+        return
+      }
+    }
+    // Botón salir
     for (const b of gs.btns) {
       if (inRect(b, x, y)) {
         sfx.click()
@@ -114,7 +131,13 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   // Barra rápida de munición (cuadros abajo-centro)
   const ammoIdx = ammoSquareAt(x, y)
   if (ammoIdx !== -1) {
-    gs.activeWeapon = AMMO_ORDER[ammoIdx]
+    const ammo = AMMO_ORDER[ammoIdx]
+    if (ammo === "missile_a" || ammo === "missile_b") {
+      // Selecciona el misil que dispara en paralelo
+      gs.missileWeapon = ammo
+    } else {
+      gs.activeWeapon = ammo
+    }
     pressedAmmo = ammoIdx
     pressedAmmoTouchId = id
     sfx.click()
@@ -313,9 +336,11 @@ export function onKeyDown(gs: GS, e: KeyboardEvent): void {
   if (e.key >= "1" && e.key <= "5") {
     const idx = parseInt(e.key, 10) - 1
     if (idx < AMMO_ORDER.length) {
-      gs.activeWeapon = AMMO_ORDER[idx]
-      const w = weaponDef(gs.activeWeapon)
-      gs.flashMsg = w.name
+      const ammo = AMMO_ORDER[idx]
+      if (ammo === "missile_a" || ammo === "missile_b") gs.missileWeapon = ammo
+      else gs.activeWeapon = ammo
+      const w = weaponDef(ammo)
+      gs.flashMsg = w.name + (ammo === "missile_a" || ammo === "missile_b" ? " (paralelo)" : "")
       gs.flashT = 1.2
       sfx.click()
     }

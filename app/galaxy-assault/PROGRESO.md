@@ -81,6 +81,13 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] shield.svg retirado (escudo procedural en canvas)
 - [x] Barras de vida/escudo del jugador movidas del HUD al panel personalizable
 
+## Fase 16 — Nivel/XP, misiles en paralelo y tienda de munición (v1.7)
+- [x] Sistema de nivel/XP persistido: XP por bajas (+8) y jefes (+40), subida de nivel con aviso
+- [x] Panel de estadísticas muestra nivel, barra de XP, monedas, bajas y jefes
+- [x] Misiles disparan en paralelo al láser con cadencia propia (delay mayor) mientras se dispara
+- [x] Barra de munición distingue láser activo (➤) y misil paralelo (⇄); teclas 1-3 láser, 4-5 misil
+- [x] Tienda de munición en la base: comprar x1/x2/x3 con monedas (config ammoShop)
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable

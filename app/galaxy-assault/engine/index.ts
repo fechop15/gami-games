@@ -58,6 +58,8 @@ export function makeGS(): GS {
     targetId: null,
     firing: false,
     activeWeapon: "x1",
+    missileWeapon: "missile_a",
+    missileTimer: 0,
     ammo,
     enemies: [],
     bullets: [],
@@ -75,6 +77,7 @@ export function makeGS(): GS {
     baseMenuOpen: false,
     minimapHidden: false,
     btns: [],
+    shopBtns: [],
     flashMsg: "",
     flashT: 0,
     shake: 0,
@@ -122,6 +125,8 @@ export function startRun(gs: GS): void {
   gs.targetId = null
   gs.firing = false
   gs.activeWeapon = "x1"
+  gs.missileWeapon = "missile_a"
+  gs.missileTimer = 0
   gs.ammo = defaultAmmo()
   const map = currentMap()
   const p = gs.player

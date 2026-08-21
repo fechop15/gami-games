@@ -92,6 +92,11 @@
     "repairBot": { "chance": 0.03 }
   },
   "repairBot": { "healPct": 0.4 },
+  "ammoShop": {
+    "x1": { "price": 60, "amount": 25 },
+    "x2": { "price": 90, "amount": 15 },
+    "x3": { "price": 120, "amount": 10 }
+  },
   "balance": {
     "coinsPerKill": 2,
     "coinsPerBossKill": 60,

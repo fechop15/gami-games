@@ -2,6 +2,7 @@
 import type { GS, HudPanelId } from "../core/types"
 import { W, H, PANEL_HEADER_H, PANEL_MIN_BTN_W, SHIELD_ABSORB } from "../core/constants"
 import { font, rgba, roundRectPath } from "../../lib/gameKit"
+import { xpForNextLevel } from "../core/save"
 
 type Imgs = Record<string, HTMLImageElement>
 
@@ -25,7 +26,7 @@ export function panelRect(id: HudPanelId, gs: GS): PanelRect {
   }
   if (id === "stats") {
     const w = 250
-    const h = 74
+    const h = 100
     const bodyH = p.minimized ? 0 : h
     return { x: p.x, y: p.y, w, h: PANEL_HEADER_H + bodyH, header: { x: p.x, y: p.y, w, h: PANEL_HEADER_H } }
   }
@@ -177,16 +178,40 @@ function drawStats(ctx: CanvasRenderingContext2D, gs: GS, r: PanelRect): void {
   const bodyY = r.y + PANEL_HEADER_H
   drawBody(ctx, r.x, bodyY, r.w, r.h - PANEL_HEADER_H, "#ffd54a")
   const s = gs.save
+  // Nivel + barra XP
+  const need = xpForNextLevel(s.level)
+  const xpPct = Math.max(0, Math.min(1, s.xp / need))
+  ctx.fillStyle = "#00e5ff"
+  ctx.font = font(16, 900)
+  ctx.textAlign = "left"
+  ctx.fillText(`⭐ Nivel ${s.level}`, r.x + 12, bodyY + 20)
+  ctx.textAlign = "left"
+  // Barra XP
+  const bx = r.x + 12
+  const by = bodyY + 30
+  const bw = r.w - 24
+  const bh = 9
+  ctx.fillStyle = "rgba(0,0,0,0.6)"
+  roundRectPath(ctx, bx, by, bw, bh, bh / 2)
+  ctx.fill()
+  ctx.fillStyle = "#00e5ff"
+  roundRectPath(ctx, bx + 1, by + 1, Math.max(4, (bw - 2) * xpPct), bh - 2, (bh - 2) / 2)
+  ctx.fill()
+  ctx.fillStyle = "rgba(255,255,255,0.75)"
+  ctx.font = font(10, 700)
+  ctx.textAlign = "right"
+  ctx.fillText(`${s.xp}/${need} xp`, bx + bw, by + bh / 2)
+  ctx.textAlign = "left"
+
   ctx.fillStyle = "#ffd54a"
   ctx.font = font(15, 900)
-  ctx.textAlign = "left"
-  ctx.fillText(`🪙 ${s.coins.toLocaleString()}`, r.x + 12, bodyY + 22)
+  ctx.fillText(`🪙 ${s.coins.toLocaleString()}`, r.x + 12, bodyY + 56)
   ctx.fillStyle = "#ffffff"
   ctx.font = font(13, 800)
-  ctx.fillText(`💀 Bajas: ${s.kills}`, r.x + 12, bodyY + 44)
+  ctx.fillText(`💀 Bajas: ${s.kills}`, r.x + 12, bodyY + 76)
   const bossCount = Object.values(s.bossKills).reduce((a, b) => a + b, 0)
   ctx.fillStyle = "#ffdd88"
-  ctx.fillText(`👑 Jefes: ${bossCount}`, r.x + 12, bodyY + 62)
+  ctx.fillText(`👑 Jefes: ${bossCount}`, r.x + 12, bodyY + 94)
   ctx.textAlign = "left"
 }
 

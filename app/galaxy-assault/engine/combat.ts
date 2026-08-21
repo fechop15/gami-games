@@ -1,6 +1,6 @@
 // Combate: targeting manual (tap para elegir objetivo), disparo al pulsar, balas,
 // daño (evasión → escudo → casco).
-import type { GS, Enemy, Bullet, DropId } from "../core/types"
+import type { GS, Enemy, DropId, AmmoType } from "../core/types"
 import {
   SHIELD_ABSORB, PLAYER_RADIUS, INVULN_AFTER_HIT, CONFIG,
   REGEN_IDLE_TIME, REGEN_SHIELD_PER_SEC, REGEN_HP_PER_SEC,
@@ -11,6 +11,7 @@ import { shipBaseDamage } from "../data/ships"
 import { angleTo, dist, clamp, chance, rand } from "../../lib/math"
 import { evasionChance } from "./player"
 import { pushEvent } from "./index"
+import { addXp } from "../core/save"
 import { sfx } from "../../lib/sound"
 
 /** Devuelve el enemigo vivo más cercano a (sx, sy) en coordenadas de pantalla.
@@ -37,12 +38,15 @@ export function setTarget(gs: GS, e: Enemy | null): boolean {
   return !!e
 }
 
-/** Disparo manual: solo dispara si hay objetivo marcado y gs.firing está activo. */
+/** Disparo manual: el láser activo (x1/x2/x3) dispara; los misiles disparan en
+ * paralelo con su propio timer (delay mayor) mientras haya munición de misil. */
 export function updateManualFire(gs: GS, dt: number): void {
   const p = gs.player
   const w = weaponDef(gs.activeWeapon)
+  const isMissileActive = w.kind === "missile"
 
   p.fireTimer -= dt * 1000
+  gs.missileTimer -= dt * 1000
   if (!gs.firing) return
 
   // Mantener el objetivo (si murió, se pierde)
@@ -52,42 +56,63 @@ export function updateManualFire(gs: GS, dt: number): void {
     return
   }
 
-  // Si no hay munición, avisar
-  if (gs.ammo[gs.activeWeapon] <= 0) {
-    gs.flashMsg = "¡Sin munición! Recoge cajas"
-    gs.flashT = Math.max(gs.flashT, 0.8)
-    return
-  }
-
   const a = angleTo(p.x, p.y, target.x, target.y)
   p.angle = a
 
-  if (p.fireTimer <= 0) {
+  // Si el arma activa ES un misil, se dispara solo (comportamiento previo);
+  // si es láser, el láser dispara y los misiles acompañan en paralelo.
+  if (isMissileActive) {
+    if (gs.ammo[gs.activeWeapon] <= 0) {
+      gs.flashMsg = "¡Sin misiles! Recoge cajas"
+      gs.flashT = Math.max(gs.flashT, 0.8)
+      return
+    }
+    if (p.fireTimer <= 0) {
+      p.fireTimer = w.fireRateMs
+      gs.ammo[gs.activeWeapon] -= 1
+      spawnMissile(gs, w, target, a)
+    }
+    return
+  }
+
+  // ── Láser activo ──
+  if (gs.ammo[gs.activeWeapon] > 0 && p.fireTimer <= 0) {
     p.fireTimer = w.fireRateMs
     gs.ammo[gs.activeWeapon] -= 1
     const damage = weaponDamageForShip(shipBaseDamage(gs.save), gs.activeWeapon)
-    let b: Bullet
-    if (w.kind === "missile") {
-      b = {
-        id: gs.nextId++, x: p.x, y: p.y,
-        vx: Math.cos(a) * w.bulletSpeed, vy: Math.sin(a) * w.bulletSpeed,
-        damage, radius: w.bulletRadius, fromPlayer: true, color: w.color,
-        kind: "missile", life: 3.5, weapon: gs.activeWeapon,
-        homing: w.homing ?? false, turn: w.turn ?? 0, aoe: w.aoe ?? 0,
-        targetId: target.id,
-      }
-      sfx.whoosh()
-    } else {
-      b = {
-        id: gs.nextId++, x: p.x, y: p.y,
-        vx: Math.cos(a) * w.bulletSpeed, vy: Math.sin(a) * w.bulletSpeed,
-        damage, radius: w.bulletRadius, fromPlayer: true, color: w.color,
-        kind: "laser", life: 1.6, weapon: gs.activeWeapon,
-      }
-      sfx.slice()
-    }
-    gs.bullets.push(b)
+    gs.bullets.push({
+      id: gs.nextId++, x: p.x, y: p.y,
+      vx: Math.cos(a) * w.bulletSpeed, vy: Math.sin(a) * w.bulletSpeed,
+      damage, radius: w.bulletRadius, fromPlayer: true, color: w.color,
+      kind: "laser", life: 1.6, weapon: gs.activeWeapon,
+    })
+    sfx.slice()
   }
+
+  // Misiles en paralelo: usa gs.missileWeapon con su propia cadencia
+  const mw = gs.missileWeapon
+  if (mw) {
+    const mdef = weaponDef(mw)
+    if (gs.ammo[mw] > 0 && gs.missileTimer <= 0) {
+      gs.missileTimer = mdef.fireRateMs
+      gs.ammo[mw] -= 1
+      spawnMissile(gs, mdef, target, a)
+      sfx.whoosh()
+    }
+  }
+}
+
+function spawnMissile(gs: GS, w: ReturnType<typeof weaponDef>, target: Enemy, a: number): void {
+  const p = gs.player
+  const damage = weaponDamageForShip(shipBaseDamage(gs.save), w.id as AmmoType)
+  gs.bullets.push({
+    id: gs.nextId++, x: p.x, y: p.y,
+    vx: Math.cos(a) * w.bulletSpeed, vy: Math.sin(a) * w.bulletSpeed,
+    damage, radius: w.bulletRadius, fromPlayer: true, color: w.color,
+    kind: "missile", life: 3.5, weapon: w.id as AmmoType,
+    homing: w.homing ?? false, turn: w.turn ?? 0, aoe: w.aoe ?? 0,
+    targetId: target.id,
+  })
 }
 
 export function updateBullets(gs: GS, dt: number): void {
@@ -217,7 +242,16 @@ export function onEnemyKilled(gs: GS, e: Enemy): void {
   gs.save.kills++
   gs.shake = Math.max(gs.shake, e.kind === "boss" ? 14 : 6)
   sfx.explode()
-  pushEvent(gs, e.kind === "boss" ? `💀 ¡${CONFIG.bosses.find(b => b.id === e.type)?.name ?? "Jefe"} derrotado!` : `💥 Enemigo destruido (+${CONFIG.balance.coinsPerKill}🪙)`)
+  // XP por bajas (más en jefes)
+  const xpGain = e.kind === "boss" ? 40 : 8
+  const ups = addXp(gs.save, xpGain)
+  if (ups > 0) {
+    gs.flashMsg = `¡Nivel ${gs.save.level}!`
+    gs.flashT = 2.2
+    sfx.levelup()
+    pushEvent(gs, `⬆️ ¡Subiste al nivel ${gs.save.level}!`)
+  }
+  pushEvent(gs, e.kind === "boss" ? `💀 ¡${CONFIG.bosses.find(b => b.id === e.type)?.name ?? "Jefe"} derrotado!` : `💥 Enemigo destruido (+${CONFIG.balance.coinsPerKill}🪙 · +${xpGain}xp)`)
 
   // Monedas
   const coins = e.kind === "boss" ? CONFIG.balance.coinsPerBossKill : CONFIG.balance.coinsPerKill
