@@ -1,6 +1,6 @@
 import type { GS, EquipTab } from "./types"
 import {
-  H, MUTE_BTN, AMMO_NAMES, AMMO_BUY, PERFECT_BUY_STEP,
+  H, MUTE_BTN, CLOSE_BTN, CLOSE_BTN_EXT, AMMO_NAMES, AMMO_BUY, PERFECT_BUY_STEP,
   FUSION_COUNT, fusionChance, REPAIR_BOT_PRICE, PERFECT_POINT_COST,
 } from "./constants"
 import {
@@ -431,6 +431,16 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
   if (x >= mb.x - 6 && x <= mb.x + mb.w + 6 && y >= mb.y - 6 && y <= mb.y + mb.h + 6) {
     setSoundMuted(!getSoundMuted())
     return
+  }
+
+  // Botón de cierre (X) — vuelve al hub desde las ventanas
+  if (gs.phase === "hangar" || gs.phase === "ship-store" || gs.phase === "equip-store") {
+    const cb = CLOSE_BTN
+    if (x >= cb.x - CLOSE_BTN_EXT && x <= cb.x + cb.w + CLOSE_BTN_EXT && y >= cb.y - CLOSE_BTN_EXT && y <= cb.y + cb.h + CLOSE_BTN_EXT) {
+      gs.phase = "intro"; gs.phaseTimer = 0
+      gs.dragItem = null
+      return
+    }
   }
 
   // Diálogo de confirmación — bloquea cualquier otra interacción

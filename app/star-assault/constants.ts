@@ -94,3 +94,7 @@ export const REPAIR_BOT_HEAL = CONFIG.repairRobot.healPct
 export const AMMO_BUY: Record<"laser" | "spread" | "missile", { price: number; amount: number }> = CONFIG.ammoBuy
 
 export const MUTE_BTN = { x: W - 54, y: 6, w: 48, h: 28 }
+
+// Botón de cierre (X) para las ventanas (hangar / tiendas)
+export const CLOSE_BTN = { x: W - 44, y: 6, w: 38, h: 34 }
+export const CLOSE_BTN_EXT = 10  // área de toque ampliada

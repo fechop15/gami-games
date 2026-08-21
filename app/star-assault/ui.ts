@@ -5,6 +5,7 @@ import {
   W, H, HUD_H, AMMO_COLORS, AMMO_ICONS, AMMO_NAMES, AMMO_BUY,
   REPAIR_BOT_PRICE, REPAIR_BOT_HEAL,
   FUSION_COUNT, fusionChance, PERFECT_POINT_COST,
+  CLOSE_BTN,
 } from "./constants"
 import {
   LASER_DEFS, SHIELD_DEFS, UAV_DEFS, laserDef, shieldDef, uavDef, singleLaserMult, getLaserInstance,
@@ -23,75 +24,78 @@ import {
 function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   // Dark overlay
   ctx.fillStyle = "rgba(0,0,0,0.72)"; ctx.fillRect(0, 0, W, H)
-  // Title
+  const s = gs.save
+
+  // ── Título superior ──
   ctx.fillStyle = "#ffffff"
-  ctx.font = "bold 52px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.font = "bold 56px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
   ctx.shadowColor = "#00e5ff"; ctx.shadowBlur = 30
-  ctx.fillText("STAR", W / 2, H / 2 - 170)
+  ctx.fillText("STAR", W / 2, 92)
   ctx.fillStyle = "#00e5ff"
-  ctx.fillText("ASSAULT", W / 2, H / 2 - 112)
+  ctx.fillText("ASSAULT", W / 2, 152)
   ctx.shadowBlur = 0
   ctx.fillStyle = "#aaaaaa"; ctx.font = "13px monospace"
-  ctx.fillText(`${WORLDS.length} mundos · combos · power-ups · jefes épicos`, W / 2, H / 2 - 66)
+  ctx.fillText(`${WORLDS.length} mundos · combos · power-ups · jefes épicos`, W / 2, 194)
 
-  // Perfil del jugador: nivel + barra de XP + monedas y puntos de mejora
-  const s = gs.save
+  // ── Tarjeta de perfil del jugador ──
   const need = xpForNextLevel(s.level)
   const pct = Math.max(0, Math.min(1, s.xp / need))
-  // Tarjeta de perfil
-  const pcW = W - 80, pcH = 44
-  const pcX = W / 2 - pcW / 2, pcY = H / 2 - 56
-  ctx.fillStyle = "rgba(10,20,32,0.85)"
-  ctx.beginPath(); ctx.roundRect(pcX, pcY, pcW, pcH, 12); ctx.fill()
-  ctx.strokeStyle = "#00e5ff44"; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(pcX, pcY, pcW, pcH, 12); ctx.stroke()
+  const pcW = W - 64, pcH = 56
+  const pcX = W / 2 - pcW / 2, pcY = 216
+  ctx.fillStyle = "rgba(10,20,32,0.9)"
+  ctx.beginPath(); ctx.roundRect(pcX, pcY, pcW, pcH, 14); ctx.fill()
+  ctx.strokeStyle = "#00e5ff55"; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(pcX, pcY, pcW, pcH, 14); ctx.stroke()
 
-  // Nivel
-  ctx.fillStyle = "#00e5ff"; ctx.font = "bold 22px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "middle"
-  ctx.fillText(`NV ${s.level}`, pcX + 14, pcY + 16)
-  ctx.fillStyle = "#88aabb"; ctx.font = "9px monospace"
-  ctx.fillText("NIVEL", pcX + 60, pcY + 16)
+  // Icono nivel
+  ctx.fillStyle = "#0c1a2b"; ctx.beginPath(); ctx.arc(pcX + 30, pcY + 28, 20, 0, Math.PI * 2); ctx.fill()
+  ctx.strokeStyle = "#00e5ff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(pcX + 30, pcY + 28, 20, 0, Math.PI * 2); ctx.stroke()
+  ctx.fillStyle = "#00e5ff"; ctx.font = "bold 18px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.fillText(String(s.level), pcX + 30, pcY + 28)
 
-  // Barra de XP
-  const barX = pcX + 14, barY = pcY + 28, barW = pcW - 28, barH = 8
-  ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 4); ctx.fill()
+  // Nivel texto
+  ctx.fillStyle = "#ffffff"; ctx.font = "bold 13px monospace"; ctx.textAlign = "left"
+  ctx.fillText(`Nivel ${s.level}`, pcX + 60, pcY + 18)
+
+  // Barra XP
+  const barX = pcX + 60, barY = pcY + 32, barW = pcW - 60 - 12, barH = 9
+  ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 5); ctx.fill()
   ctx.fillStyle = "#00e5ff"
-  ctx.beginPath(); ctx.roundRect(barX, barY, Math.max(barW * pct, 6), barH, 4); ctx.fill()
+  ctx.beginPath(); ctx.roundRect(barX, barY, Math.max(barW * pct, 8), barH, 5); ctx.fill()
   ctx.fillStyle = "#aaddee"; ctx.font = "bold 8px monospace"; ctx.textAlign = "right"; ctx.textBaseline = "middle"
-  ctx.fillText(`${s.xp}/${need} XP`, pcX + pcW - 14, barY + barH / 2)
+  ctx.fillText(`${s.xp}/${need} XP`, barX + barW, barY + barH / 2)
 
   // Monedas y puntos de mejora
-  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
-  ctx.fillText(`🪙 ${s.coins.toLocaleString()}`, W / 2 - 70, H / 2 - 26)
-  ctx.fillStyle = "#ffee44"; ctx.font = "bold 14px monospace"
-  ctx.fillText(`⚡ ${(s.perfectionPoints ?? 0)}`, W / 2 + 70, H / 2 - 26)
+  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 13px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "middle"
+  ctx.fillText(`🪙 ${s.coins.toLocaleString()}`, pcX + 60, pcY + 48)
+  ctx.fillStyle = "#ffee44"; ctx.font = "bold 13px monospace"; ctx.textAlign = "right"
+  ctx.fillText(`⚡ ${(s.perfectionPoints ?? 0)} pts`, pcX + pcW - 12, pcY + 48)
 
+  // ── Botones del menú (centro, aprovechando el espacio) ──
   gs.introBtns = []
   const pulse = 0.96 + Math.sin(time * 2.5) * 0.04
   const mkBtn = (label: string, action: string, cy: number, color: string, textColor: string) => {
-    const bw = 220, bh = 44, bx = W / 2 - bw / 2, by = cy - bh / 2
+    const bw = W - 120, bh = 52, bx = W / 2 - bw / 2, by = cy - bh / 2
     gs.introBtns.push({ action, x: bx, y: by, w: bw, h: bh })
     ctx.save(); ctx.translate(W / 2, cy); ctx.scale(pulse, pulse)
     ctx.fillStyle = color
-    ctx.beginPath(); ctx.roundRect(-bw / 2, -bh / 2, bw, bh, 12); ctx.fill()
-    ctx.fillStyle = textColor; ctx.font = "bold 16px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.beginPath(); ctx.roundRect(-bw / 2, -bh / 2, bw, bh, 14); ctx.fill()
+    ctx.fillStyle = textColor; ctx.font = "bold 18px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
     ctx.fillText(label, 0, 0)
     ctx.restore()
   }
-  mkBtn("▶  CAMPAÑA", "campaign", H / 2 + 30, "#00e5ff", "#001020")
-  mkBtn("♾  ENDLESS", "endless", H / 2 + 86, "#ff44aa", "#20000f")
-  mkBtn("🔧  HANGAR", "hangar", H / 2 + 142, "#ffcc44", "#201400")
-  mkBtn("🛒  TIENDA", "equip", H / 2 + 198, "#ff8844", "#201000")
-  mkBtn("🚀  NAVES", "ships", H / 2 + 254, "#44ff88", "#001405")
+  const btnStart = 320
+  const btnGap = 64
+  mkBtn("▶  CAMPAÑA", "campaign", btnStart + btnGap * 0, "#00e5ff", "#001020")
+  mkBtn("♾  ENDLESS", "endless", btnStart + btnGap * 1, "#ff44aa", "#20000f")
+  mkBtn("🔧  HANGAR", "hangar", btnStart + btnGap * 2, "#ffcc44", "#201400")
+  mkBtn("🛒  TIENDA", "equip", btnStart + btnGap * 3, "#ff8844", "#201000")
+  mkBtn("🚀  NAVES", "ships", btnStart + btnGap * 4, "#44ff88", "#001405")
 
-  // Récord endless
-  if (s.endlessBest > 0) {
-    ctx.fillStyle = "#ff88bb"; ctx.font = "11px monospace"; ctx.textAlign = "center"
-    ctx.fillText(`Mejor oleada endless: ${s.endlessBest}`, W / 2, H / 2 + 310)
-  }
-
-  // Credits
-  ctx.fillStyle = "#555555"; ctx.font = "11px monospace"; ctx.textAlign = "center"
-  ctx.fillText("Desliza para mover · Disparo automático · 🛡 escudo", W / 2, H - 40)
+  // ── Récord y créditos inferiores ──
+  ctx.fillStyle = "#ff88bb"; ctx.font = "12px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  if (s.endlessBest > 0) ctx.fillText(`Mejor oleada endless: ${s.endlessBest}`, W / 2, 760)
+  ctx.fillStyle = "#555555"; ctx.font = "11px monospace"
+  ctx.fillText("Desliza para mover · Disparo automático · 🛡 escudo", W / 2, H - 34)
 }
 
 /* Pantalla de HANGAR — mejoras permanentes de nave */
