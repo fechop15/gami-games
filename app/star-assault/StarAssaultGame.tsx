@@ -6,6 +6,9 @@ import { handleTap, hangarDragStart, hangarDragMove, hangarDragEnd, onHangarInvB
 import { W, H, HUD_H, AMMO_NAMES } from "./constants"
 import type { GS, AmmoType } from "./types"
 
+// Escala interna de renderizado (2x) para una imagen más nítida en pantallas de alta densidad
+const RENDER_SCALE = 2
+
 export default function StarAssaultGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const gsRef = useRef<GS>(makeGS())
@@ -14,6 +17,10 @@ export default function StarAssaultGame() {
     const canvas = canvasRef.current!
     const ctx = canvas.getContext("2d")!
     const gs = gsRef.current
+
+    // Tamaño interno a alta resolución (la lógica usa W×H, se escala al dibujar)
+    canvas.width = W * RENDER_SCALE
+    canvas.height = H * RENDER_SCALE
 
     // Canvas CSS scaling to fill screen
     const resize = () => {
@@ -34,6 +41,7 @@ export default function StarAssaultGame() {
       const dt = Math.min(rawDt, 0.05)  // cap at 50ms
       const time = (now - startTime) / 1000
       update(gs, dt)
+      ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0)
       draw(ctx, gs, time)
       rafId = requestAnimationFrame(loop)
     }
@@ -114,7 +122,7 @@ export default function StarAssaultGame() {
         const { sx, rect } = getScale()
         const t = e.changedTouches[0]
         hangarDragEnd(gs, (t.clientX - rect.left) * sx, (t.clientY - rect.top) * sx)
-        gs.dragItem = null
+        // Si el toque fue un tap, el item queda seleccionado para colocarlo en un slot.
         gs.isTouching = false
         return
       }
@@ -200,7 +208,7 @@ export default function StarAssaultGame() {
       if (gs.dragItem) {
         const { sx, sy, rect } = getScale()
         hangarDragEnd(gs, (e.clientX - rect.left) * sx, (e.clientY - rect.top) * sy)
-        gs.dragItem = null
+        // Si fue un tap, el item queda seleccionado para colocarlo en un slot.
         return
       }
       if (gs.phase === "world-select") {
@@ -229,6 +237,7 @@ export default function StarAssaultGame() {
       if (gs.dragItem) {
         const { sx, sy, rect } = getScale()
         hangarDragEnd(gs, (e.clientX - rect.left) * sx, (e.clientY - rect.top) * sy)
+        // Al soltar fuera del canvas, cancelar la selección
         gs.dragItem = null
         gs.isTouching = false
       }

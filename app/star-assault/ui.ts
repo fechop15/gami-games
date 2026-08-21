@@ -1,9 +1,10 @@
 import type { GS, EquipTab } from "./types"
 import type { ShipUpgrades } from "./save"
+import { xpForNextLevel } from "./save"
 import {
   W, H, HUD_H, AMMO_COLORS, AMMO_ICONS, AMMO_NAMES, AMMO_BUY,
-  perfectBuyCost, REPAIR_BOT_PRICE, REPAIR_BOT_HEAL,
-  FUSION_COUNT, fusionChance,
+  REPAIR_BOT_PRICE, REPAIR_BOT_HEAL,
+  FUSION_COUNT, fusionChance, PERFECT_POINT_COST,
 } from "./constants"
 import {
   LASER_DEFS, SHIELD_DEFS, UAV_DEFS, laserDef, shieldDef, uavDef, singleLaserMult, getLaserInstance,
@@ -21,44 +22,71 @@ import {
 
 function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   // Dark overlay
-  ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(0, 0, W, H)
+  ctx.fillStyle = "rgba(0,0,0,0.72)"; ctx.fillRect(0, 0, W, H)
   // Title
   ctx.fillStyle = "#ffffff"
   ctx.font = "bold 52px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
   ctx.shadowColor = "#00e5ff"; ctx.shadowBlur = 30
-  ctx.fillText("STAR", W / 2, H / 2 - 150)
+  ctx.fillText("STAR", W / 2, H / 2 - 170)
   ctx.fillStyle = "#00e5ff"
-  ctx.fillText("ASSAULT", W / 2, H / 2 - 92)
+  ctx.fillText("ASSAULT", W / 2, H / 2 - 112)
   ctx.shadowBlur = 0
   ctx.fillStyle = "#aaaaaa"; ctx.font = "13px monospace"
-  ctx.fillText(`${WORLDS.length} mundos · combos · power-ups · jefes épicos`, W / 2, H / 2 - 44)
+  ctx.fillText(`${WORLDS.length} mundos · combos · power-ups · jefes épicos`, W / 2, H / 2 - 66)
 
-  // Monedas
-  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 16px monospace"
-  ctx.fillText(`🪙 ${gs.save.coins.toLocaleString()}`, W / 2, H / 2 - 14)
+  // Perfil del jugador: nivel + barra de XP + monedas y puntos de mejora
+  const s = gs.save
+  const need = xpForNextLevel(s.level)
+  const pct = Math.max(0, Math.min(1, s.xp / need))
+  // Tarjeta de perfil
+  const pcW = W - 80, pcH = 44
+  const pcX = W / 2 - pcW / 2, pcY = H / 2 - 56
+  ctx.fillStyle = "rgba(10,20,32,0.85)"
+  ctx.beginPath(); ctx.roundRect(pcX, pcY, pcW, pcH, 12); ctx.fill()
+  ctx.strokeStyle = "#00e5ff44"; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(pcX, pcY, pcW, pcH, 12); ctx.stroke()
+
+  // Nivel
+  ctx.fillStyle = "#00e5ff"; ctx.font = "bold 22px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "middle"
+  ctx.fillText(`NV ${s.level}`, pcX + 14, pcY + 16)
+  ctx.fillStyle = "#88aabb"; ctx.font = "9px monospace"
+  ctx.fillText("NIVEL", pcX + 60, pcY + 16)
+
+  // Barra de XP
+  const barX = pcX + 14, barY = pcY + 28, barW = pcW - 28, barH = 8
+  ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 4); ctx.fill()
+  ctx.fillStyle = "#00e5ff"
+  ctx.beginPath(); ctx.roundRect(barX, barY, Math.max(barW * pct, 6), barH, 4); ctx.fill()
+  ctx.fillStyle = "#aaddee"; ctx.font = "bold 8px monospace"; ctx.textAlign = "right"; ctx.textBaseline = "middle"
+  ctx.fillText(`${s.xp}/${need} XP`, pcX + pcW - 14, barY + barH / 2)
+
+  // Monedas y puntos de mejora
+  ctx.fillStyle = "#ffcc44"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.fillText(`🪙 ${s.coins.toLocaleString()}`, W / 2 - 70, H / 2 - 26)
+  ctx.fillStyle = "#ffee44"; ctx.font = "bold 14px monospace"
+  ctx.fillText(`⚡ ${(s.perfectionPoints ?? 0)}`, W / 2 + 70, H / 2 - 26)
 
   gs.introBtns = []
   const pulse = 0.96 + Math.sin(time * 2.5) * 0.04
   const mkBtn = (label: string, action: string, cy: number, color: string, textColor: string) => {
-    const bw = 220, bh = 46, bx = W / 2 - bw / 2, by = cy - bh / 2
+    const bw = 220, bh = 44, bx = W / 2 - bw / 2, by = cy - bh / 2
     gs.introBtns.push({ action, x: bx, y: by, w: bw, h: bh })
     ctx.save(); ctx.translate(W / 2, cy); ctx.scale(pulse, pulse)
     ctx.fillStyle = color
-    ctx.beginPath(); ctx.roundRect(-bw / 2, -bh / 2, bw, bh, 10); ctx.fill()
-    ctx.fillStyle = textColor; ctx.font = "bold 17px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.beginPath(); ctx.roundRect(-bw / 2, -bh / 2, bw, bh, 12); ctx.fill()
+    ctx.fillStyle = textColor; ctx.font = "bold 16px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
     ctx.fillText(label, 0, 0)
     ctx.restore()
   }
-  mkBtn("▶  CAMPAÑA", "campaign", H / 2 + 20, "#00e5ff", "#001020")
-  mkBtn("♾  ENDLESS", "endless", H / 2 + 78, "#ff44aa", "#20000f")
-  mkBtn("🔧  HANGAR", "hangar", H / 2 + 136, "#ffcc44", "#201400")
-  mkBtn("🛒  TIENDA", "equip", H / 2 + 194, "#ff8844", "#201000")
-  mkBtn("🚀  NAVES", "ships", H / 2 + 252, "#44ff88", "#001405")
+  mkBtn("▶  CAMPAÑA", "campaign", H / 2 + 30, "#00e5ff", "#001020")
+  mkBtn("♾  ENDLESS", "endless", H / 2 + 86, "#ff44aa", "#20000f")
+  mkBtn("🔧  HANGAR", "hangar", H / 2 + 142, "#ffcc44", "#201400")
+  mkBtn("🛒  TIENDA", "equip", H / 2 + 198, "#ff8844", "#201000")
+  mkBtn("🚀  NAVES", "ships", H / 2 + 254, "#44ff88", "#001405")
 
   // Récord endless
-  if (gs.save.endlessBest > 0) {
+  if (s.endlessBest > 0) {
     ctx.fillStyle = "#ff88bb"; ctx.font = "11px monospace"; ctx.textAlign = "center"
-    ctx.fillText(`Mejor oleada endless: ${gs.save.endlessBest}`, W / 2, H / 2 + 310)
+    ctx.fillText(`Mejor oleada endless: ${s.endlessBest}`, W / 2, H / 2 + 310)
   }
 
   // Credits
@@ -67,13 +95,15 @@ function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
 }
 
 /* Pantalla de HANGAR — mejoras permanentes de nave */
-interface UpgradeDef { key: keyof ShipUpgrades; name: string; desc: string; max: number; cost: (lvl: number) => number }
+interface UpgradeDef { key: keyof ShipUpgrades; name: string; icon: string; desc: string; max: number; cost: (lvl: number) => number }
 export const UPGRADE_DEFS: UpgradeDef[] = [
-  { key: "hp",        name: "Blindaje",    desc: "+20 HP máximo",         max: 3, cost: l => 200 + l * 150 },
-  { key: "shieldDur", name: "Escudo+",     desc: "+1s de escudo",         max: 3, cost: l => 250 + l * 150 },
-  { key: "shieldCd",  name: "Recarga",     desc: "-1s recarga escudo",    max: 3, cost: l => 250 + l * 150 },
-  { key: "fireRate",  name: "Cadencia",    desc: "-8% tiempo de disparo", max: 3, cost: l => 300 + l * 200 },
-  { key: "magnet",    name: "Imán perm.",  desc: "Atrae drops siempre",   max: 1, cost: () => 600 },
+  { key: "hp",        name: "Blindaje",      icon: "🛡", desc: "+20 HP máximo",              max: 5, cost: l => 200 + l * 150 },
+  { key: "laserDmg",  name: "Potencia Láser", icon: "⚔", desc: "+6% daño a todos los láseres", max: 5, cost: l => 250 + l * 180 },
+  { key: "shieldDur", name: "Escudo+",       icon: "🛰", desc: "+1s de duración de escudo",    max: 3, cost: l => 250 + l * 160 },
+  { key: "shieldCd",  name: "Recarga",       icon: "⏱", desc: "-1s recarga de escudo",        max: 3, cost: l => 250 + l * 160 },
+  { key: "fireRate",  name: "Cadencia",      icon: "🔥", desc: "-8% tiempo de disparo",        max: 5, cost: l => 300 + l * 200 },
+  { key: "coinGain",  name: "Botín",         icon: "💰", desc: "+8% monedas ganadas",          max: 5, cost: l => 250 + l * 170 },
+  { key: "magnet",    name: "Imán perm.",    icon: "🧲", desc: "Atrae drops siempre",          max: 1, cost: () => 800 },
 ]
 
 function drawConfirmDialog(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
@@ -131,7 +161,9 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
   ctx.fillStyle = "#ffcc44"; ctx.font = "bold 26px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
   ctx.fillText("🔧 HANGAR", W / 2, 20)
   ctx.fillStyle = "#ffcc44"; ctx.font = "bold 14px monospace"
-  ctx.fillText(`🪙 ${gs.save.coins.toLocaleString()} monedas`, W / 2, 52)
+  ctx.fillText(`🪙 ${gs.save.coins.toLocaleString()}`, W / 2 - 70, 52)
+  ctx.fillStyle = "#ffee44"; ctx.font = "bold 14px monospace"
+  ctx.fillText(`⚡ ${(gs.save.perfectionPoints ?? 0)} pts`, W / 2 + 70, 52)
 
   // Pestañas en píldoras: Inventario | Mejoras
   gs.hangarBtns = []
@@ -164,13 +196,32 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     gs.itemAreas = []
     gs.equipBtns = []
     // Inventario: panel de la nave + cuadrícula de láseres y escudos (4 por fila)
-    // Panel resumen de la nave
+    // Panel resumen de la nave con vista previa
     ctx.fillStyle = "rgba(255,255,255,0.04)"
-    ctx.beginPath(); ctx.roundRect(16, listTop, W - 32, 22, 7); ctx.fill()
-    ctx.fillStyle = "#cccccc"; ctx.font = "bold 10px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
-    ctx.fillText(`${ship.name} · ⚔ Daño x${totalLaserMult(gs).toFixed(2)} · 🛡 Escudo HP ${effShieldMaxHP(gs)}`, W / 2, listTop + 11)
-    drawSlotChips(ctx, gs, lo.lasers, lo.lasers.length, laserDef, listTop + 28, "LÁSERES EQUIPADOS", "laser")
-    drawSlotChips(ctx, gs, lo.shields, lo.shields.length, shieldDef, listTop + 100, "ESCUDOS EQUIPADOS", "shield")
+    ctx.beginPath(); ctx.roundRect(16, listTop, W - 32, 30, 8); ctx.fill()
+    ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1
+    ctx.beginPath(); ctx.roundRect(16, listTop, W - 32, 30, 8); ctx.stroke()
+    // Miniatura de la nave
+    ctx.save()
+    ctx.translate(36, listTop + 15)
+    ctx.scale(0.42, 0.42)
+    drawShipShape(ctx, ship)
+    ctx.restore()
+    ctx.fillStyle = "#cccccc"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "middle"
+    ctx.fillText(ship.name, 56, listTop + 11)
+    ctx.fillStyle = "#88aabb"; ctx.font = "9px monospace"
+    ctx.fillText(`⚔ Daño x${totalLaserMult(gs).toFixed(2)} · 🛡 Escudo HP ${effShieldMaxHP(gs)}`, 56, listTop + 22)
+    drawSlotChips(ctx, gs, lo.lasers, lo.lasers.length, laserDef, listTop + 36, "LÁSERES EQUIPADOS", "laser")
+    drawSlotChips(ctx, gs, lo.shields, lo.shields.length, shieldDef, listTop + 108, "ESCUDOS EQUIPADOS", "shield")
+
+    // Ayuda contextual según si hay un item seleccionado
+    ctx.fillStyle = gs.dragItem ? "#ffee44" : "#667788"
+    ctx.font = gs.dragItem ? "bold 10px monospace" : "9px monospace"
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText(
+      gs.dragItem ? "Item seleccionado — toca un slot para colocarlo" : "Toca un item y luego un slot para equiparlo",
+      W / 2, listTop + 166,
+    )
 
     // Cuadrícula desplazable del inventario
     const invTop = listTop + 172
@@ -237,14 +288,14 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     }
   } else {
     // Mejoras permanentes (lo que antes era el hangar)
-    const cardH = 92, cardW = W - 40, cx = 20
+    const cardH = 86, cardW = W - 40, cx = 20, gap = 6
     for (let i = 0; i < UPGRADE_DEFS.length; i++) {
       const def = UPGRADE_DEFS[i]
       const lvl = gs.save.upgrades[def.key]
       const maxed = lvl >= def.max
       const cost = def.cost(lvl)
       const afford = gs.save.coins >= cost
-      const cy = listTop + 6 + i * (cardH + 8)
+      const cy = listTop + 6 + i * (cardH + gap)
       gs.hangarBtns.push({ key: def.key, x: cx, y: cy, w: cardW, h: cardH })
 
       ctx.fillStyle = maxed ? "#13261a" : afford ? "#ffcc4416" : "#17171f"
@@ -253,22 +304,25 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
       ctx.lineWidth = maxed ? 2 : 1.5
       ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 12); ctx.stroke()
 
+      // Icono
+      ctx.fillStyle = maxed ? "#44ff88" : afford ? "#ffcc44" : "#555"
+      ctx.font = "22px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText(def.icon, cx + 24, cy + cardH / 2)
+
       // Nombre + descripción
       ctx.textAlign = "left"; ctx.textBaseline = "top"
-      ctx.fillStyle = maxed ? "#44ff88" : "#ffffff"; ctx.font = "bold 15px monospace"
-      ctx.fillText(def.name, cx + 16, cy + 12)
+      ctx.fillStyle = maxed ? "#44ff88" : "#ffffff"; ctx.font = "bold 14px monospace"
+      ctx.fillText(def.name, cx + 44, cy + 10)
       ctx.fillStyle = "#9a9aaa"; ctx.font = "10px monospace"
-      ctx.fillText(def.desc, cx + 16, cy + 36)
+      ctx.fillText(def.desc, cx + 44, cy + 30)
 
       // Puntos de nivel
       ctx.font = "bold 9px monospace"; ctx.fillStyle = "#666"; ctx.textBaseline = "top"
-      ctx.fillText("NIVEL", cx + 16, cy + 56)
+      ctx.fillText("NIVEL", cx + 44, cy + 52)
       for (let p = 0; p < def.max; p++) {
         ctx.fillStyle = p < lvl ? "#44ff88" : "#3a3a44"
-        ctx.beginPath(); ctx.arc(cx + 20 + p * 16, cy + 72, 5, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(cx + 48 + p * 14, cy + 67, 5, 0, Math.PI * 2); ctx.fill()
       }
-      if (lvl < def.max) ctx.fillStyle = "#777"; ctx.font = "bold 9px monospace"; ctx.textAlign = "right"
-      if (lvl < def.max) ctx.fillText(`${lvl}/${def.max}`, cx + 24 + def.max * 16, cy + 60)
 
       ctx.textAlign = "right"; ctx.textBaseline = "middle"
       if (maxed) {
@@ -278,8 +332,8 @@ function drawHangar(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
         const pulse = afford ? 1 + Math.sin(time * 4 + i) * 0.05 : 1
         ctx.save(); ctx.translate(cx + cardW - 56, cy + cardH / 2); ctx.scale(pulse, pulse)
         ctx.fillStyle = afford ? "#ffcc44" : "#443311"
-        ctx.beginPath(); ctx.roundRect(-50, -16, 100, 32, 8); ctx.fill()
-        ctx.fillStyle = afford ? "#201400" : "#776644"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center"
+        ctx.beginPath(); ctx.roundRect(-50, -15, 100, 30, 8); ctx.fill()
+        ctx.fillStyle = afford ? "#201400" : "#776644"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"
         ctx.fillText(`🪙 ${cost}`, 0, 0)
         ctx.restore()
       }
@@ -423,11 +477,6 @@ function drawItemTile(ctx: CanvasRenderingContext2D, kind: IconKind, color: stri
     ctx.fillText(String(tier), x + size - 2, y + size - 1)
   }
 }
-
-function pointInRect(x: number, y: number, rx: number, ry: number, rw: number, rh: number): boolean {
-  return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
-}
-
 function drawSlotChips(
   ctx: CanvasRenderingContext2D,
   gs: GS,
@@ -441,26 +490,26 @@ function drawSlotChips(
   ctx.fillStyle = "#888"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"
   ctx.fillText(label, 16, top)
   const size = 40, gap = 9
+  const hasSelection = !!gs.dragItem && gs.dragItem.kind === kind
   for (let i = 0; i < count; i++) {
     const id = slots[i]
     const def = id ? defName(id) : null
     const cx2 = 16 + i * (size + gap)
     const cy2 = top + 16
-    const isDropTarget = !!gs.dragItem && gs.dragItem.kind === kind &&
-      pointInRect(gs.dragX, gs.dragY, cx2, cy2, size, size)
+    const isTarget = hasSelection && (!id || id === gs.dragItem!.id)
     // Cuadrado del slot
     ctx.fillStyle = def ? def.color + "22" : "rgba(255,255,255,0.06)"
     ctx.fillRect(cx2, cy2, size, size)
-    ctx.strokeStyle = isDropTarget ? "#ffffff" : def ? def.color + "aa" : "#444"
-    ctx.lineWidth = isDropTarget ? 3 : 1.5
-    if (isDropTarget) { ctx.shadowColor = "#ffffff"; ctx.shadowBlur = 12 }
+    ctx.strokeStyle = isTarget ? "#ffffff" : def ? def.color + "aa" : "#444"
+    ctx.lineWidth = isTarget ? 3 : 1.5
+    if (isTarget) { ctx.shadowColor = "#ffffff"; ctx.shadowBlur = 12 }
     ctx.strokeRect(cx2 + 0.5, cy2 + 0.5, size - 1, size - 1)
     ctx.shadowBlur = 0
     if (def) {
       drawItemIcon(ctx, kind, def.color, cx2 + size / 2, cy2 + size / 2, size - 8)
     } else {
-      ctx.fillStyle = "#555"; ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
-      ctx.fillText("·", cx2 + size / 2, cy2 + size / 2)
+      ctx.fillStyle = isTarget ? "#ffffff" : "#555"; ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText(isTarget ? "+" : "·", cx2 + size / 2, cy2 + size / 2)
     }
     // Número del slot debajo
     ctx.fillStyle = "#777"; ctx.font = "9px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top"
@@ -626,13 +675,15 @@ function drawInvTile(ctx: CanvasRenderingContext2D, gs: GS, tile: InvTile, kind:
   const w = INV_TILE_W, h = INV_TILE_H
   const perfect = tile.perfection >= 100
   const owned = tile.qty > 0
+  const selected = !!gs.dragItem && gs.dragItem.kind === kind && gs.dragItem.id === tile.key
 
   // Fondo del cuadro
-  ctx.fillStyle = tile.equipped ? tile.color + "22" : owned ? "#1a241a" : "#16161c"
+  ctx.fillStyle = selected ? tile.color + "3d" : tile.equipped ? tile.color + "22" : owned ? "#1a241a" : "#16161c"
   ctx.beginPath(); ctx.roundRect(tx, ty, w, h, 8); ctx.fill()
-  ctx.strokeStyle = tile.equipped ? tile.color : owned ? "#2a4a3a" : "#333"
-  ctx.lineWidth = tile.equipped ? 2 : 1
+  ctx.strokeStyle = selected ? "#ffffff" : tile.equipped ? tile.color : owned ? "#2a4a3a" : "#333"
+  ctx.lineWidth = selected ? 3 : tile.equipped ? 2 : 1
   ctx.beginPath(); ctx.roundRect(tx, ty, w, h, 8); ctx.stroke()
+  if (selected) { ctx.shadowColor = tile.color; ctx.shadowBlur = 12; ctx.strokeRect(tx, ty, w, h); ctx.shadowBlur = 0 }
 
   // Icono con tier
   const iconSize = 44
@@ -673,12 +724,12 @@ function drawInvTile(ctx: CanvasRenderingContext2D, gs: GS, tile: InvTile, kind:
   // Botón mejorar perfección (láser individual, solo si se tiene y no está perfecto)
   if (kind === "laser" && owned && !perfect && tile.perfection < 100) {
     const pBtnY = btnY + 28
-    const cost = perfectBuyCost(tile.perfection)
+    const hasPts = (gs.save.perfectionPoints ?? 0) >= PERFECT_POINT_COST
     gs.equipBtns.push({ action: `laser:perf:${tile.key}`, x: btnX, y: pBtnY, w: btnW, h: 24 })
-    ctx.fillStyle = "#ffee4433"
+    ctx.fillStyle = hasPts ? "#ffee4433" : "#33333322"
     ctx.beginPath(); ctx.roundRect(btnX, pBtnY, btnW, 24, 5); ctx.fill()
-    ctx.fillStyle = "#ffee44"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
-    ctx.fillText(`MEJORAR 🪙${cost}`, btnX + btnW / 2, pBtnY + 12)
+    ctx.fillStyle = hasPts ? "#ffee44" : "#887744"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillText(`MEJORAR ⚡${PERFECT_POINT_COST}`, btnX + btnW / 2, pBtnY + 12)
   }
 }
 
@@ -763,10 +814,10 @@ function drawEquipStore(ctx: CanvasRenderingContext2D, gs: GS, time: number) {
     ctx.fillText(`🪙 ${REPAIR_BOT_PRICE}`, 0, 0)
     ctx.restore()
   } else if (gs.equipTab === "ammo") {
-    // Munición: el láser vive en el inventario, spread/missile bancados
+    // Munición: láser/rapidez/misil son consumibles guardados entre partidas
     const banked = gs.save.bankedAmmo ?? {}
     const rows: Array<{ ammo: "laser" | "spread" | "missile"; n: number }> = [
-      { ammo: "laser", n: inventoryLaserTotal(eq) },
+      { ammo: "laser", n: banked.laser ?? 0 },
       { ammo: "spread", n: banked.spread ?? 0 },
       { ammo: "missile", n: banked.missile ?? 0 },
     ]

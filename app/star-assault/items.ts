@@ -88,19 +88,34 @@ export function getLoadout(eq: EquipmentState, shipId: string): ShipLoadout {
   eq.loadouts[shipId] = lo
   return lo
 }
-// Rellena todos los loadouts con items disponibles donde haya huecos libres
+// Rellena todos los loadouts con items disponibles donde haya huecos libres.
+// Garantiza que un láser (uid) o escudo no esté equipado en más de una nave a la vez.
 export function ensureLoadouts(eq: EquipmentState) {
+  const usedLasers = new Set<string>()
+  const usedShields = new Set<string>()
+  for (const ship of SHIP_DEFS) {
+    const lo = getLoadout(eq, ship.id)
+    for (const s of lo.lasers) if (s) usedLasers.add(s)
+    for (const s of lo.shields) if (s) usedShields.add(s)
+  }
   for (const ship of SHIP_DEFS) {
     const lo = getLoadout(eq, ship.id)
     for (let i = 0; i < lo.lasers.length; i++) {
       if (!lo.lasers[i]) {
-        // llena con el uid de una instancia disponible (o crea una estándar)
-        const available = eq.lasers[0]
-        if (available) lo.lasers[i] = available.uid
-        else { const inst = addLaserToInventory(eq, DEFAULT_LASER_ID); lo.lasers[i] = inst.uid }
+        // Busca una instancia que NO esté equipada en otra nave
+        const available = eq.lasers.find(l => !usedLasers.has(l.uid))
+        if (available) { lo.lasers[i] = available.uid; usedLasers.add(available.uid) }
+        else { const inst = addLaserToInventory(eq, DEFAULT_LASER_ID); lo.lasers[i] = inst.uid; usedLasers.add(inst.uid) }
       }
     }
-    for (let i = 0; i < lo.shields.length; i++) if (!lo.shields[i]) lo.shields[i] = DEFAULT_SHIELD_ID
+    for (let i = 0; i < lo.shields.length; i++) {
+      if (!lo.shields[i]) {
+        // Busca un escudo del inventario que no esté usado en otra nave
+        const id = SHIELD_DEFS.find(s => (eq.shields[s.id] ?? 0) > 0 && !usedShields.has(s.id))?.id
+        if (id) { lo.shields[i] = id; usedShields.add(id) }
+        else { lo.shields[i] = DEFAULT_SHIELD_ID; usedShields.add(DEFAULT_SHIELD_ID) }
+      }
+    }
   }
 }
 // Uids de láseres equipados en la nave actual

@@ -84,6 +84,7 @@ export function fusionChance(tier: number): number {
 
 export const PERFECT_BUY_STEP = CONFIG.balance.perfection.buyStep
 export function perfectBuyCost(pct: number): number { return Math.round(CONFIG.balance.perfection.buyCostBase + pct * CONFIG.balance.perfection.buyCostPer) }
+export const PERFECT_POINT_COST = 5  // puntos de mejora por paso (10%) al mejorar un láser
 export const PERFECT_BONUS = CONFIG.balance.perfection.perfectBonus
 export const PERFECT_BONUS_PER_STEP = CONFIG.balance.perfection.stepBonus
 

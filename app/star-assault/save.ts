@@ -1,9 +1,11 @@
 export interface ShipUpgrades {
-  hp: number         // 0-3: +20 HP máx por nivel
+  hp: number         // 0-5: +20 HP máx por nivel
   shieldDur: number  // 0-3: +1 s de escudo por nivel
   shieldCd: number   // 0-3: -1 s de recarga por nivel
-  fireRate: number   // 0-3: -8% de cadencia por nivel
+  fireRate: number   // 0-5: -8% de cadencia por nivel
   magnet: number     // 0-1: imán de drops permanente
+  laserDmg: number   // 0-5: +6% daño a todos los láseres por nivel
+  coinGain: number   // 0-5: +8% monedas ganadas por nivel
 }
 
 export type AmmoType = "basic" | "laser" | "spread" | "missile"
@@ -42,12 +44,15 @@ export interface StarSave {
   shipsOwned: string[]       // ids de naves compradas
   equipment: EquipmentState  // inventario + loadouts por nave
   bankedAmmo: Record<AmmoType, number>  // munición guardada entre partidas
+  perfectionPoints: number   // puntos de mejora gastables en cualquier láser
+  level: number              // nivel de experiencia del jugador
+  xp: number                 // experiencia acumulada del nivel actual
 }
 
 const KEY = "star-assault-save"
 
 const DEFAULT_UPGRADES: ShipUpgrades = {
-  hp: 0, shieldDur: 0, shieldCd: 0, fireRate: 0, magnet: 0,
+  hp: 0, shieldDur: 0, shieldCd: 0, fireRate: 0, magnet: 0, laserDmg: 0, coinGain: 0,
 }
 
 export const DEFAULT_SHIP_ID = "aurora"
@@ -81,6 +86,9 @@ const DEFAULTS: StarSave = {
   shipsOwned: [DEFAULT_SHIP_ID],
   equipment: defaultEquipment(),
   bankedAmmo: { ...DEFAULT_BANKED },
+  perfectionPoints: 0,
+  level: 1,
+  xp: 0,
 }
 
 export function loadStarSave(): StarSave {
@@ -157,6 +165,9 @@ export function loadStarSave(): StarSave {
         uavsEquipped: Array.isArray(eq.uavsEquipped) ? eq.uavsEquipped : [],
       },
       bankedAmmo: { ...DEFAULT_BANKED, ...(p.bankedAmmo ?? {}) },
+      perfectionPoints: p.perfectionPoints ?? 0,
+      level: p.level ?? 1,
+      xp: p.xp ?? 0,
     }
   } catch {
     return cloneDefaults()
@@ -169,10 +180,31 @@ function cloneDefaults(): StarSave {
     upgrades: { ...DEFAULT_UPGRADES },
     equipment: defaultEquipment(),
     bankedAmmo: { ...DEFAULT_BANKED },
+    perfectionPoints: 0,
+    level: 1,
+    xp: 0,
   }
 }
 
 export function writeStarSave(d: StarSave): void {
   if (typeof window === "undefined") return
   try { localStorage.setItem(KEY, JSON.stringify(d)) } catch {}
+}
+
+// ── Experiencia y niveles ──
+// XP necesaria para subir del nivel `level` al siguiente.
+export function xpForNextLevel(level: number): number {
+  return 100 + (level - 1) * 60
+}
+
+// Añade XP y gestiona subidas de nivel. Devuelve cuántos niveles se subieron.
+export function addXp(d: StarSave, amount: number): number {
+  d.xp += Math.max(0, Math.floor(amount))
+  let levelUps = 0
+  while (d.xp >= xpForNextLevel(d.level)) {
+    d.xp -= xpForNextLevel(d.level)
+    d.level += 1
+    levelUps += 1
+  }
+  return levelUps
 }

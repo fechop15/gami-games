@@ -8,13 +8,13 @@ import {
 import {
   laserDef, getLaserInstance, equippedLaserUids, equippedShieldIds, totalLaserMult,
   effShieldMaxHP, effShieldDur, shieldDef, upShieldCd, equippedLaserTier,
-  inventoryLaserTotal, spendLaserFromInventory, addLaserToInventory, ensureLoadouts,
+  addLaserToInventory, ensureLoadouts,
 } from "./items"
 import type { ShipDef } from "./ships"
 import { getShip } from "./ships"
 import { WORLDS } from "./worlds"
 import { SFX } from "./audio"
-import { loadStarSave, writeStarSave } from "./save"
+import { loadStarSave, writeStarSave, addXp } from "./save"
 import type { ShipUpgrades } from "./save"
 
 /* ── Helpers de mejoras de nave ── */
@@ -22,6 +22,10 @@ import type { ShipUpgrades } from "./save"
 export function comboMult(combo: number): number { return 1 + combo * 0.25 }
 
 export function upMaxHP(u: ShipUpgrades, ship: ShipDef): number { return Math.round((100 + u.hp * 20) * ship.hpMult) }
+// Bonus de monedas ganadas por la mejora permanente "Botín"
+export function upCoinMult(u: ShipUpgrades): number { return 1 + u.coinGain * 0.08 }
+// Bonus de daño láser por la mejora permanente "Potencia Láser"
+export function upLaserDmgMult(u: ShipUpgrades): number { return 1 + u.laserDmg * 0.06 }
 export function upFireMult(u: ShipUpgrades): number { return 1 - u.fireRate * 0.08 }
 export function upHasMagnet(u: ShipUpgrades, ship: ShipDef): boolean { return u.magnet >= 1 || ship.passive?.magnet === true }
 
@@ -160,7 +164,7 @@ function spawnPlayerBullets(gs: GS): Bullet[] {
   const x = gs.playerX, y = gs.playerY - PLAYER_H / 2 - 4
   const ammo = gs.activeAmmo
   // Daño proporcional a la cantidad de láseres equipados
-  const dmg = (base: number) => Math.round(base * totalLaserMult(gs))
+  const dmg = (base: number) => Math.round(base * totalLaserMult(gs) * upLaserDmgMult(gs.save.upgrades))
   const configs: Record<AmmoType, () => Bullet[]> = {
     basic: () => [{
       id: nextId(gs), x, y, vx: 0, vy: -540, damage: dmg(26),   // buff 22→26
@@ -293,7 +297,7 @@ function registerKill(gs: GS, e: Enemy) {
   if (gs.combo > gs.save.bestCombo) gs.save.bestCombo = gs.combo
   const gained = Math.round(e.points * comboMult(gs.combo))
   gs.score += gained
-  gs.runCoins += Math.max(1, Math.floor(gs.combo / 2))
+  gs.runCoins += Math.max(1, Math.floor(gs.combo / 2 * upCoinMult(gs.save.upgrades)))
   spawnFloater(gs, e.x, e.y - 8, `+${gained}`, gs.combo >= 4 ? "#ffdd44" : "#ffffff", gs.combo >= 4 ? 14 : 11)
   spawnParticles(gs, e.x, e.y, e.color, 18, 200)
   spawnShockwave(gs, e.x, e.y, e.w * 2, "#ffffff")
@@ -400,34 +404,19 @@ function updatePlayerFire(gs: GS, dt: number) {
     gs.fireTimer = effectiveFireRate(gs, gs.activeAmmo)
     const newBullets = spawnPlayerBullets(gs)
     if (gs.activeAmmo !== "basic") {
-      if (gs.activeAmmo === "laser") {
-        // Los láseres del inventario son la munición de láser: se gastan al disparar
-        const available = inventoryLaserTotal(gs.save.equipment)
-        if (available <= 0) {
-          gs.activeAmmo = "basic"
-          gs.fireTimer = effectiveFireRate(gs, "basic")
-          gs.flashMsg = "¡Sin láseres!"
-          gs.flashT = 1.5
-          return
-        }
-        spendLaserFromInventory(gs.save.equipment)
-        gs.ammo.laser = available - 1
-        writeStarSave(gs.save)
-      } else {
-        const current = gs.ammo[gs.activeAmmo]
-        if (current <= 0) {
-          gs.activeAmmo = "basic"
-          gs.fireTimer = effectiveFireRate(gs, "basic")
-          gs.flashMsg = "¡Sin " + AMMO_NAMES[gs.activeAmmo] + "!"
-          gs.flashT = 1.5
-          return
-        }
-        gs.ammo[gs.activeAmmo] = Math.max(0, current - 1)
-        if (gs.ammo[gs.activeAmmo] === 0) {
-          gs.flashMsg = "¡Sin munición especial!"
-          gs.flashT = 1.5
-          gs.activeAmmo = "basic"
-        }
+      const current = gs.ammo[gs.activeAmmo] ?? 0
+      if (current <= 0) {
+        gs.activeAmmo = "basic"
+        gs.fireTimer = effectiveFireRate(gs, "basic")
+        gs.flashMsg = "¡Sin " + AMMO_NAMES[gs.activeAmmo] + "!"
+        gs.flashT = 1.5
+        return
+      }
+      gs.ammo[gs.activeAmmo] = Math.max(0, current - 1)
+      if (gs.ammo[gs.activeAmmo] === 0) {
+        gs.flashMsg = "¡Sin munición especial!"
+        gs.flashT = 1.5
+        gs.activeAmmo = "basic"
       }
     }
     gs.bullets.push(...newBullets)
@@ -1010,7 +999,7 @@ function collectDrop(gs: GS, d: Drop) {
     if (!inst) return
     if (inst.perfection >= 100) {
       // Láser ya perfecto: el núcleo se convierte en monedas
-      gs.runCoins += 5
+      gs.runCoins += Math.round(5 * upCoinMult(gs.save.upgrades))
       gs.flashMsg = "Láser perfecto · +5 monedas"
       gs.flashT = 1.5
       spawnParticles(gs, d.x, d.y, "#ffcc44", 12, 130)
@@ -1056,14 +1045,16 @@ function collectDrop(gs: GS, d: Drop) {
   // Munición
   const ammo = d.kind as AmmoType
   if (ammo === "laser") {
-    // Los drops de láser añaden instancias al inventario (para disparar y fusionar)
-    const n = 3
-    for (let i = 0; i < n; i++) addLaserToInventory(gs.save.equipment, "laser_std")
-    gs.ammo.laser = inventoryLaserTotal(gs.save.equipment)
+    // Los drops de "láser" dan puntos de mejora (gastables en cualquier láser)
+    // y munición de láser para disparar (separada del inventario de piezas).
+    const pts = 10
+    gs.save.perfectionPoints = (gs.save.perfectionPoints ?? 0) + pts
+    gs.ammo.laser = (gs.ammo.laser ?? 0) + 10
+    gs.save.bankedAmmo = { ...gs.save.bankedAmmo, laser: gs.ammo.laser }
     writeStarSave(gs.save)
     spawnParticles(gs, d.x, d.y, AMMO_COLORS.laser, 10, 120)
-    gs.flashMsg = `+${n} LÁSER al inventario`
-    gs.flashT = 1.5
+    gs.flashMsg = `+${pts} puntos de mejora · +10 láser`
+    gs.flashT = 1.6
     SFX.pickup()
     return
   }
@@ -1130,7 +1121,7 @@ function damagePlayer(gs: GS, dmg: number, invSet: number, hitColor: string) {
 function onBossDefeated(gs: GS, b2: Boss) {
   b2.alive = false
   gs.score += 1000 + gs.worldId * 500
-  gs.runCoins += 50 + gs.worldId * 25
+  gs.runCoins += Math.round((50 + gs.worldId * 25) * upCoinMult(gs.save.upgrades))
   gs.screenShake = 14
   spawnShockwave(gs, b2.x, b2.y, 200, b2.accent)
   spawnParticles(gs, b2.x, b2.y, b2.accent, 60, 350)
@@ -1378,11 +1369,14 @@ function resetRunState(gs: GS) {
   gs.floaters = []; gs.shockwaves = []; gs.trail = []
 }
 
-// Banca las monedas de la corrida al save
+// Banca las monedas de la corrida al save y otorga XP por el rendimiento
 function bankCoins(gs: GS) {
   gs.lastRunCoins = gs.runCoins
   if (gs.runCoins > 0) {
     gs.save.coins += gs.runCoins
+    // XP por rendimiento: 1 XP por moneda ganada + bonus por mundo
+    const xpGain = gs.runCoins + gs.worldId * 15
+    addXp(gs.save, xpGain)
     gs.runCoins = 0
   }
   saveBankedAmmo(gs)   // la munición sobrante se guarda para futuras partidas
@@ -1391,16 +1385,13 @@ function bankCoins(gs: GS) {
 
 // Munición guardada: carga el stock bancado al inicio de la partida
 export function loadBankedAmmo(gs: GS) {
-  gs.ammo = { basic: -1, laser: inventoryLaserTotal(gs.save.equipment), spread: 0, missile: 0 }
   const banked = gs.save.bankedAmmo ?? {}
-  gs.ammo.spread = banked.spread ?? 0
-  gs.ammo.missile = banked.missile ?? 0
+  gs.ammo = { basic: -1, laser: banked.laser ?? 0, spread: banked.spread ?? 0, missile: banked.missile ?? 0 }
   gs.activeAmmo = "basic"
 }
 // Munición guardada: persiste el sobrante de la corrida al terminarla
 function saveBankedAmmo(gs: GS) {
-  // El láser persiste en el inventario (equipment.lasers), no en bankedAmmo
-  gs.save.bankedAmmo = { basic: -1, laser: inventoryLaserTotal(gs.save.equipment), spread: gs.ammo.spread, missile: gs.ammo.missile }
+  gs.save.bankedAmmo = { basic: -1, laser: gs.ammo.laser, spread: gs.ammo.spread, missile: gs.ammo.missile }
 }
 
 export function startEndless(gs: GS) {

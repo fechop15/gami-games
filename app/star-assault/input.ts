@@ -1,11 +1,11 @@
 import type { GS, EquipTab } from "./types"
 import {
-  H, MUTE_BTN, AMMO_NAMES, AMMO_BUY, PERFECT_BUY_STEP, perfectBuyCost,
-  FUSION_COUNT, fusionChance, REPAIR_BOT_PRICE,
+  H, MUTE_BTN, AMMO_NAMES, AMMO_BUY, PERFECT_BUY_STEP,
+  FUSION_COUNT, fusionChance, REPAIR_BOT_PRICE, PERFECT_POINT_COST,
 } from "./constants"
 import {
   LASER_DEFS, SHIELD_DEFS, laserDef, shieldDef, uavDef, getLaserInstance,
-  getLoadout, inventoryLaserTotal, addLaserToInventory,
+  getLoadout, addLaserToInventory,
 } from "./items"
 import { SHIP_DEFS, getShip } from "./ships"
 import { WORLDS } from "./worlds"
@@ -99,15 +99,15 @@ function execHangarAction(gs: GS, action: string) {
     if (!inst) return
     const pct = inst.perfection
     if (pct >= 100) return
-    const cost = perfectBuyCost(pct)
-    if (gs.save.coins >= cost) {
-      gs.save.coins -= cost
+    const pts = (gs.save.perfectionPoints ?? 0)
+    if (pts >= PERFECT_POINT_COST) {
+      gs.save.perfectionPoints = pts - PERFECT_POINT_COST
       inst.perfection = Math.min(100, pct + PERFECT_BUY_STEP)
       writeStarSave(gs.save)
       const np = inst.perfection
       gs.flashMsg = np >= 100 ? "★ ¡LÁSER PERFECTO! ★" : `Perfección +${PERFECT_BUY_STEP}%`
       gs.flashT = 1.6; SFX.pickup()
-    } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+    } else { gs.flashMsg = "Puntos de mejora insuficientes"; gs.flashT = 1; SFX.shieldOff() }
     return
   }
 }
@@ -175,7 +175,6 @@ function fuseItem(gs: GS, kind: "laser" | "shield", id: string) {
       gs.flashT = 1.6
       SFX.shieldBreak()
     }
-    gs.ammo.laser = inventoryLaserTotal(eq)
     writeStarSave(gs.save)
     return
   }
@@ -198,10 +197,10 @@ function fuseItem(gs: GS, kind: "laser" | "shield", id: string) {
   writeStarSave(gs.save)
 }
 
-/* ── DRAG & DROP del hangar ── */
+/* ── SELECCIÓN Y EQUIPADO del hangar (tap para seleccionar, tap en slot para colocar) ── */
 
-// Inicia el arrastre si el punto toca un item del inventario o un slot ocupado.
-// Devuelve true si se inició el drag (el tap NO debe disparar handleTap).
+// Al tocar un item del inventario o un slot ocupado lo SELECCIONA (queda resaltado).
+// El siguiente toque sobre un slot lo coloca. Devuelve true para no disparar handleTap.
 export function hangarDragStart(gs: GS, x: number, y: number): boolean {
   if (gs.phase !== "hangar" || gs.hangarTab !== "inventory" || gs.confirm) return false
   // Ítems del inventario primero
@@ -212,14 +211,14 @@ export function hangarDragStart(gs: GS, x: number, y: number): boolean {
       return true
     }
   }
-  // Slots de la nave (solo si tienen item)
+  // Slots de la nave (solo si tienen item): seleccionar el item equipado
   for (const a of gs.slotAreas) {
     if (x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) {
       const ship = getShip(gs.save)
       const lo = getLoadout(gs.save.equipment, ship.id)
       const arr = a.kind === "laser" ? lo.lasers : lo.shields
       const id = arr[a.index]
-      if (!id) return true  // slot vacío: traga el toque para no disparar botones
+      if (!id) return false  // slot vacío: dejar que handleTap lo maneje (colocar selección)
       gs.dragItem = { kind: a.kind, id }
       gs.dragX = x; gs.dragY = y
       return true
@@ -251,7 +250,8 @@ export function onHangarTile(gs: GS, x: number, y: number): boolean {
   return false
 }
 
-// Resuelve el drop: equipar en slot vacío, intercambiar/reemplazar, o desequipar fuera.
+// Resuelve el toque: si es un tap, mantiene el item seleccionado para colocarlo en un slot.
+// Si se arrastró hasta un slot, lo coloca ahí. Si se suelta fuera, lo deselecciona.
 export function hangarDragEnd(gs: GS, x: number, y: number): void {
   const drag = gs.dragItem
   if (!drag) return
@@ -261,14 +261,14 @@ export function hangarDragEnd(gs: GS, x: number, y: number): void {
   const slotArr = drag.kind === "laser" ? lo.lasers : lo.shields
   const equipped = drag.kind === "laser" ? lo.lasers.includes(drag.id) : lo.shields.includes(drag.id)
 
-  // Tap sin arrastre real (menos de 12px): no hacer nada para evitar desequipar por error
+  // Tap (movimiento pequeño): mantener seleccionado para colocar luego en un slot
   const dx = x - gs.dragX, dy = y - gs.dragY
-  if (Math.sqrt(dx * dx + dy * dy) < 12) {
-    gs.dragItem = null
+  if (Math.sqrt(dx * dx + dy * dy) < 14) {
+    gs.dragX = x; gs.dragY = y
     return
   }
 
-  // Slot objetivo bajo el dedo
+  // Arrastre real: buscar slot objetivo
   let targetSlot = -1
   for (const a of gs.slotAreas) {
     if (a.kind !== drag.kind) continue
@@ -276,7 +276,7 @@ export function hangarDragEnd(gs: GS, x: number, y: number): void {
   }
 
   if (targetSlot === -1) {
-    // Soltó fuera de los slots: si venía equipado, desequipar
+    // Soltó fuera de los slots: deseleccionar; si venía equipado, desequipar
     if (equipped) {
       for (let i = 0; i < slotArr.length; i++) if (slotArr[i] === drag.id) slotArr[i] = null
       writeStarSave(gs.save)
@@ -285,22 +285,46 @@ export function hangarDragEnd(gs: GS, x: number, y: number): void {
       gs.flashT = 1.2
       SFX.pickup()
     }
+    gs.dragItem = null
     return
   }
 
   const occupant = slotArr[targetSlot]
   if (equipped) {
-    // Viene de otro slot: se mueve (se quita de todos y se coloca en el objetivo)
     for (let i = 0; i < slotArr.length; i++) if (slotArr[i] === drag.id) slotArr[i] = null
   }
-  // Si el slot tenía otro item, ese vuelve al inventario (en ambos casos el item
-  // siempre vive en el inventario: los láseres por instancia y los escudos por Record).
   slotArr[targetSlot] = drag.id
   writeStarSave(gs.save)
   const nm = drag.kind === "laser" ? laserDef(getLaserInstance(eq, drag.id)?.type ?? "laser_std").name : shieldDef(drag.id).name
   gs.flashMsg = occupant && occupant !== drag.id ? `${nm} reemplazado` : `${nm} equipado`
   gs.flashT = 1.2
   SFX.pickup()
+  gs.dragItem = null
+}
+
+// Coloca el item seleccionado en un slot concreto (usado al tocar un slot con un item ya seleccionado)
+export function placeSelectedInSlot(gs: GS, kind: "laser" | "shield", index: number): boolean {
+  const drag = gs.dragItem
+  if (!drag || drag.kind !== kind) return false
+  const eq = gs.save.equipment
+  const ship = getShip(gs.save)
+  const lo = getLoadout(eq, ship.id)
+  const slotArr = kind === "laser" ? lo.lasers : lo.shields
+  const equipped = kind === "laser" ? lo.lasers.includes(drag.id) : lo.shields.includes(drag.id)
+  const occupant = slotArr[index]
+
+  if (equipped) {
+    // Quitar de todos los slots y colocar en el objetivo
+    for (let i = 0; i < slotArr.length; i++) if (slotArr[i] === drag.id) slotArr[i] = null
+  }
+  slotArr[index] = drag.id
+  writeStarSave(gs.save)
+  const nm = kind === "laser" ? laserDef(getLaserInstance(eq, drag.id)?.type ?? "laser_std").name : shieldDef(drag.id).name
+  gs.flashMsg = occupant && occupant !== drag.id ? `${nm} reemplazado` : `${nm} equipado`
+  gs.flashT = 1.2
+  SFX.pickup()
+  gs.dragItem = null
+  return true
 }
 
 // Ejecuta una acción de la tienda de equipamiento tras confirmarla el jugador
@@ -312,7 +336,6 @@ function execStoreAction(gs: GS, action: string) {
     if (gs.save.coins >= def.price) {
       gs.save.coins -= def.price
       addLaserToInventory(eq, id)
-      gs.ammo.laser = inventoryLaserTotal(eq)
       writeStarSave(gs.save)
       gs.flashMsg = `¡${def.name} comprado!`
       gs.flashT = 1.5; SFX.worldClear()
@@ -355,13 +378,8 @@ function execStoreAction(gs: GS, action: string) {
     if (!buy) return
     if (gs.save.coins >= buy.price) {
       gs.save.coins -= buy.price
-      if (ammo === "laser") {
-        addLaserToInventory(eq, "laser_std")
-        gs.ammo.laser = inventoryLaserTotal(eq)
-      } else {
-        gs.ammo[ammo] = (gs.ammo[ammo] ?? 0) + buy.amount
-        gs.save.bankedAmmo = { ...gs.save.bankedAmmo, [ammo]: gs.ammo[ammo] }
-      }
+      gs.ammo[ammo] = (gs.ammo[ammo] ?? 0) + buy.amount
+      gs.save.bankedAmmo = { ...gs.save.bankedAmmo, [ammo]: gs.ammo[ammo] }
       writeStarSave(gs.save)
       gs.flashMsg = `+${buy.amount} ${AMMO_NAMES[ammo]}!`
       gs.flashT = 1.5; SFX.worldClear()
@@ -534,15 +552,14 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
         if (!inst) return
         const pct = inst.perfection
         if (pct >= 100) return
-        const cost = perfectBuyCost(pct)
-        if (gs.save.coins >= cost) {
-          gs.save.coins -= cost
+        if ((gs.save.perfectionPoints ?? 0) >= PERFECT_POINT_COST) {
+          gs.save.perfectionPoints -= PERFECT_POINT_COST
           inst.perfection = Math.min(100, pct + PERFECT_BUY_STEP)
           writeStarSave(gs.save)
           const np = inst.perfection
           gs.flashMsg = np >= 100 ? "★ ¡LÁSER PERFECTO! ★" : `Perfección +${PERFECT_BUY_STEP}%`
           gs.flashT = 1.6; SFX.pickup()
-        } else { gs.flashMsg = "Monedas insuficientes"; gs.flashT = 1; SFX.shieldOff() }
+        } else { gs.flashMsg = "Puntos de mejora insuficientes"; gs.flashT = 1; SFX.shieldOff() }
         return
       }
       if (a.startsWith("shield:buy:")) {
@@ -641,6 +658,21 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
     }
 
     if (gs.hangarTab === "inventory") {
+      // Si hay un item seleccionado y se toca un slot, colocarlo ahí
+      if (gs.dragItem) {
+        for (const a of gs.slotAreas) {
+          if (x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) {
+            if (placeSelectedInSlot(gs, a.kind, a.index)) return
+          }
+        }
+        // Tocar un item del inventario con uno ya seleccionado: cancelar selección previa
+        for (const a of gs.itemAreas) {
+          if (x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) {
+            gs.dragItem = null
+            break
+          }
+        }
+      }
       // Inventario: equipar / quitar / mejorar con confirmación
       for (let i = gs.equipBtns.length - 1; i >= 0; i--) {
         const btn = gs.equipBtns[i]
@@ -670,10 +702,13 @@ export function handleTap(gs: GS, cx: number, cy: number, canvasRect: DOMRect, s
           if (!inst) return
           const pct = inst.perfection
           if (pct >= 100) return
-          const cost = perfectBuyCost(pct)
+          if ((gs.save.perfectionPoints ?? 0) < PERFECT_POINT_COST) {
+            gs.flashMsg = "Puntos de mejora insuficientes"; gs.flashT = 1; SFX.shieldOff()
+            return
+          }
           gs.confirm = {
             title: "MEJORAR LÁSER",
-            msg: `¿Mejorar ${laserDef(inst.type).name}?\nCosto: 🪙 ${cost} · +${PERFECT_BUY_STEP}%`,
+            msg: `¿Mejorar ${laserDef(inst.type).name}?\nCosto: ⚡ ${PERFECT_POINT_COST} pts · +${PERFECT_BUY_STEP}%`,
             action: a,
           }
           return
