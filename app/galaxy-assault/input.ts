@@ -1,19 +1,21 @@
 // Input: joystick en pad fijo + tap para elegir objetivo + botón disparo + barra de munición.
-import type { GS } from "./core/types"
+import type { GS, HudPanelId } from "./core/types"
 import {
-  W, H, JOY_RADIUS, JOY_PAD_X, JOY_PAD_Y, JOY_PAD_SIZE, MUTE_BTN, MINIMAP_BTN, FIRE_BTN,
-  AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, CONFIG, inRect,
+  W, H, JOY_RADIUS, JOY_PAD_X, JOY_PAD_Y, JOY_PAD_SIZE, MUTE_BTN, MINIMAP_BTN, FIRE_BTN, EDIT_BTN,
+  AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, PANEL_HEADER_H, PANEL_MIN_BTN_W, CONFIG, inRect,
 } from "./core/constants"
-import { startRun, saveProgress } from "./engine"
+import { startRun, saveProgress, saveHudLayout } from "./engine"
 import { enemyAtScreen, setTarget } from "./engine/combat"
 import { joystickInput } from "./engine/player"
+import { panelRect } from "./render/panels"
 import { AMMO_ORDER, weaponDef } from "./data/ammo"
 import { toggleMute, unlockAudio, sfx } from "../lib/sound"
 
 // ── Roles por dedo (multitouch) ──
-type Role = "joystick" | "fire" | "tap" | "none"
+type Role = "joystick" | "fire" | "tap" | "panel" | "none"
 const touchRole = new Map<number, Role>()
 const tapStart = new Map<number, { x: number; y: number }>()
+const dragPanel: { id: HudPanelId | null; offX: number; offY: number } = { id: null, offX: 0, offY: 0 }
 
 // Cuadro de munición presionado (para el globo de nombre en el HUD)
 let pressedAmmo = -1
@@ -77,6 +79,38 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   // Botón de minimapa
   if (inRect(MINIMAP_BTN, x, y)) { gs.minimapHidden = !gs.minimapHidden; sfx.click(); return }
 
+  // Botón de edición de paneles
+  if (inRect(EDIT_BTN, x, y)) {
+    gs.editMode = !gs.editMode
+    sfx.click()
+    if (!gs.editMode) saveHudLayout(gs)
+    gs.flashMsg = gs.editMode ? "✏️ Arrastra los paneles · ✓ para guardar" : "Paneles guardados"
+    gs.flashT = 1.6
+    return
+  }
+
+  // Modo edición: interactuar con paneles
+  if (gs.editMode) {
+    const panel = panelAt(gs, x, y)
+    if (panel) {
+      const pid = panel.id
+      if (panel.isMin) {
+        gs.hud[pid].minimized = !gs.hud[pid].minimized
+        sfx.click()
+      } else if (panel.isOrient) {
+        gs.hud[pid].orientation = gs.hud[pid].orientation === "vertical" ? "horizontal" : "vertical"
+        sfx.click()
+      } else {
+        // Cabecera o cuerpo: arrastrar el panel
+        touchRole.set(id, "panel")
+        dragPanel.id = pid
+        dragPanel.offX = x - gs.hud[pid].x
+        dragPanel.offY = y - gs.hud[pid].y
+      }
+      return
+    }
+  }
+
   // Barra rápida de munición (cuadros abajo-centro)
   const ammoIdx = ammoSquareAt(x, y)
   if (ammoIdx !== -1) {
@@ -126,6 +160,13 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
 
 export function onTouchMove(gs: GS, id: number, x: number, y: number): void {
   const role = touchRole.get(id)
+  if (role === "panel") {
+    if (dragPanel.id) {
+      gs.hud[dragPanel.id].x = Math.max(0, Math.min(W - 40, x - dragPanel.offX))
+      gs.hud[dragPanel.id].y = Math.max(0, Math.min(H - 30, y - dragPanel.offY))
+    }
+    return
+  }
   if (role !== "joystick") {
     // Si un tap se convierte en arrastre, se cancela (no seleccionar por error)
     if (role === "tap") {
@@ -158,6 +199,14 @@ export function onTouchEnd(gs: GS, id: number, x: number, y: number): void {
 
   // Soltar el dedo del cuadro de munición → ocultar el globo de nombre
   if (pressedAmmoTouchId === id) clearPressedAmmo()
+
+  if (role === "panel") {
+    if (dragPanel.id) {
+      saveHudLayout(gs)
+      dragPanel.id = null
+    }
+    return
+  }
 
   if (role === "fire") {
     gs.firing = false
@@ -224,6 +273,29 @@ function isUiDeadZone(x: number, y: number): boolean {
   if (x >= ammoStart && x <= ammoStart + AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
       && y >= AMMO_BAR_Y && y <= AMMO_BAR_Y + AMMO_SQUARE) return true
   return false
+}
+
+// Hit-test de los paneles del HUD (para mover/minimizar/orientar en modo edición)
+function panelAt(gs: GS, x: number, y: number): { id: HudPanelId; isMin: boolean; isOrient: boolean } | null {
+  const ids: HudPanelId[] = ["vitals", "stats", "events", "minimap"]
+  for (const id of ids) {
+    const r = id === "minimap" ? minimapRectFromHud(gs) : panelRect(id, gs)
+    // Cabecera del panel
+    const header = id === "minimap" ? { x: r.x, y: r.y - PANEL_HEADER_H - 2, w: r.w, h: PANEL_HEADER_H } : { x: r.x, y: r.y, w: r.w, h: PANEL_HEADER_H }
+    if (inRect(header, x, y)) {
+      const isMin = x >= header.x + header.w - PANEL_MIN_BTN_W - 14 && x <= header.x + header.w
+      const isOrient = id === "vitals" && x >= header.x + header.w - PANEL_MIN_BTN_W - 40 && x <= header.x + header.w - PANEL_MIN_BTN_W - 12
+      return { id, isMin, isOrient }
+    }
+    if (inRect({ x: r.x, y: r.y + (id === "minimap" ? 0 : PANEL_HEADER_H), w: r.w, h: 200 }, x, y)) {
+      return { id, isMin: false, isOrient: false }
+    }
+  }
+  return null
+}
+
+function minimapRectFromHud(gs: GS) {
+  return { x: gs.hud.minimap.x, y: gs.hud.minimap.y, w: CONFIG.minimap.size, h: CONFIG.minimap.size }
 }
 
 function ammoSquareAt(x: number, y: number): number {

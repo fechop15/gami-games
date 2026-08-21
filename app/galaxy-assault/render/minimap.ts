@@ -1,23 +1,19 @@
-// Minimapa: arriba-derecha, muestra mundo, base, jugador, enemigos, jefes y cajas.
+// Minimapa: panel movible del HUD, muestra mundo, base, jugador, enemigos, jefes y cajas.
 import type { GS } from "../core/types"
-import { CONFIG, CELL } from "../core/constants"
+import { CONFIG, CELL, PANEL_HEADER_H, PANEL_MIN_BTN_W } from "../core/constants"
 import { minimapData } from "../engine/crates"
 import { roundRectPath, font } from "../../lib/gameKit"
 
-export function minimapRect(): { x: number; y: number; w: number; h: number } {
+export function minimapRect(gs: GS): { x: number; y: number; w: number; h: number } {
   const size = CONFIG.minimap.size
-  return {
-    x: CONFIG.minimap.offsetX,
-    y: CONFIG.minimap.offsetY,
-    w: size,
-    h: size,
-  }
+  const p = gs.hud.minimap
+  return { x: p.x, y: p.y, w: size, h: size }
 }
 
 export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
   if (gs.minimapHidden) return
   const data = minimapData(gs)
-  const r = minimapRect()
+  const r = minimapRect(gs)
   const size = r.w
   const scale = size / data.worldPx
 
@@ -108,6 +104,34 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
   ctx.fillText(`x:${gx}  y:${gy}`, r.x + size / 2, r.y + size + 32)
   ctx.textAlign = "left"
   ctx.textBaseline = "alphabetic"
+
+  // Cabecera/edición del minimapa
+  if (gs.editMode) {
+    const hx = r.x
+    const hy = r.y - PANEL_HEADER_H - 2
+    ctx.fillStyle = "rgba(12,16,32,0.9)"
+    roundRectPath(ctx, hx, hy, size, PANEL_HEADER_H, 8)
+    ctx.fill()
+    ctx.strokeStyle = "rgba(0,229,255,0.5)"
+    ctx.lineWidth = 1.5
+    roundRectPath(ctx, hx, hy, size, PANEL_HEADER_H, 8)
+    ctx.stroke()
+    ctx.fillStyle = "#ffffff"
+    ctx.font = font(13, 800)
+    ctx.textAlign = "left"
+    ctx.textBaseline = "middle"
+    ctx.fillText("🗺 Mapa", hx + 8, hy + PANEL_HEADER_H / 2 + 1)
+    const bx = hx + size - PANEL_MIN_BTN_W - 4
+    ctx.fillStyle = "rgba(255,255,255,0.2)"
+    ctx.beginPath()
+    ctx.arc(bx + PANEL_MIN_BTN_W / 2, hy + PANEL_HEADER_H / 2, 10, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = "#ffffff"
+    ctx.font = font(12, 800)
+    ctx.fillText(gs.hud.minimap.minimized ? "▾" : "▴", bx + PANEL_MIN_BTN_W / 2, hy + PANEL_HEADER_H / 2 + 1)
+    ctx.textAlign = "left"
+    ctx.textBaseline = "alphabetic"
+  }
 }
 
 function dot(ctx: CanvasRenderingContext2D, x: number, y: number): void {

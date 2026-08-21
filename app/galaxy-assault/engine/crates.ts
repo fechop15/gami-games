@@ -5,6 +5,7 @@ import { rand, dist } from "../../lib/math"
 import { weaponDef, AMMO_ORDER } from "../data/ammo"
 import { applyDrop } from "../data/items"
 import { pushFloater, pushParticles } from "./combat"
+import { pushEvent } from "./index"
 import { sfx } from "../../lib/sound"
 
 export function updateCrates(gs: GS, dt: number): void {
@@ -42,6 +43,7 @@ export function updateCrates(gs: GS, dt: number): void {
       pushFloater(gs, c.x, c.y - 20, `+${w.crateAmount} ${w.name}`, w.color, 15)
       pushParticles(gs, c.x, c.y, w.color, 8)
       sfx.coin()
+      pushEvent(gs, `📦 Recogiste ${w.crateAmount} de ${w.name}`)
     }
   }
 }
@@ -81,10 +83,13 @@ export function updateDrops(gs: GS, dt: number): void {
       if (d.dropId === "repairBot") {
         pushFloater(gs, d.x, d.y - 18, "🤖 Robot reparación", "#33aaff", 14)
         sfx.powerup()
+        pushEvent(gs, "🤖 Recogiste un robot de reparación")
       } else {
         gs.save.coins += coins
-        pushFloater(gs, d.x, d.y - 18, `+${d.dropId === "core" ? "Núcleo" : d.dropId === "energy" ? "Energía" : "Chatarra"}`, d.dropId === "core" ? "#ffdd44" : "#88ddff", 13)
+        const names = { core: "Núcleo", energy: "Energía", scrap: "Chatarra" } as const
+        pushFloater(gs, d.x, d.y - 18, `+${names[d.dropId]}`, d.dropId === "core" ? "#ffdd44" : "#88ddff", 13)
         sfx.pop()
+        pushEvent(gs, `🔧 Recogiste ${names[d.dropId]}${coins > 0 ? ` (+${coins}🪙)` : ""}`)
       }
       gs.drops.splice(i, 1)
       continue

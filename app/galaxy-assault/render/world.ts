@@ -126,13 +126,34 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
     ctx.globalAlpha = 1
   }
 
-  // Escudo visual
+  // Escudo visual (procedural)
   if (p.shieldHp > 0) {
     const base = 0.45 + 0.15 * Math.sin(time * 3)
     const flashing = gs.shieldFlashT > 0
     const flashA = flashing ? Math.min(1, gs.shieldFlashT * 3.5) : 0
-    // Burbuja base
-    drawSprite(ctx, imgs, "shield", sx, sy, 96, 0, base)
+    // Burbuja base con gradiente radial
+    const R = 46
+    ctx.save()
+    ctx.globalAlpha = base
+    const g = ctx.createRadialGradient(sx - 8, sy - 8, 6, sx, sy, R)
+    g.addColorStop(0, "rgba(220,255,255,0.35)")
+    g.addColorStop(0.5, "rgba(80,180,255,0.22)")
+    g.addColorStop(1, "rgba(0,120,220,0.08)")
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.arc(sx, sy, R, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = "rgba(140,220,255,0.5)"
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(sx, sy, R, 0, Math.PI * 2)
+    ctx.stroke()
+    // Reflejo
+    ctx.fillStyle = "rgba(255,255,255,0.18)"
+    ctx.beginPath()
+    ctx.ellipse(sx - 14, sy - 18, 10, 6, -0.6, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
 
     // Efecto al recibir ataque: destello blanco/cian que crece y se apaga
     if (flashing) {
@@ -187,51 +208,6 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
     ctx.arc(sx, sy, 54, 0, Math.PI * 2)
     ctx.stroke()
     ctx.setLineDash([])
-  }
-
-  drawShipBars(ctx, gs, sx, sy)
-}
-
-// Barras de vida y escudo sobre la nave del jugador
-function drawShipBars(ctx: CanvasRenderingContext2D, gs: GS, sx: number, sy: number): void {
-  const p = gs.player
-  const w = 96
-  const hpBarY = sy - 46
-  // HP
-  const hpPct = Math.max(0, p.hp / p.maxHp)
-  ctx.fillStyle = "rgba(0,0,0,0.6)"
-  roundRectPath(ctx, sx - w / 2, hpBarY, w, 8, 4)
-  ctx.fill()
-  const g = ctx.createLinearGradient(sx - w / 2, 0, sx + w / 2, 0)
-  g.addColorStop(0, hpPct > 0.5 ? "#7CFF5A" : hpPct > 0.25 ? "#ffcc44" : "#ff5533")
-  g.addColorStop(1, hpPct > 0.5 ? "#22aa44" : hpPct > 0.25 ? "#aa7722" : "#aa2222")
-  ctx.fillStyle = g
-  roundRectPath(ctx, sx - w / 2 + 1, hpBarY + 1, Math.max(4, (w - 2) * hpPct), 6, 3)
-  ctx.fill()
-  ctx.fillStyle = "#ffffff"
-  ctx.font = "800 9px system-ui, sans-serif"
-  ctx.textAlign = "center"
-  ctx.textBaseline = "middle"
-  ctx.fillText(`❤ ${Math.ceil(p.hp)}/${p.maxHp}`, sx, hpBarY - 6)
-  ctx.textAlign = "left"
-  ctx.textBaseline = "alphabetic"
-
-  // Escudo
-  const shPct = p.shieldHp / p.shieldMaxHp
-  const shY = hpBarY + 12
-  ctx.fillStyle = "rgba(0,0,0,0.6)"
-  roundRectPath(ctx, sx - w / 2, shY, w, 6, 3)
-  ctx.fill()
-  if (p.shieldHp > 0) {
-    ctx.fillStyle = "#44aaff"
-    roundRectPath(ctx, sx - w / 2 + 1, shY + 1, Math.max(4, (w - 2) * shPct), 4, 2)
-    ctx.fill()
-  } else {
-    // Progreso hacia la regeneración: en zona segura ya repone; fuera, espera el idle
-    const idlePct = Math.min(1, (gs.time - gs.lastHitT) / REGEN_IDLE_TIME)
-    ctx.fillStyle = "rgba(68,170,255,0.35)"
-    roundRectPath(ctx, sx - w / 2 + 1, shY + 1, Math.max(4, (w - 2) * idlePct), 4, 2)
-    ctx.fill()
   }
 }
 

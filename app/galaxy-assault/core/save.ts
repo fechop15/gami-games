@@ -10,6 +10,7 @@ export interface GalaxySave {
   bossKills: Record<string, number>
   repairBots: number
   muted: boolean
+  hud: Record<string, { x: number; y: number; minimized: boolean; orientation: "vertical" | "horizontal" }>
 }
 
 const KEY = "galaxy-assault-save"
@@ -29,6 +30,7 @@ function defaults(): GalaxySave {
     bossKills: {},
     repairBots: 0,
     muted: false,
+    hud: {},
   }
 }
 
@@ -51,6 +53,7 @@ export function loadGalaxySave(): GalaxySave {
       bossKills: p.bossKills && typeof p.bossKills === "object" ? { ...(p.bossKills as Record<string, number>) } : {},
       repairBots: typeof p.repairBots === "number" ? p.repairBots : 0,
       muted: p.muted === true,
+      hud: p.hud && typeof p.hud === "object" ? { ...(p.hud as GalaxySave["hud"]) } : {},
     }
   } catch {
     return defaults()

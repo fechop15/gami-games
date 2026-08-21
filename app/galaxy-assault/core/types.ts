@@ -205,4 +205,8 @@ export interface GS {
   respawnT: number
   lastHitT: number
   shieldFlashT: number
+  hud: Record<HudPanelId, HudPanelState>
+  editMode: boolean
+  eventLog: string[]
+  dragPanel: HudPanelId | null
 }

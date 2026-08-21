@@ -1,10 +1,10 @@
 // Motor: estado inicial y update principal (orquesta todos los subsistemas).
-import type { GS, PlayerState } from "../core/types"
+import type { GS, PlayerState, HudPanelId, HudPanelState } from "../core/types"
 import {
   W, H, PLAYABLE_MIN, PLAYABLE_MAX, BASE_X, BASE_Y,
-  SHIELD_MAX_HP, SHIELD_COOLDOWN,
+  SHIELD_MAX_HP, SHIELD_COOLDOWN, PANEL_DEFAULT,
 } from "../core/constants"
-import { loadGalaxySave, writeGalaxySave } from "../core/save"
+import { loadGalaxySave, writeGalaxySave, type GalaxySave } from "../core/save"
 import { shipMaxHp } from "../data/ships"
 import { defaultAmmo } from "../data/ammo"
 import { currentMap, buildAsteroidBelt } from "../data/maps"
@@ -44,6 +44,7 @@ export function makeGS(): GS {
     fireTimer: 0,
   }
   const ammo = defaultAmmo()
+  const hud = defaultHud(save)
   return {
     phase: "loading",
     loadPct: 0,
@@ -82,7 +83,28 @@ export function makeGS(): GS {
     respawnT: 0,
     lastHitT: 0,
     shieldFlashT: 0,
+    hud,
+    editMode: false,
+    eventLog: [],
+    dragPanel: null,
   }
+}
+
+// Layout del HUD: defaults según la posición guardada (o posición por defecto)
+function defaultHud(save: { hud: Record<string, { x: number; y: number; minimized: boolean; orientation: "vertical" | "horizontal" }> }): Record<HudPanelId, HudPanelState> {
+  const out = {} as Record<HudPanelId, HudPanelState>
+  const ids: HudPanelId[] = ["vitals", "stats", "events", "minimap"]
+  for (const id of ids) {
+    const saved = save.hud[id]
+    const def = PANEL_DEFAULT[id]
+    out[id] = {
+      x: saved?.x ?? def.x,
+      y: saved?.y ?? def.y,
+      minimized: saved?.minimized ?? false,
+      orientation: saved?.orientation ?? "horizontal",
+    }
+  }
+  return out
 }
 
 export function startRun(gs: GS): void {
@@ -223,6 +245,23 @@ function updateEffects(gs: GS, dt: number): void {
 
 export function saveProgress(gs: GS): void {
   writeGalaxySave(gs.save)
+}
+
+// Guarda el layout del HUD en el save (posiciones/estado de paneles)
+export function saveHudLayout(gs: GS): void {
+  const hud: GalaxySave["hud"] = {}
+  for (const id of Object.keys(gs.hud) as HudPanelId[]) {
+    const p = gs.hud[id]
+    hud[id] = { x: p.x, y: p.y, minimized: p.minimized, orientation: p.orientation }
+  }
+  gs.save.hud = hud
+  saveProgress(gs)
+}
+
+// Registra un acontecimiento en el log (mantiene los últimos 5)
+export function pushEvent(gs: GS, msg: string): void {
+  gs.eventLog.push(msg)
+  if (gs.eventLog.length > 5) gs.eventLog.shift()
 }
 
 export { evasionChance, pushFloater, pushParticles }

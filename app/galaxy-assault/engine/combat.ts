@@ -10,6 +10,7 @@ import { weaponDef, weaponDamageForShip, defaultAmmo } from "../data/ammo"
 import { shipBaseDamage } from "../data/ships"
 import { angleTo, dist, clamp, chance, rand } from "../../lib/math"
 import { evasionChance } from "./player"
+import { pushEvent } from "./index"
 import { sfx } from "../../lib/sound"
 
 /** Devuelve el enemigo vivo más cercano a (sx, sy) en coordenadas de pantalla.
@@ -216,6 +217,7 @@ export function onEnemyKilled(gs: GS, e: Enemy): void {
   gs.save.kills++
   gs.shake = Math.max(gs.shake, e.kind === "boss" ? 14 : 6)
   sfx.explode()
+  pushEvent(gs, e.kind === "boss" ? `💀 ¡${CONFIG.bosses.find(b => b.id === e.type)?.name ?? "Jefe"} derrotado!` : `💥 Enemigo destruido (+${CONFIG.balance.coinsPerKill}🪙)`)
 
   // Monedas
   const coins = e.kind === "boss" ? CONFIG.balance.coinsPerBossKill : CONFIG.balance.coinsPerKill

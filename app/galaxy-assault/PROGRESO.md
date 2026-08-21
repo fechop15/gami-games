@@ -71,6 +71,16 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Efecto visual del escudo al recibir ataque (destello) y al regenerarse (anillo giratorio)
 - [x] Tope global de NPCs vivos en el mapa (`balance.maxNpcsOnMap` = 26) para no sobrepoblar
 
+## Fase 15 — HUD personalizable y log de eventos (v1.6)
+- [x] Paneles HUD movibles con botón ⚙ (modo edición): vida/escudo, estadísticas, acontecimientos y minimapa
+- [x] Cada panel se arrastra y su posición se guarda en localStorage
+- [x] Paneles minimizables (botón ▴/▾) y vida/escudo con orientación vertical/horizontal (⇅/⇄)
+- [x] Panel de estadísticas: monedas, bajas y jefes derrotados
+- [x] Log de últimos 5 acontecimientos (recogiste munición/drop, destruiste enemigo, etc.)
+- [x] Coordenadas del jugador (x:celda y:celda) abajo-centro del minimapa
+- [x] shield.svg retirado (escudo procedural en canvas)
+- [x] Barras de vida/escudo del jugador movidas del HUD al panel personalizable
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable

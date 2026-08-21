@@ -35,7 +35,26 @@ export function drawIntro(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): vo
   const p = gs.save
   const drift = Math.sin(gs.time * 2) * 0.12
   drawSprite(ctx, imgs, (SHIP_DEFS.find(s => s.id === p.shipId)?.sprite ?? "player") as SpriteKey, W / 2, H / 2 + 60, 90, dirToAngle(-Math.PI / 2 + drift))
-  drawSprite(ctx, imgs, "shield", W / 2, H / 2 + 60, 150, 0, 0.25 + Math.sin(gs.time * 2) * 0.08)
+  // Escudo decorativo procedural (intro)
+  const cx = W / 2
+  const cy = H / 2 + 60
+  const a = 0.25 + Math.sin(gs.time * 2) * 0.08
+  ctx.save()
+  ctx.globalAlpha = a
+  const g = ctx.createRadialGradient(cx - 12, cy - 12, 8, cx, cy, 75)
+  g.addColorStop(0, "rgba(220,255,255,0.35)")
+  g.addColorStop(0.5, "rgba(80,180,255,0.22)")
+  g.addColorStop(1, "rgba(0,120,220,0.08)")
+  ctx.fillStyle = g
+  ctx.beginPath()
+  ctx.arc(cx, cy, 75, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = "rgba(140,220,255,0.5)"
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, 75, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.restore()
 
   // Botones
   gs.btns = []

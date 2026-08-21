@@ -4,6 +4,7 @@ import { W, H } from "../core/constants"
 import { drawBackground, drawGrid, drawAsteroidBelt, drawBase, drawPlayer, drawEnemies, drawTargetReticle, drawBullets, drawCrates, drawDrops, drawBossLaser, drawEdgeArrows, drawEffects } from "./world"
 import { drawMinimap } from "./minimap"
 import { drawHUD } from "./hud"
+import { drawPanel } from "./panels"
 import { drawIntro, drawBaseMenu, drawDead } from "./screens"
 import { drawLoading } from "../../lib/gameKit"
 
@@ -54,7 +55,10 @@ export function drawScreen(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
 
   // HUD
   drawHUD(ctx, gs, imgs)
-  drawMinimap(ctx, gs)
+  if (!gs.hud.vitals.minimized || gs.editMode) drawPanel(ctx, gs, "vitals", imgs, time)
+  if (!gs.hud.stats.minimized || gs.editMode) drawPanel(ctx, gs, "stats", imgs, time)
+  if (!gs.hud.events.minimized || gs.editMode) drawPanel(ctx, gs, "events", imgs, time)
+  if (!gs.hud.minimap.minimized || gs.editMode) drawMinimap(ctx, gs)
 
   // Overlays
   if (gs.phase === "dead") {

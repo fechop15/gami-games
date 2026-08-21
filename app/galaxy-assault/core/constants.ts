@@ -162,6 +162,17 @@ export const JOY_PAD_SIZE = CONFIG.joystick.padSize
 export const MUTE_BTN: BtnRect = { x: W - 54, y: 8, w: 44, h: 44 }
 export const MINIMAP_BTN: BtnRect = { x: W - 54, y: 60, w: 44, h: 44 }
 export const FIRE_BTN: BtnRect = { x: W - 200, y: H - 170, w: 150, h: 150 }
+export const EDIT_BTN: BtnRect = { x: W - 54, y: 112, w: 44, h: 44 }
+
+// ── Paneles HUD personalizables ──
+export const PANEL_HEADER_H = 24
+export const PANEL_MIN_BTN_W = 22
+export const PANEL_DEFAULT: Record<string, { x: number; y: number }> = {
+  vitals: { x: 16, y: 150 },
+  stats: { x: 16, y: 16 },
+  events: { x: 16, y: 250 },
+  minimap: { x: 16, y: 16 },
+}
 
 // ── Barra rápida de munición (cuadros abajo-centro) ──
 export const AMMO_SQUARE = 62

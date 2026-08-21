@@ -22,7 +22,6 @@ export interface SpriteSet {
   drop_core: string
   repair_bot: string
   base: string
-  shield: string
   reticle: string
   asteroid: string
 }
@@ -48,7 +47,6 @@ export const SPRITE_SRC: SpriteSet = {
   drop_core: "/games/galaxy-assault/drop-core.svg",
   repair_bot: "/games/galaxy-assault/repair-bot.svg",
   base: "/games/galaxy-assault/base.svg",
-  shield: "/games/galaxy-assault/shield.svg",
   reticle: "/games/galaxy-assault/target-reticle.svg",
   asteroid: "/games/galaxy-assault/asteroid.svg",
 }

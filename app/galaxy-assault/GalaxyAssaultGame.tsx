@@ -10,7 +10,7 @@ import {
 import type { GS } from "./core/types"
 import { isMuted } from "../lib/sound"
 import { drawIconButton } from "../lib/gameKit"
-import { MUTE_BTN, MINIMAP_BTN } from "./core/constants"
+import { MUTE_BTN, MINIMAP_BTN, EDIT_BTN } from "./core/constants"
 
 // Escala interna de renderizado (1.5x) para nitidez en pantallas de alta densidad
 const RENDER_SCALE = 1.5
@@ -168,9 +168,10 @@ export default function GalaxyAssaultGame() {
   )
 }
 
-// Botones de la esquina superior derecha (mute + minimapa) siempre visibles
+// Botones de la esquina superior derecha (mute + minimapa + editar) siempre visibles
 function drawTopButtons(ctx: CanvasRenderingContext2D, gs: GS): void {
   drawIconButton(ctx, { x: MUTE_BTN.x, y: MUTE_BTN.y, w: MUTE_BTN.w, h: MUTE_BTN.h }, isMuted() ? "🔇" : "🔊")
   drawIconButton(ctx, { x: MINIMAP_BTN.x, y: MINIMAP_BTN.y, w: MINIMAP_BTN.w, h: MINIMAP_BTN.h }, gs.minimapHidden ? "🗺" : "🗺", gs.minimapHidden ? "#ffffff" : "#00e5ff")
+  drawIconButton(ctx, { x: EDIT_BTN.x, y: EDIT_BTN.y, w: EDIT_BTN.w, h: EDIT_BTN.h }, gs.editMode ? "✓" : "⚙", gs.editMode ? "#7CFF5A" : "#ffffff")
   if (gs.phase === "playing" && gs.inSafeZone) drawBaseButton(ctx, gs)
 }
