@@ -230,20 +230,31 @@ function drawControlsEdit(ctx: CanvasRenderingContext2D, gs: GS): void {
     ctx.fillText(it.title, it.x + 8, hy + PANEL_HEADER_H / 2 + 1)
     ctx.textAlign = "left"
     ctx.textBaseline = "alphabetic"
-    // Botón de orientación (solo munición)
+    // Botón de orientación (solo munición) — zona ampliada, centro en w-46
     if (it.id === "ammo") {
-      const bx = it.x + it.w - 26
+      const ocx = it.x + it.w - 46
       ctx.fillStyle = "rgba(255,255,255,0.2)"
       ctx.beginPath()
-      ctx.arc(bx + 10, hy + PANEL_HEADER_H / 2, 10, 0, Math.PI * 2)
+      ctx.arc(ocx, hy + PANEL_HEADER_H / 2, 14, 0, Math.PI * 2)
       ctx.fill()
       ctx.fillStyle = "#ffffff"
-      ctx.font = font(11, 800)
+      ctx.font = font(13, 800)
       ctx.textAlign = "center"
       ctx.textBaseline = "middle"
-      ctx.fillText(ammoVertical ? "⇅" : "⇄", bx + 10, hy + PANEL_HEADER_H / 2 + 1)
+      ctx.fillText(ammoVertical ? "⇅" : "⇄", ocx, hy + PANEL_HEADER_H / 2 + 1)
       ctx.textAlign = "left"
       ctx.textBaseline = "alphabetic"
+      // Botón minimizar
+      const minCx = it.x + it.w - 15
+      ctx.fillStyle = "rgba(255,255,255,0.2)"
+      ctx.beginPath()
+      ctx.arc(minCx, hy + PANEL_HEADER_H / 2, 14, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = "#ffffff"
+      ctx.font = font(13, 800)
+      ctx.textAlign = "center"
+      ctx.fillText(gs.hud.ammo.minimized ? "▾" : "▴", minCx, hy + PANEL_HEADER_H / 2 + 1)
+      ctx.textAlign = "left"
     }
     // Borde punteado del área
     ctx.strokeStyle = "rgba(0,229,255,0.9)"

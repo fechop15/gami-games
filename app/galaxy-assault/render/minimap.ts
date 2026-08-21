@@ -1,6 +1,6 @@
 // Minimapa: panel movible del HUD, muestra mundo, base, jugador, enemigos, jefes y cajas.
 import type { GS } from "../core/types"
-import { CONFIG, CELL, PANEL_HEADER_H, PANEL_MIN_BTN_W } from "../core/constants"
+import { CONFIG, CELL, PANEL_HEADER_H, PANEL_MIN_BTN_W, MINIMAP_VIEW_WORLD } from "../core/constants"
 import { minimapData } from "../engine/crates"
 import { roundRectPath, font } from "../../lib/gameKit"
 
@@ -15,7 +15,13 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
   const data = minimapData(gs)
   const r = minimapRect(gs)
   const size = r.w
-  const scale = size / data.worldPx
+
+  // Escala: mostramos solo MINIMAP_VIEW_WORLD px del mundo, centrado en el jugador
+  const scale = size / MINIMAP_VIEW_WORLD
+  const cx = r.x + size / 2
+  const cy = r.y + size / 2
+  const px = (wx: number) => cx + (wx - data.playerX) * scale
+  const py = (wy: number) => cy + (wy - data.playerY) * scale
 
   // Panel
   ctx.save()
@@ -30,21 +36,29 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
   roundRectPath(ctx, r.x, r.y, size, size, 10)
   ctx.stroke()
 
-  // Marco del mundo (línea del área jugable)
-  const border = CONFIG.map.border.belt * scale
-  ctx.strokeStyle = "rgba(255,255,255,0.25)"
-  ctx.strokeRect(r.x + border, r.y + border, size - border * 2, size - border * 2)
+  // Recuadro del mundo completo (solo su borde visible: indica dónde estás)
+  const worldS = data.worldPx * scale
+  const wx0 = cx + (0 - data.playerX) * scale
+  const wy0 = cy + (0 - data.playerY) * scale
+  ctx.save()
+  roundRectPath(ctx, r.x, r.y, size, size, 10)
+  ctx.clip()
+  ctx.strokeStyle = "rgba(255,255,255,0.4)"
+  ctx.lineWidth = 2
+  ctx.strokeRect(wx0, wy0, worldS, worldS)
+  ctx.restore()
 
-  // Cinturón de asteroides (puntos a lo largo del borde)
+  // Cinturón de asteroides (solo el del borde visible)
+  const border = CONFIG.map.border.belt * scale
   ctx.fillStyle = "rgba(180,170,150,0.5)"
   const step = 26
-  for (let x = border; x <= size - border; x += step) {
-    dot(ctx, r.x + x, r.y + border)
-    dot(ctx, r.x + x, r.y + size - border)
+  for (let x = border; x <= worldS - border; x += step) {
+    dot(ctx, wx0 + x, wy0 + border)
+    dot(ctx, wx0 + x, wy0 + worldS - border)
   }
-  for (let y = border; y <= size - border; y += step) {
-    dot(ctx, r.x + border, r.y + y)
-    dot(ctx, r.x + size - border, r.y + y)
+  for (let y = border; y <= worldS - border; y += step) {
+    dot(ctx, wx0 + border, wy0 + y)
+    dot(ctx, wx0 + worldS - border, wy0 + y)
   }
 
   // Cajas
@@ -52,7 +66,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
     for (const c of data.crates) {
       ctx.fillStyle = "#ffe44d"
       ctx.beginPath()
-      ctx.arc(r.x + c.x * scale, r.y + c.y * scale, 2.4, 0, Math.PI * 2)
+      ctx.arc(px(c.x), py(c.y), 2.4, 0, Math.PI * 2)
       ctx.fill()
     }
   }
@@ -61,20 +75,18 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
   for (const e of data.enemies) {
     ctx.fillStyle = e.boss ? "#ffdd44" : "#ff5533"
     ctx.beginPath()
-    ctx.arc(r.x + e.x * scale, r.y + e.y * scale, e.boss ? 4 : 2.2, 0, Math.PI * 2)
+    ctx.arc(px(e.x), py(e.y), e.boss ? 4 : 2.2, 0, Math.PI * 2)
     ctx.fill()
   }
 
   // Base
   ctx.fillStyle = "#7CFF5A"
-  roundRectPath(ctx, r.x + data.baseX * scale - 3.5, r.y + data.baseY * scale - 3.5, 7, 7, 2)
+  roundRectPath(ctx, px(data.baseX) - 3.5, py(data.baseY) - 3.5, 7, 7, 2)
   ctx.fill()
 
-  // Jugador (triángulo rotado)
-  const px = r.x + data.playerX * scale
-  const py = r.y + data.playerY * scale
+  // Jugador (triángulo rotado) — siempre al centro
   ctx.save()
-  ctx.translate(px, py)
+  ctx.translate(cx, cy)
   ctx.rotate(data.playerAngle)
   ctx.fillStyle = "#00e5ff"
   ctx.beginPath()

@@ -1,6 +1,6 @@
 // Paneles HUD personalizables: vida/escudo (vertical u horizontal), stats y eventos.
 import type { GS, HudPanelId } from "../core/types"
-import { W, H, PANEL_HEADER_H, PANEL_MIN_BTN_W, SHIELD_ABSORB } from "../core/constants"
+import { W, H, PANEL_HEADER_H, SHIELD_ABSORB } from "../core/constants"
 import { font, rgba, roundRectPath } from "../../lib/gameKit"
 import { xpForNextLevel } from "../core/save"
 
@@ -51,26 +51,28 @@ function drawHeader(ctx: CanvasRenderingContext2D, id: HudPanelId, r: PanelRect,
   ctx.textAlign = "left"
   ctx.textBaseline = "middle"
   ctx.fillText(title, h.x + 8, h.y + h.h / 2 + 1)
-  // Botones: minimizar / orientación (solo en modo edición)
+  // Botones: minimizar / orientación (solo en modo edición) — zonas ampliadas
   if (gs.editMode) {
     const p = gs.hud[id]
-    const bx = h.x + h.w - PANEL_MIN_BTN_W - 4
+    // Botón minimizar: esquina derecha (zona 30px)
+    const minCx = h.x + h.w - 15
     ctx.fillStyle = "rgba(255,255,255,0.2)"
     ctx.beginPath()
-    ctx.arc(bx + PANEL_MIN_BTN_W / 2, h.y + h.h / 2, 10, 0, Math.PI * 2)
+    ctx.arc(minCx, h.y + h.h / 2, 14, 0, Math.PI * 2)
     ctx.fill()
     ctx.fillStyle = "#ffffff"
-    ctx.font = font(12, 800)
-    ctx.fillText(p.minimized ? "▾" : "▴", bx + PANEL_MIN_BTN_W / 2, h.y + h.h / 2 + 1)
+    ctx.font = font(13, 800)
+    ctx.fillText(p.minimized ? "▾" : "▴", minCx, h.y + h.h / 2 + 1)
     if (id === "vitals" || id === "stats") {
-      const ox = bx - 26
+      // Botón orientación: a la izquierda del minimizar (zona 36px)
+      const ocx = h.x + h.w - 46
       ctx.fillStyle = "rgba(255,255,255,0.2)"
       ctx.beginPath()
-      ctx.arc(ox + 10, h.y + h.h / 2, 10, 0, Math.PI * 2)
+      ctx.arc(ocx, h.y + h.h / 2, 14, 0, Math.PI * 2)
       ctx.fill()
       ctx.fillStyle = "#ffffff"
-      ctx.font = font(11, 800)
-      ctx.fillText(p.orientation === "vertical" ? "⇅" : "⇄", ox + 10, h.y + h.h / 2 + 1)
+      ctx.font = font(13, 800)
+      ctx.fillText(p.orientation === "vertical" ? "⇅" : "⇄", ocx, h.y + h.h / 2 + 1)
     }
   }
   ctx.textAlign = "left"

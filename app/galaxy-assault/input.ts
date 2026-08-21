@@ -2,7 +2,7 @@
 import type { GS, HudPanelId } from "./core/types"
 import {
   W, H, JOY_RADIUS, JOY_PAD_SIZE, MUTE_BTN, MINIMAP_BTN, EDIT_BTN,
-  AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_TOTAL, PANEL_HEADER_H, PANEL_MIN_BTN_W, CONFIG, AMMO_SHOP, inRect,
+  AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_TOTAL, PANEL_HEADER_H, CONFIG, AMMO_SHOP, inRect,
 } from "./core/constants"
 import { startRun, saveProgress, saveHudLayout } from "./engine"
 import { enemyAtScreen, setTarget } from "./engine/combat"
@@ -307,14 +307,16 @@ function panelAt(gs: GS, x: number, y: number): { id: HudPanelId; isMin: boolean
       : id === "fire" ? { x: gs.hud.fire.x, y: gs.hud.fire.y, w: 150, h: 150 }
       : id === "ammo" ? { x: gs.hud.ammo.x, y: gs.hud.ammo.y, w: ammoVert ? AMMO_SQUARE : AMMO_TOTAL, h: ammoVert ? AMMO_TOTAL : AMMO_SQUARE }
       : panelRect(id, gs)
-    // Cabecera del panel
-    const header = id === "minimap" ? { x: r.x, y: r.y - PANEL_HEADER_H - 2, w: r.w, h: PANEL_HEADER_H } : { x: r.x, y: r.y, w: r.w, h: PANEL_HEADER_H }
+    // Cabecera del panel: minimap/joystick/fire/ammo la dibujan ARRIBA del panel
+    const headerAbove = id === "minimap" || id === "joystick" || id === "fire" || id === "ammo"
+    const header = headerAbove ? { x: r.x, y: r.y - PANEL_HEADER_H - 2, w: r.w, h: PANEL_HEADER_H } : { x: r.x, y: r.y, w: r.w, h: PANEL_HEADER_H }
     if (inRect(header, x, y)) {
-      const isMin = x >= header.x + header.w - PANEL_MIN_BTN_W - 14 && x <= header.x + header.w
-      const isOrient = (id === "vitals" || id === "stats" || id === "ammo") && x >= header.x + header.w - PANEL_MIN_BTN_W - 40 && x <= header.x + header.w - PANEL_MIN_BTN_W - 12
+      // Zonas de toque ampliadas para minimizar/orientar
+      const isMin = x >= header.x + header.w - 30 && x <= header.x + header.w
+      const isOrient = (id === "vitals" || id === "stats" || id === "ammo") && x >= header.x + header.w - 64 && x <= header.x + header.w - 28
       return { id, isMin, isOrient }
     }
-    if (inRect({ x: r.x, y: r.y + (id === "minimap" ? 0 : PANEL_HEADER_H), w: r.w, h: 200 }, x, y)) {
+    if (inRect({ x: r.x, y: r.y + (headerAbove ? 0 : PANEL_HEADER_H), w: r.w, h: 200 }, x, y)) {
       return { id, isMin: false, isOrient: false }
     }
   }

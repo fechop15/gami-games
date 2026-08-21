@@ -108,6 +108,12 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Barra de munición con orientación vertical/horizontal (botón ⇅/⇄ en modo edición)
 - [x] Hit-test y tooltip de munición adaptados a la orientación
 
+## Fase 20 — Minimapa con visión limitada, vida/escudo 1x2 y fix botón orientación (v2.1)
+- [x] Minimapa muestra solo una porción del mundo (MINIMAP_VIEW_WORLD=1800) centrada en el jugador, con recuadro del mundo completo visible para orientarse
+- [x] Panel vida/escudo en layout 1×2 (vida y escudo apilados)
+- [x] Fix botón de orientación de munición: el hit-test usaba la posición equivocada de la cabecera; ahora coincide con el dibujo
+- [x] Zonas de toque ampliadas para minimizar/orientar en los paneles (más fáciles de tocar)
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable
