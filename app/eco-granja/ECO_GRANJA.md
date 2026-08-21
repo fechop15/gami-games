@@ -3,7 +3,7 @@
 > Juego 015 del catálogo Gami Game
 > Ruta: `/eco-granja`
 > Tecnología: Canvas 2D puro (sin dependencias externas), Next.js App Router, TypeScript
-> Estado: **v1** (granja viva: siembra, cría, pesca, mercado, impuestos, empleados, clima y ecosistema dinámico)
+> Estado: **v2** — mundo abierto con personaje (v1 era grid con hoja de acciones)
 
 ---
 
@@ -12,166 +12,101 @@
 ```
 app/eco-granja/
 ├── page.tsx              ← Wrapper de Next.js (metadata + export)
-├── EcoGranjaGame.tsx     ← Componente React: canvas, game loop y eventos touch/mouse (~250 líneas)
-├── config.json           ← Balance y catálogos: cultivos, animales, peces, productos, clima, fauna, decoraciones, personal y extras
-├── types.ts              ← Tipos compartidos (Phase, GS, entidades, etc.)
-├── constants.ts          ← Constantes derivadas de config (dimensiones, costes, helpers de calidad/raza)
+├── EcoGranjaGame.tsx     ← Componente React: canvas, game loop y eventos touch/mouse
+├── config.json           ← Balance y catálogos: cultivos, animales, peces, productos, clima, fauna, personal y extras
+├── types.ts              ← Tipos compartidos (Phase, GS, PlayerState, Tool, etc.)
+├── constants.ts          ← Constantes y catálogo de herramientas/construcciones
 ├── save.ts               ← Persistencia en localStorage (granja, inventario, fama, personal, estadísticas)
-├── engine.ts             ← Lógica de juego: ciclo de día, cultivos, animales, estanques, impuestos, salarios, fauna, cría, pesca
-├── draw.ts               ← Render del mundo: cielo por clima, parcela, cultivos, animales, estanques y efectos de clima
-├── ui.ts                 ← HUD, nav inferior, hoja de parcela/cría, tienda, mercado, personal, ecosistema y modales
-├── input.ts              ← handleTap (touch + mouse) y acciones por prefijo de botón
+├── engine.ts             ← Lógica: movimiento del personaje, cámara, trabajo/acciones, ciclo de día, fauna, economía
+├── draw.ts               ← Mundo en mundo-abierto (cámara que sigue al personaje), personaje animado, construcciones, clima
+├── ui.ts                 ← HUD, barra de herramientas, selector de opciones, rail de menús y modales
+├── input.ts              ← handleTap: botones → mundo (mover / actuar con herramienta)
 └── ECO_GRANJA.md         ← Este documento
 ```
 
 ---
 
-## Arquitectura
+## Mundo abierto con personaje
 
-Misma filosofía que Star Assault: **módulos por responsabilidad** y un componente React delgado que monta un `<canvas>` de **480 × 854 px** (lógico) escalado con CSS, corre el game loop (`requestAnimationFrame`) y los event listeners.
+La granja es un **mundo con scroll y cámara que sigue al granjero**. Todo se hace caminando hasta el lugar:
 
-| Módulo | Responsabilidad |
+- **👆 Toca el suelo** → el granjero camina (y **corre** si el punto está lejos).
+- El personaje tiene animación de caminar/correr (piernas, brazos, sombrero de paja), giro según la dirección y **animación de trabajo** (golpe de azada, regadera, martillo, caña…) al llegar a la parcela.
+- Las **herramientas** de la barra inferior definen la actividad; al tocar una parcela válida el personaje camina, trabaja y el efecto se aplica con partículas y marcador en la parcela.
+
+### Herramientas
+
+| Herramienta | Acción |
 |---|---|
-| `config.json` | Catálogos y balance (todo ajustable sin tocar TS) |
-| `save.ts` | Persistencia y saneamiento de la partida (`localStorage`) |
-| `engine.ts` | `update`, `endOfDay` y todas las acciones del jugador |
-| `draw.ts` | Mundo (grid, cultivos, animales, estanques) + clima |
-| `ui.ts` | HUD, navegación, paneles y modales |
-| `input.ts` | `handleTap` → rutas de acción |
+| 👋 Mover | Camina/corre hasta el punto tocado |
+| 🪓 Arar | Convierte hierba 🌱 en tierra arada |
+| 🌱 Sembrar | Siembra la semilla elegida en el selector |
+| 💧 Regar | Riega un cultivo |
+| 🌾 Cosechar | Recoge un cultivo maduro |
+| 🎣 Pescar | Pesca (o siembra alevines) en un estanque |
+| 🐔 Criar | Compra animales en pastizales; sobre un animal abre su menú (alimentar/vender/criar) |
+| 🏗️ Construir | Construye vallas, estanques, pastizales y edificios del jardín |
 
-El estado vive en `useRef<GS>`. El canvas escala uniformemente, por lo que las conversiones touch usan un único factor.
+### El mundo
 
----
-
-## Fases (`Phase`)
-
-```
-"intro" ──► "farm" ──► (pestañas) "shop" | "market" | "staff" | "eco"
-```
-
-- **Intro**: tarjeta de onboarding con botón COMENZAR.
-- **Farm**: el hub. El área central muestra la cuadrícula de parcelas (desplazable) y la hoja inferior contextual por parcela.
-- **Shop**: desbloquea especies (fama) y compra decoraciones/extras/expansión.
-- **Market**: vende el inventario (con calidad) y "VENDER TODO".
-- **Staff**: contrata/despide empleados.
-- **Eco**: estado del clima, fauna (beneficios/perjuicios) y estadísticas.
-
-Nav inferior siempre visible en fases de juego para cambiar rápido.
+- Cuadrícula de **7 columnas × 7 filas** (expandible hasta 12 filas) de parcelas de **hierba** que hay que arar.
+- Tipos de parcela: `grass` (hierba), `soil` (arada), `pond` (estanque), `pasture` (pastizal) y `building` (construcción).
+- La cámara se centra en el personaje y se recorre automáticamente al caminar.
 
 ---
 
-## La cuadrícula
+## Construcciones (🏗️ Construir)
 
-- 5 columnas fijas; filas de 5 expandibles hasta **12** (`🚜 Expandir granja`, coste creciente).
-- Cada celda puede ser **tierra** (cultivo), **pastizal** (animal) o **estanque** (peces). Convertir una parcela cuesta monedas (cavar estanque `$60`, preparar pastizal `$80`); volver a tierra es gratis.
-- Scroll vertical de la granja cuando hay más filas de las visibles.
+Catálogo (se coloca en una parcela y el personaje la construye):
 
-### Cultivos
-| Especie | Fama | Crecimiento | Rendimiento | Venta |
-|---|---|---|---|---|
-| Trigo 🌾 | 0 | 2d | 3 | $8 |
-| Zanahoria 🥕 | 200 | 3d | 4 | $11 |
-| Maíz 🌽 | 600 | 4d | 4 | $16 |
-| Tomate 🍅 | 1500 | 5d | 5 | $22 |
-| Fresa 🍓 | 3500 | 6d | 6 | $32 |
-| Café ☕ | 8000 | 8d | 6 | $55 |
-| Trufa 🍄 | 18000 | 10d | 4 | $140 |
-
-- **Regar** 💧 (gratis) multiplica el crecimiento; la lluvia/tormenta riega todo.
-- **Calidad 1-5**: riego ≥70% de los días, abono ✨, abejas 🐝 y lluvia suben la calidad. Más calidad = más precio al vender (`+35%` por nivel).
-- **Clima adverso**: helada congela cultivos sin regar, la sequía los marchita, la tormenta los daña.
-
-### Animales (pastizal)
-| Especie | Fama | Compra | Producto | Cadencia | Comida/día |
-|---|---|---|---|---|---|
-| Gallina 🐔 | 0 | $60 | 🥚 Huevo | 2d | $5 |
-| Oveja 🐑 | 400 | $150 | 🧶 Lana | 4d | $8 |
-| Conejo 🐇 | 900 | $220 | 🧵 Piel | 3d | $6 |
-| Cabra 🐐 | 2000 | $300 | 🥛 Leche de cabra | 3d | $10 |
-| Vaca 🐄 | 6000 | $550 | 🥛 Leche | 3d | $15 |
-| Cerdo 🐖 | 12000 | $700 | 🥓 Carne | 5d | $12 |
-
-- Cada animal paga **comida** al cierre del día; sin dinero baja la felicidad y puede **escapar**.
-- **Felicidad** (0-100) acelera la producción.
-- **Cría 🐣**: con un segundo ejemplar de la misma especie en otro pastizal puedes intentar una **raza +1** (hasta raza 5). La raza multiplica el precio de los productos y el valor de venta del animal.
-
-### Estanque / pesca
-- Siembra **alevines** de una especie desbloqueada (`$15-$150`) y el stock se regenera (máx 5, +1/día).
-- **Minijuego de pesca**: barra con zona dorada; suelta en la zona para pesca ×2, en la barra pesca normal; con mal tiempo puedes fallar.
-- Especies: Sardina 🐟, Trucha 🐠, Salmón 🐟, Dorado 🐠.
-
----
-
-## Ciclo de día
-
-`DAY_LENGTH = 40s` reales (o botón **▶ Día+1**). Al cerrar el día:
-
-1. Clima (nuevo día, 45% de cambiar).
-2. Cultivos crecen (clima × riego × lombrices), cosecha automática del peón.
-3. Animales pagan comida, producen y ajustan felicidad (tormenta/lluvia).
-4. Estanques regeneran stock; el pescador pesca automático.
-5. **Salarios** del personal (si no alcanza, no trabajan ese día).
-6. **Impuestos** cada 7 días (base + parcelas + animales + personal; el contador reduce 20%). La deuda acumula **5% de interés diario**.
-7. **Ecosistema**: poblaciones de fauna evolucionan y sus eventos ocurren.
-8. Modal de resumen del día.
-
----
-
-## Ecosistema dinámico
-
-Poblaciones que crecen/declinan según tus decoraciones y estructura:
-
-| Fauna | Tipo | Efecto | Control |
-|---|---|---|---|
-| Abeja 🐝 | beneficio | +15% rendimiento cosechas | Colmena |
-| Mariquita 🐞 | beneficio | reduce plagas | Flores |
-| Lombriz 🪱 | beneficio | +10% crecimiento | Composta |
-| Zorro 🦊 | perjuicio | roba huevos / asusta gallinas | Cercas |
-| Jabalí 🐗 | perjuicio | destruye cultivos | Espantapájaros |
-| Plaga 🦗 | perjuicio | daña cultivos | Mariquitas o repelente |
-
-El panel **Ecosistema** muestra poblaciones, su origen y las estadísticas de la granja.
-
----
-
-## Decoraciones (Jardín)
-
-`espantapájaros 🧙`, `cerco 🚧`, `colmena 🐝`, `flores 🌻`, `composta 🪵`, `molino 🎡` (+10% ventas), `granero 🏠` (+40 almacén), `letrero 🪧`. Se compran en la tienda y aparecen en el banner "Jardín" sobre la granja.
-
----
-
-## Personal
-
-| Empleado | Salario/día | Efecto |
+| Construcción | Coste | Efecto |
 |---|---|---|
-| Peón 🧑‍🌾 | $15 | cosecha maduros |
-| Pescador 🎣 | $15 | pesca automática |
-| Cuidador 🧑‍🤝‍🧑 | $22 | alimenta y reduce comida 50% |
-| Contador 🧮 | $30 | −20% impuestos |
-
-Contratar cuesta **2 días de salario** (depósito).
-
----
-
-## Economía
-
-- **Monedas 🪙**: se ganan vendiendo en el Mercado (productos y animales).
-- **Fama ⭐**: aumenta con lo vendido y desbloquea especies premium en la tienda.
-- **Almacén 📦**: límite de items (base 60, +40 por granero). Lleno ⇒ producción detenida.
-- **Impuestos**: pagar en el aviso rojo del HUD o en el modal del día 7.
+| 🚧 Valla | $100 | Protege de zorros |
+| 🌊 Estanque | $60 | Permite pescar |
+| 🌿 Pastizal | $80 | Permite criar animales |
+| 🧙 Espantapájaros | $80 | Ahuyenta jabalíes |
+| 🐝 Colmena | $150 | Atrae abejas (+15% cosechas) |
+| 🌻 Flores | $120 | Atrae mariquitas y alegra animales |
+| 🪵 Composta | $140 | Atrae lombrices (+10% crecimiento) |
+| 🎡 Molino | $400 | +10% ventas |
+| 🏠 Granero | $600 | +40 almacén |
+| 🪧 Letrero | $50 | Decorativo |
 
 ---
 
-## Save / persistencia
+## Cultivos
 
-Clave `"eco-granja-save"`. Se guarda al cerrar el día y tras cada acción importante (comprar, vender, contratar…). El `load` sanea tiles e inventario y aplica defaults a campos nuevos (retrocompatible).
+7 especies (Trigo → Trufa) con calidad 1-5 (riego, abono, abejas y lluvia la suben). El clima riega, acelera o daña: lluvia/tormenta riegan todo, la helada congela sin regar, la sequía/calor marchita sin regar.
+
+## Animales y cría
+
+6 especies; cada una paga comida diaria, tiene felicidad (acelera la producción) y produce su producto. **Criar** dos ejemplares de la misma especie tiene probabilidad de dar una **raza +1** (hasta ✦5) que multiplica el precio de productos y el valor de venta.
+
+## Pesca
+
+Estanques con **alevines** que se regeneran; minijuego de barra con zona dorada (pesca ×2) afectado por el clima.
+
+---
+
+## Ciclo de día, impuestos, personal y ecosistema
+
+- **Día** = 40 s reales o botón **▶ Día+1**. Cada día: cultivos crecen, animales producen/comen, estanques regeneran, salarios, impuestos (cada 7 días, interés 4%/día), fauna y clima.
+- **Personal**: Peón (cosecha), Pescador (pesca), Cuidador (alimenta, −50% comida), Contador (−20% impuestos).
+- **Ecosistema**: abejas/mariquitas/lombrices (beneficios) y zorros/jabalíes/plagas (perjuicios) que aparecen según tus construcciones y estructura de la granja. Panel 🦊 con poblaciones y estadísticas.
+- **Mercado 💰**: vende el inventario (con calidad) y "VENDER TODO". La fama ⭐ desbloquea especies premium.
+
+---
+
+## Persistencia
+
+Clave `"eco-granja-save"`. Se guarda al cerrar el día y tras cada acción. `loadEcoSave` sanea tiles (tipo, construcción), inventario y aplica defaults a campos nuevos.
 
 ---
 
 ## Ideas para iteraciones futuras
 
-- [ ] Estaciones del año (primavera/verano/otoño/invierno) con catálogos rotativos.
-- [ ] Misiones de clientes (pedidos en el mercado con recompensa extra).
-- [ ] Huevos dorados / animales legendarios especiales.
+- [ ] Estaciones del año con catálogos rotativos.
+- [ ] Misiones de clientes en el mercado.
+- [ ] Animales legendarios y huevos dorados.
 - [ ] Mejoras de edificios (invernadero, granero nivel 2).
-- [ ] Eventos aleatorios raros (feria, inspección, premio de lotería).
+- [ ] Eventos raros (feria, inspección, premio de lotería).

@@ -1,9 +1,9 @@
 "use client"
 import { useEffect, useRef } from "react"
-import { makeGS, update, maxScroll, clampScroll } from "./engine"
+import { makeGS, update } from "./engine"
 import { drawScreen } from "./ui"
 import { handleTap } from "./input"
-import { W, H, FARM_TOP, FARM_BOTTOM, NAV_H } from "./constants"
+import { W, H, NAV_H } from "./constants"
 import type { GS } from "./types"
 
 export default function EcoGranjaGame() {
@@ -41,30 +41,20 @@ export default function EcoGranjaGame() {
       return { sx: W / rect.width, sy: H / rect.height, rect }
     }
 
-    // drag / tap
+    const isListPhase = (p: GS["phase"]) => p === "shop" || p === "market" || p === "staff" || p === "eco"
+
+    // drag de listas en menús
     let tapPending: { x: number; y: number } | null = null
     let tapStartX = 0, tapStartY = 0
     let dragStartY: number | null = null
     let dragBase = 0
-    let dragMode: "farm" | "list" | null = null
-
-    const isListPhase = (p: GS["phase"]) => p === "shop" || p === "market" || p === "staff" || p === "eco"
 
     const startDragIfNeeded = (gs: GS, tx: number, ty: number) => {
       dragStartY = ty
       tapPending = { x: tx, y: ty }
       tapStartX = tx; tapStartY = ty
-      dragMode = null
       if (gs.modal !== "none" || gs.fishing.active) return
-      if (gs.phase === "farm") {
-        if (gs.sheet === "none" && ty >= FARM_TOP - 6 && ty <= FARM_BOTTOM + 6) {
-          dragMode = "farm"
-          dragBase = gs.scroll
-        }
-        return
-      }
       if (isListPhase(gs.phase) && ty > 100 && ty < H - NAV_H) {
-        dragMode = "list"
         dragBase = gs.listScroll
       }
     }
@@ -87,10 +77,7 @@ export default function EcoGranjaGame() {
       const tx = (t.clientX - rect.left) * sx
       const ty = (t.clientY - rect.top) * sx
       if (Math.abs(tx - tapStartX) > 8 || Math.abs(ty - tapStartY) > 8) tapPending = null
-      if (dragMode === "farm") {
-        gs.scroll = clampScroll(gs)
-        gs.scroll = Math.max(0, Math.min(dragBase + (dragStartY - ty), maxScroll(gs)))
-      } else if (dragMode === "list") {
+      if (isListPhase(gs.phase)) {
         gs.listScroll = Math.max(0, Math.min(dragBase + (dragStartY - ty), 5000))
       }
     }
@@ -117,12 +104,10 @@ export default function EcoGranjaGame() {
     const onMouseMove = (e: MouseEvent) => {
       if (dragStartY === null) return
       const { sx, sy, rect } = getScale()
-      const mx = (e.clientX - rect.left) * sx
       const my = (e.clientY - rect.top) * sy
+      const mx = (e.clientX - rect.left) * sx
       if (Math.abs(mx - tapStartX) > 8 || Math.abs(my - tapStartY) > 8) tapPending = null
-      if (dragMode === "farm") {
-        gs.scroll = Math.max(0, Math.min(dragBase + (dragStartY - my), maxScroll(gs)))
-      } else if (dragMode === "list") {
+      if (isListPhase(gs.phase)) {
         gs.listScroll = Math.max(0, Math.min(dragBase + (dragStartY - my), 5000))
       }
     }

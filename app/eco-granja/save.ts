@@ -1,7 +1,9 @@
-export type TileKind = "soil" | "pond" | "pasture"
+export type TileKind = "grass" | "soil" | "pond" | "pasture"
 
 export interface TileState {
   kind: TileKind
+  // construcción colocada (decoración)
+  building?: string
   // cultivo
   cropId?: string
   cropProgress?: number   // 0..1
@@ -81,9 +83,9 @@ export function inventoryUsed(s: EcoSave): number {
 
 function defaultTiles(): TileState[][] {
   const rows: TileState[][] = []
-  for (let r = 0; r < 5; r++) {
+  for (let r = 0; r < 7; r++) {
     const row: TileState[] = []
-    for (let c = 0; c < 5; c++) row.push({ kind: "soil" })
+    for (let c = 0; c < 7; c++) row.push({ kind: "grass" })
     rows.push(row)
   }
   return rows
@@ -125,10 +127,11 @@ export function loadEcoSave(): EcoSave {
     const d = defaults()
     // tiles con saneamiento
     let tiles = d.tiles
-    if (Array.isArray(p.tiles) && p.tiles.length > 0 && Array.isArray(p.tiles[0])) {
+if (Array.isArray(p.tiles) && p.tiles.length > 0 && Array.isArray(p.tiles[0])) {
       tiles = (p.tiles as TileState[][]).map(row =>
         row.map(t => ({
-          kind: t && t.kind === "soil" || t && t.kind === "pond" || t && t.kind === "pasture" ? t.kind : "soil",
+          kind: t && (t.kind === "grass" || t.kind === "soil" || t.kind === "pond" || t.kind === "pasture") ? t.kind : "grass",
+          building: t.building,
           cropId: t.cropId,
           cropProgress: t.cropProgress,
           cropWater: t.cropWater,

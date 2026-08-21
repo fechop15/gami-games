@@ -1,13 +1,16 @@
 import { writeEcoSave, loadEcoSave, invKey, inventoryUsed, type TileState, type EcoSave } from "./save"
 import {
-  CONFIG, DAY_LENGTH, TAX_INTERVAL,
-  cropDef, animalDef, fishDef, productDef, staffDef, decorDef, weatherDef, extraDef,
+  CONFIG, DAY_LENGTH, TAX_INTERVAL, W, H,
+  cropDef, animalDef, fishDef, productDef, staffDef, weatherDef, extraDef, decorDef,
   rowCost, breedChance, breedCost, qualityMult, storageMax, animalQualityMax, cropQualityMax,
-  FARM_TOP, FARM_BOTTOM, CELL, CELL_GAP, COLS, GRID_MARGIN_X,
+  CELL, GAP, COLS, GRID_MARGIN, WORLD_TOP, VIEW_H,
+  TOOL_WORK, BUILDINGS, WALK_SPEED, RUN_SPEED, RUN_THRESHOLD,
+  tileWorldX, tileWorldY, tileCenterWorldX, tileCenterWorldY, worldW, worldH,
 } from "./constants"
-import type { GS } from "./types"
+import type { GS, Tool, PlayerState } from "./types"
 
 const ACCENT_TXT = "#7cff5a"
+const TILE_STRIDE = CELL + GAP
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,8 +73,7 @@ function addToInventory(gs: GS, productId: string, quality: number, qty: number)
     if (free > 0) {
       const key = invKey(productId, quality)
       gs.save.inventory[key] = (gs.save.inventory[key] ?? 0) + free
-      gs.flashMsg = "¡Almacén lleno!"
-      gs.flashT = 1.6
+      flash(gs, "¡Almacén lleno!")
     }
     return false
   }
@@ -90,12 +92,21 @@ function persist(gs: GS) {
   gs.savedAt = gs.time
 }
 
+export function flash(gs: GS, msg: string) {
+  gs.flashMsg = msg
+  gs.flashT = 1.6
+}
+
 // ---------------------------------------------------------------------------
 // GS factory
 // ---------------------------------------------------------------------------
 
 export function makeGS(): GS {
-  const save = loadEcoSave() as EcoSave
+  const save = loadEcoSave()
+  const rows = save.tiles.length
+  const cols = save.tiles[0]?.length ?? COLS
+  const spawnX = tileCenterWorldX(Math.min(3, cols - 1))
+  const spawnY = tileCenterWorldY(Math.min(3, rows - 1))
   return {
     phase: "intro",
     save,
@@ -103,19 +114,21 @@ export function makeGS(): GS {
     time: 0,
     dayTime: 0,
     isTouching: false,
-    scroll: 0,
-    dragStartY: null,
-    dragBase: 0,
-    listScroll: 0,
-    listDragBase: 0,
-    selTile: null,
+    camX: 0,
+    camY: 0,
+    player: makePlayer(spawnX, spawnY),
+    tool: "hand",
+    selOption: null,
+    pending: null,
+    menuTile: null,
+    breedTarget: null,
     sheet: "none",
     modal: "none",
     confirmAction: null,
     shopTab: "seeds",
-    breedTarget: null,
+    listScroll: 0,
+    listDragBase: 0,
     btns: [],
-    tabs: [],
     floaters: [],
     sparks: [],
     rain: [],
@@ -130,6 +143,10 @@ export function makeGS(): GS {
   }
 }
 
+function makePlayer(x: number, y: number): PlayerState {
+  return { x, y, tx: x, ty: y, moving: false, facing: 1, animT: 0, working: false, workT: 0, workTool: "hand" }
+}
+
 // ---------------------------------------------------------------------------
 // Update (por frame)
 // ---------------------------------------------------------------------------
@@ -138,8 +155,11 @@ export function update(gs: GS, dt: number) {
   gs.time += dt
   gs.dayTime += dt
 
-  // flash message
   if (gs.flashT > 0) gs.flashT -= dt
+
+  // personaje: movimiento y trabajo
+  updatePlayer(gs, dt)
+  updateCamera(gs, dt)
 
   // floaters
   for (let i = gs.floaters.length - 1; i >= 0; i--) {
@@ -163,14 +183,14 @@ export function update(gs: GS, dt: number) {
   if (gs.phase === "farm" || gs.phase === "intro") {
     if (w.id === "lluvia" || w.id === "tormenta") {
       if (gs.rain.length < 60 && chance(dt * 40)) {
-        gs.rain.push({ x: rand(0, 480), y: rand(-30, 0), len: rand(12, 22), spd: rand(600, 900) })
+        gs.rain.push({ x: rand(0, W), y: rand(-30, 0), len: rand(12, 22), spd: rand(600, 900) })
       }
     } else {
       gs.rain.length = 0
     }
     if (w.id === "helada") {
       if (gs.snow.length < 50 && chance(dt * 30)) {
-        gs.snow.push({ x: rand(0, 480), y: rand(-30, 0), r: rand(1.5, 3.5), spd: rand(30, 70), sway: rand(0, Math.PI * 2) })
+        gs.snow.push({ x: rand(0, W), y: rand(-30, 0), r: rand(1.5, 3.5), spd: rand(30, 70), sway: rand(0, Math.PI * 2) })
       }
     } else {
       gs.snow.length = 0
@@ -179,13 +199,13 @@ export function update(gs: GS, dt: number) {
       const d = gs.rain[i]
       d.y += d.spd * dt
       d.x += (w.id === "tormenta" ? 60 : 15) * dt
-      if (d.y > 900) gs.rain.splice(i, 1)
+      if (d.y > H + 20) gs.rain.splice(i, 1)
     }
     for (let i = gs.snow.length - 1; i >= 0; i--) {
       const s = gs.snow[i]
       s.y += s.spd * dt
       s.x += Math.sin(gs.time * 1.5 + s.sway) * 20 * dt
-      if (s.y > 900) gs.snow.splice(i, 1)
+      if (s.y > H + 20) gs.snow.splice(i, 1)
     }
   }
   if (gs.lightningT > 0) gs.lightningT -= dt
@@ -206,10 +226,173 @@ export function update(gs: GS, dt: number) {
   }
 
   // auto day advance
-  if (gs.phase === "farm" && gs.modal === "none" && !gs.fishing.active && gs.dayTime >= DAY_LENGTH) {
+  if (gs.phase === "farm" && gs.modal === "none" && !gs.fishing.active && !gs.player.working && gs.dayTime >= DAY_LENGTH) {
     gs.dayTime = 0
     endOfDay(gs)
   }
+}
+
+function updatePlayer(gs: GS, dt: number) {
+  const p = gs.player
+
+  if (p.working) {
+    p.animT += dt * 12
+    p.workT -= dt
+    if (p.workT <= 0) {
+      p.working = false
+      executePending(gs)
+    }
+    return
+  }
+
+  const dx = p.tx - p.x
+  const dy = p.ty - p.y
+  const dist = Math.hypot(dx, dy)
+  if (dist > 3) {
+    p.moving = true
+    const speed = dist > RUN_THRESHOLD ? RUN_SPEED : WALK_SPEED
+    const nx = dx / dist
+    const ny = dy / dist
+    p.x += nx * speed * dt
+    p.y += ny * speed * dt
+    if (nx !== 0) p.facing = nx > 0 ? 1 : -1
+    p.animT += dt * (speed / 60)
+    const ndx = p.tx - p.x
+    const ndy = p.ty - p.y
+    if (Math.hypot(ndx, ndy) <= 3) { p.x = p.tx; p.y = p.ty }
+  } else if (p.moving) {
+    p.moving = false
+    p.x = p.tx
+    p.y = p.ty
+  }
+
+  // si hay una acción pendiente y el personaje ya está en la parcela, empezar a trabajar
+  if (!p.working && gs.pending) {
+    const pd = gs.pending
+    const wx = tileCenterWorldX(pd.c)
+    const wy = tileCenterWorldY(pd.r)
+    if (Math.hypot(p.x - wx, p.y - wy) < 4) {
+      p.working = true
+      p.workT = TOOL_WORK[pd.tool]
+      p.workTool = pd.tool
+      p.animT = 0
+    }
+  }
+}
+
+function updateCamera(gs: GS, dt: number) {
+  const rows = gs.save.tiles.length
+  const maxX = Math.max(0, worldW() - W)
+  const maxY = Math.max(0, worldH(rows) - VIEW_H)
+  const targetX = Math.max(0, Math.min(gs.player.x - W / 2, maxX))
+  const targetY = Math.max(0, Math.min(gs.player.y - WORLD_TOP - VIEW_H / 2, maxY))
+  const k = Math.min(1, dt * 6)
+  gs.camX += (targetX - gs.camX) * k
+  gs.camY += (targetY - gs.camY) * k
+  gs.camX = Math.max(0, Math.min(gs.camX, maxX))
+  gs.camY = Math.max(0, Math.min(gs.camY, maxY))
+}
+
+// ---------------------------------------------------------------------------
+// Movimiento y acciones con herramientas
+// ---------------------------------------------------------------------------
+
+export function requestMove(gs: GS, wx: number, wy: number) {
+  const rows = gs.save.tiles.length
+  const cols = gs.save.tiles[0]?.length ?? COLS
+  const p = gs.player
+  p.tx = Math.max(GRID_MARGIN - 8, Math.min(wx, GRID_MARGIN + cols * TILE_STRIDE - CELL + 8))
+  p.ty = Math.max(GRID_MARGIN - 8, Math.min(wy, GRID_MARGIN + rows * TILE_STRIDE - CELL + 8))
+  gs.pending = null
+}
+
+export function requestAction(gs: GS, tool: Tool, wx: number, wy: number) {
+  const tile = tileAt(gs, wx, wy)
+  if (!tile) return
+  const t = gs.save.tiles[tile.r][tile.c]
+  const opt = gs.selOption
+
+  const valid = (() => {
+    switch (tool) {
+      case "hand": return true
+      case "plow": return t.kind === "grass" && !t.building
+      case "plant": return t.kind === "soil" && !t.cropId && !t.building && !!opt
+      case "water": return t.kind === "soil" && !!t.cropId && !t.wateredToday
+      case "harvest": return t.kind === "soil" && !!t.cropId && (t.cropProgress ?? 0) >= 1
+      case "fish": {
+        if (t.kind !== "pond") return false
+        if (t.pondFish && (t.pondStock ?? 0) > 0) return true
+        if (!t.pondFish && !!opt) return true
+        return false
+      }
+      case "criar": return t.kind === "pasture" && (!t.animalId ? !!opt : true)
+      case "build": return (t.kind === "grass" || t.kind === "soil") && !t.building && !t.cropId && !!opt
+    }
+  })()
+
+  if (!valid) {
+    if (tool === "plow") flash(gs, "Aquí no hay hierba que arar")
+    else if (tool === "plant") flash(gs, "Necesitas tierra arada y una semilla")
+    else if (tool === "water") flash(gs, "No hay cultivo para regar")
+    else if (tool === "harvest") flash(gs, "No hay cultivo listo")
+    else if (tool === "fish") flash(gs, !t.pondFish ? "Elige un pez para sembrar" : "Sin peces en el estanque")
+    else if (tool === "build") flash(gs, "No se puede construir aquí")
+    else if (tool === "criar") flash(gs, "Elige un pastizal")
+    return
+  }
+
+  // mover al centro de la parcela y encolar la acción
+  gs.pending = { r: tile.r, c: tile.c, tool, opt }
+  const p = gs.player
+  p.tx = tileCenterWorldX(tile.c)
+  p.ty = tileCenterWorldY(tile.r)
+}
+
+export function tileAt(gs: GS, wx: number, wy: number): { r: number; c: number } | null {
+  const rows = gs.save.tiles.length
+  for (let r = 0; r < rows; r++) {
+    const ty = tileWorldY(r)
+    if (wx >= tileWorldX(0) - 4 && wx <= tileWorldX(0) + COLS * TILE_STRIDE + 4 && wy >= ty && wy < ty + CELL) {
+      for (let c = 0; c < COLS; c++) {
+        const tx = tileWorldX(c)
+        if (wx >= tx && wx < tx + CELL) return { r, c }
+      }
+      return null
+    }
+  }
+  return null
+}
+
+function executePending(gs: GS) {
+  const p = gs.pending
+  if (!p) return
+  const t = gs.save.tiles[p.r]?.[p.c]
+  if (t) {
+    switch (p.tool) {
+      case "plow": plowTile(gs, p.r, p.c); break
+      case "plant": plantSeed(gs, p.r, p.c, p.opt ?? ""); break
+      case "water": waterTile(gs, p.r, p.c); break
+      case "harvest": harvestTile(gs, p.r, p.c); break
+      case "fish": {
+        if (t.pondFish && (t.pondStock ?? 0) > 0) startFishing(gs, p.r, p.c)
+        else if (!t.pondFish && p.opt) stockFish(gs, p.r, p.c, p.opt)
+        break
+      }
+      case "criar": {
+        if (t.animalId) {
+          gs.menuTile = { r: p.r, c: p.c }
+          gs.sheet = "animal"
+        } else if (p.opt) {
+          buyAnimalAt(gs, p.r, p.c, p.opt)
+        }
+        break
+      }
+      case "build": placeBuilding(gs, p.r, p.c, p.opt ?? ""); break
+      case "hand": break
+    }
+  }
+  gs.pending = null
+  gs.sheet = "none"
 }
 
 // ---------------------------------------------------------------------------
@@ -235,7 +418,6 @@ export function endOfDay(gs: GS) {
   s.day++
   s.repelenteT = Math.max(0, s.repelenteT - 1)
 
-  // lluvia / tormenta riega todos los cultivos
   const w = weatherDef(s.weather)
   if (w.id === "lluvia" || w.id === "tormenta") waterAll(gs)
 
@@ -250,7 +432,6 @@ export function endOfDay(gs: GS) {
     if (watered) t.cropWater = (t.cropWater ?? 0) + 1
     t.cropDays = (t.cropDays ?? 0) + 1
 
-    // eventos de clima
     if (w.id === "tormenta" && chance(0.12)) {
       t.cropProgress = Math.max(0, (t.cropProgress ?? 0) - 0.2)
       log(gs, `⛈️ La tormenta dañó un ${crop.name}`)
@@ -266,18 +447,16 @@ export function endOfDay(gs: GS) {
       return
     }
 
-    // crecimiento
     const base = 1 / crop.growDays
     const wateredMult = watered ? 1 : 0.55
     const wormMult = worms > 0 ? 1.1 : 1
     t.cropProgress = Math.min(1, (t.cropProgress ?? 0) + base * w.growth * wateredMult * wormMult)
   })
 
-  // peón cosecha automática
   if (s.ownedStaff.includes("peon")) {
-    eachTile(s, t => {
+    eachTile(s, (t, r, c) => {
       if (t.cropId && (t.cropProgress ?? 0) >= 1) {
-        harvestAt(gs, t, true)
+        harvestAt(gs, t, r, c, true)
         harvestedAny = true
       }
     })
@@ -296,14 +475,12 @@ export function endOfDay(gs: GS) {
     if (s.coins >= cost) {
       s.coins -= cost
       t.animalHappy = Math.min(100, (t.animalHappy ?? 70) + 5)
-      // producción
       const eff = a.produceDays / (0.55 + (t.animalHappy ?? 70) / 100 * 0.9)
       t.animalProg = (t.animalProg ?? 0) + 1 / eff
       if (t.animalProg >= 1) {
         t.animalProg = 0
         const q = t.animalQuality ?? 1
         if (addToInventory(gs, a.product, q, 1)) {
-          pushFloater(gs, 240, 200, `${a.productEmoji} +1`, "#ffffff")
           log(gs, `${a.emoji} produjo ${productDef(a.product)?.name ?? a.product}`)
         }
       }
@@ -319,17 +496,11 @@ export function endOfDay(gs: GS) {
   if (hasCuidador) log(gs, "🧑🤝🧑 El cuidador alimentó a los animales")
   else if (feedCostTotal > 0) log(gs, `Comida de animales: -$${feedCostTotal}`)
 
-  // tormenta asusta animales
   if (w.id === "tormenta") {
-    eachTile(s, t => {
-      if (t.animalId) t.animalHappy = Math.max(0, (t.animalHappy ?? 70) - 4)
-    })
+    eachTile(s, t => { if (t.animalId) t.animalHappy = Math.max(0, (t.animalHappy ?? 70) - 4) })
   }
-  // lluvia alegra
   if (w.id === "lluvia") {
-    eachTile(s, t => {
-      if (t.animalId) t.animalHappy = Math.min(100, (t.animalHappy ?? 70) + 3)
-    })
+    eachTile(s, t => { if (t.animalId) t.animalHappy = Math.min(100, (t.animalHappy ?? 70) + 3) })
   }
 
   // ---- estanques ----
@@ -341,7 +512,6 @@ export function endOfDay(gs: GS) {
     }
   })
 
-  // pescador automático
   if (s.ownedStaff.includes("pescador")) {
     eachTile(s, t => {
       if (t.kind === "pond" && t.pondFish && (t.pondStock ?? 0) > 0) {
@@ -388,10 +558,8 @@ export function endOfDay(gs: GS) {
   // ---- ecosistema ----
   updateWildlife(gs)
 
-  // clima cambia
   rollWeather(gs)
 
-  // reset de riego para el día siguiente
   eachTile(s, t => { t.wateredToday = false })
 
   persist(gs)
@@ -414,7 +582,7 @@ function clearAnimal(t: TileState) {
   t.animalProg = undefined
 }
 
-function harvestAt(gs: GS, t: TileState, silent: boolean): boolean {
+function harvestAt(gs: GS, t: TileState, r: number, c: number, silent: boolean): boolean {
   if (!t.cropId || (t.cropProgress ?? 0) < 1) return false
   const crop = cropDef(t.cropId)!
   const s = gs.save
@@ -430,8 +598,8 @@ function harvestAt(gs: GS, t: TileState, silent: boolean): boolean {
   if (addToInventory(gs, crop.id, q, crop.yield)) {
     s.stats.harvested += crop.yield
     if (!silent) {
-      pushFloater(gs, 240, 220, `${crop.emoji} +${crop.yield}`, ACCENT_TXT)
-      pushSparks(gs, 240, 220, "#ffd54a", 10)
+      pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), `${crop.emoji} +${crop.yield}`, ACCENT_TXT)
+      pushSparks(gs, tileCenterWorldX(c), tileCenterWorldY(r), "#ffd54a", 10)
     }
     log(gs, `🌾 Cosechaste ${crop.yield} ${crop.name}`)
     clearCrop(t)
@@ -455,7 +623,6 @@ function updateWildlife(gs: GS) {
   const cercos = s.decorations["cerco"] ?? 0
   const espantapajaros = s.decorations["espantapajaros"] ?? 0
 
-  // poblaciones → objetivos (requieren una masa mínima para aparecer)
   wl.abeja = drift(wl.abeja, colmenas * 2)
   wl.mariquita = drift(wl.mariquita, flores * 1.5)
   wl.lombriz = drift(wl.lombriz, compostas * 1.5)
@@ -463,7 +630,6 @@ function updateWildlife(gs: GS) {
   wl.jabali = drift(wl.jabali, crops >= 5 && espantapajaros === 0 ? Math.ceil(crops / 4) : 0)
   wl.plaga = drift(wl.plaga, crops >= 6 && wl.mariquita < 2 && s.repelenteT === 0 ? Math.ceil(crops / 5) : 0)
 
-  // eventos
   if (wl.zorro > 0 && hens > 0) {
     const eggKey = invKey("huevo", 1)
     if (s.inventory[eggKey] && s.inventory[eggKey] > 0 && chance(0.3)) {
@@ -499,37 +665,28 @@ function drift(cur: number, target: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// Acciones del jugador
+// Acciones del jugador (ejecutadas al llegar con la herramienta)
 // ---------------------------------------------------------------------------
 
 export function advanceDay(gs: GS) {
-  if (gs.phase !== "farm" || gs.modal !== "none" || gs.fishing.active) return
+  if (gs.phase !== "farm" || gs.modal !== "none" || gs.fishing.active || gs.player.working) return
   gs.dayTime = 0
   endOfDay(gs)
 }
 
-export function tapTile(gs: GS, r: number, c: number) {
-  if (gs.phase !== "farm" || gs.fishing.active || gs.modal !== "none") return
-  if (gs.sheet !== "none" && gs.selTile && gs.selTile.r === r && gs.selTile.c === c) {
-    closeSheet(gs)
-    return
-  }
-  gs.selTile = { r, c }
-  gs.sheet = "tile"
-  gs.scroll = clampScroll(gs)
+export function plowTile(gs: GS, r: number, c: number) {
+  const t = gs.save.tiles[r][c]
+  if (t.kind !== "grass" || t.building) return
+  t.kind = "soil"
+  pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), "🪓 arada", "#c9a06a", 13)
+  pushSparks(gs, tileCenterWorldX(c), tileCenterWorldY(r), "#8a5a2b", 8)
+  persist(gs)
 }
-
-export function closeSheet(gs: GS) {
-  gs.sheet = "none"
-  gs.breedTarget = null
-}
-
-// --- cultivos ---
 
 export function plantSeed(gs: GS, r: number, c: number, seedId: string) {
   const t = gs.save.tiles[r][c]
   const crop = cropDef(seedId)
-  if (!crop || t.kind !== "soil" || t.cropId) return
+  if (!crop || t.kind !== "soil" || t.cropId || t.building) return
   if (!gs.save.unlockedCrops.includes(seedId)) { flash(gs, "Desbloquea la semilla primero"); return }
   if (gs.save.coins < crop.buy) { flash(gs, "No tienes suficientes monedas"); return }
   gs.save.coins -= crop.buy
@@ -539,8 +696,7 @@ export function plantSeed(gs: GS, r: number, c: number, seedId: string) {
   t.cropDays = 0
   t.cropFert = false
   t.wateredToday = false
-  pushFloater(gs, tileCX(c), tileCY(r), `${crop.emoji} sembrado`, "#ffffff", 14)
-  closeSheet(gs)
+  pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), `${crop.emoji} sembrado`, "#ffffff", 13)
   persist(gs)
 }
 
@@ -548,8 +704,8 @@ export function waterTile(gs: GS, r: number, c: number) {
   const t = gs.save.tiles[r][c]
   if (t.kind !== "soil" || !t.cropId) return
   t.wateredToday = true
-  pushFloater(gs, tileCX(c), tileCY(r), "💧", "#7cc4ff", 16)
-  closeSheet(gs)
+  pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), "💧", "#7cc4ff", 15)
+  pushSparks(gs, tileCenterWorldX(c), tileCenterWorldY(r), "#7cc4ff", 6)
   persist(gs)
 }
 
@@ -559,66 +715,14 @@ export function fertilizeTile(gs: GS, r: number, c: number) {
   if (gs.save.abono <= 0) { flash(gs, "No tienes abono"); return }
   gs.save.abono--
   t.cropFert = true
-  pushFloater(gs, tileCX(c), tileCY(r), "💩 calidad +", "#b8ff7a", 14)
-  closeSheet(gs)
+  pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), "💩 calidad +", "#b8ff7a", 13)
   persist(gs)
 }
 
 export function harvestTile(gs: GS, r: number, c: number) {
   const t = gs.save.tiles[r][c]
-  if (harvestAt(gs, t, false)) {
-    closeSheet(gs)
-    persist(gs)
-  } else {
-    flash(gs, "Aún no está listo")
-  }
+  if (!harvestAt(gs, t, r, c, false)) flash(gs, "Aún no está listo")
 }
-
-export function uprootTile(gs: GS, r: number, c: number) {
-  const t = gs.save.tiles[r][c]
-  if (t.kind !== "soil" || !t.cropId) return
-  clearCrop(t)
-  pushFloater(gs, tileCX(c), tileCY(r), "cultivo arrancado", "#ff8a80", 13)
-  closeSheet(gs)
-  persist(gs)
-}
-
-export function digPond(gs: GS, r: number, c: number) {
-  const t = gs.save.tiles[r][c]
-  const cost = CONFIG.balance.pondDigCost
-  if (t.kind !== "soil" || t.cropId) return
-  if (gs.save.coins < cost) { flash(gs, "No tienes suficientes monedas"); return }
-  gs.save.coins -= cost
-  t.kind = "pond"
-  pushFloater(gs, tileCX(c), tileCY(r), "🌊 estanque", "#7cc4ff", 14)
-  closeSheet(gs)
-  persist(gs)
-}
-
-export function prepPasture(gs: GS, r: number, c: number) {
-  const t = gs.save.tiles[r][c]
-  const cost = CONFIG.balance.pasturePrepCost
-  if (t.kind !== "soil" || t.cropId) return
-  if (gs.save.coins < cost) { flash(gs, "No tienes suficientes monedas"); return }
-  gs.save.coins -= cost
-  t.kind = "pasture"
-  pushFloater(gs, tileCX(c), tileCY(r), "🌿 pastizal", "#7cff5a", 14)
-  closeSheet(gs)
-  persist(gs)
-}
-
-export function backToSoil(gs: GS, r: number, c: number) {
-  const t = gs.save.tiles[r][c]
-  if (t.kind === "soil" || t.cropId || t.animalId) return
-  t.kind = "soil"
-  t.pondFish = undefined
-  t.pondStock = undefined
-  pushFloater(gs, tileCX(c), tileCY(r), "🟫 tierra", "#c9a06a", 13)
-  closeSheet(gs)
-  persist(gs)
-}
-
-// --- animales ---
 
 export function buyAnimalAt(gs: GS, r: number, c: number, animalId: string) {
   const t = gs.save.tiles[r][c]
@@ -631,8 +735,23 @@ export function buyAnimalAt(gs: GS, r: number, c: number, animalId: string) {
   t.animalQuality = 1
   t.animalHappy = 70
   t.animalProg = 0
-  pushFloater(gs, tileCX(c), tileCY(r), `${a.emoji} +${a.name}`, "#ffffff", 14)
-  closeSheet(gs)
+  pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), `${a.emoji} +${a.name}`, "#ffffff", 14)
+  persist(gs)
+}
+
+export function placeBuilding(gs: GS, r: number, c: number, id: string) {
+  const t = gs.save.tiles[r][c]
+  const b = BUILDINGS.find(x => x.id === id)
+  if (!b || !t || t.building) return
+  if (t.kind !== "grass" && t.kind !== "soil") return
+  if (gs.save.coins < b.cost) { flash(gs, "No tienes suficientes monedas"); return }
+  gs.save.coins -= b.cost
+  if (id === "estanque") t.kind = "pond"
+  else if (id === "pastizal") t.kind = "pasture"
+  else gs.save.decorations[id] = (gs.save.decorations[id] ?? 0) + 1
+  t.building = id
+  pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), `${b.emoji} ${b.name}`, "#ffd54a", 14)
+  pushSparks(gs, tileCenterWorldX(c), tileCenterWorldY(r), "#ffd54a", 10)
   persist(gs)
 }
 
@@ -645,8 +764,8 @@ export function feedAnimal(gs: GS, r: number, c: number) {
   if (gs.save.coins < cost) { flash(gs, "No puedes pagar la comida"); return }
   gs.save.coins -= cost
   t.animalHappy = Math.min(100, (t.animalHappy ?? 70) + 12)
-  pushFloater(gs, tileCX(c), tileCY(r), "🍽️ +felicidad", "#ffd54a", 13)
-  closeSheet(gs)
+  pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), "🍽️ +felicidad", "#ffd54a", 13)
+  gs.sheet = "none"
   persist(gs)
 }
 
@@ -658,10 +777,11 @@ export function sellAnimal(gs: GS, r: number, c: number) {
   const price = Math.round(a.sell * qualityMult(q))
   gs.save.coins += price
   gs.save.stats.sold += 1
-  pushFloater(gs, tileCX(c), tileCY(r), `🪙 +$${price}`, "#ffd54a", 16)
-  pushSparks(gs, tileCX(c), tileCY(r), "#ffd54a", 8)
+  pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), `🪙 +$${price}`, "#ffd54a", 16)
+  pushSparks(gs, tileCenterWorldX(c), tileCenterWorldY(r), "#ffd54a", 8)
   clearAnimal(t)
-  closeSheet(gs)
+  gs.sheet = "none"
+  gs.menuTile = null
   persist(gs)
 }
 
@@ -681,7 +801,6 @@ export function doBreed(gs: GS, targetR: number, targetC: number, mateR: number,
   const cost = breedCost(bestQ)
   if (gs.save.coins < cost) { flash(gs, "No tienes suficientes monedas"); return }
 
-  // buscar pastizal vacío
   let freeR = -1, freeC = -1
   eachTile(gs.save, (t, r, c) => {
     if (freeR === -1 && t.kind === "pasture" && !t.animalId) { freeR = r; freeC = c }
@@ -697,13 +816,14 @@ export function doBreed(gs: GS, targetR: number, targetC: number, mateR: number,
     nt.animalHappy = 70
     nt.animalProg = 0
     gs.save.stats.bred++
-    pushFloater(gs, tileCX(freeC), tileCY(freeR), `${a.emoji} raza ${newQ}!`, "#ffd54a", 18)
-    pushSparks(gs, tileCX(freeC), tileCY(freeR), "#ffd54a", 14)
+    pushFloater(gs, tileCenterWorldX(freeC), tileCenterWorldY(freeR), `${a.emoji} raza ${newQ}!`, "#ffd54a", 18)
+    pushSparks(gs, tileCenterWorldX(freeC), tileCenterWorldY(freeR), "#ffd54a", 14)
     log(gs, `🐣 Nació un ${a.name} de raza ${newQ}`)
   } else {
-    pushFloater(gs, tileCX(mateC), tileCY(mateR), "no hubo cría", "#ff8a80", 13)
+    pushFloater(gs, tileCenterWorldX(mateC), tileCenterWorldY(mateR), "no hubo cría", "#ff8a80", 13)
   }
-  closeSheet(gs)
+  gs.sheet = "none"
+  gs.menuTile = null
   persist(gs)
 }
 
@@ -718,8 +838,7 @@ export function stockFish(gs: GS, r: number, c: number, fishId: string) {
   gs.save.coins -= f.fryCost
   t.pondFish = fishId
   t.pondStock = Math.max(t.pondStock ?? 0, 2)
-  pushFloater(gs, tileCX(c), tileCY(r), `${f.emoji} alevines`, "#7cc4ff", 14)
-  closeSheet(gs)
+  pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r), `${f.emoji} alevines`, "#7cc4ff", 14)
   persist(gs)
 }
 
@@ -736,14 +855,13 @@ export function startFishing(gs: GS, r: number, c: number) {
   gs.fishing.zoneW = CONFIG.balance.fishing.zoneW * w.fishMult
   const span = 1 - gs.fishing.zoneW
   gs.fishing.zone = rand(0, span) + gs.fishing.zoneW / 2
-  gs.sheet = "none"
 }
 
 export function resolveFishing(gs: GS) {
   if (!gs.fishing.active || gs.fishing.done) return
   gs.fishing.done = true
   const prog = Math.min(1, gs.fishing.t / gs.fishing.dur)
-  const marker = Math.abs(1 - prog * 2) // ping-pong
+  const marker = Math.abs(1 - prog * 2)
   const r = gs.fishing.pondR
   const c = gs.fishing.pondC
   const t = gs.save.tiles[r]?.[c]
@@ -763,9 +881,9 @@ export function resolveFishing(gs: GS) {
     t.pondStock = Math.max(0, (t.pondStock ?? 0) - catchN)
     if (addToInventory(gs, f.id, 1, catchN)) {
       gs.save.stats.caught += catchN
-      pushFloater(gs, tileCX(c), tileCY(r) - 20, `+${catchN} ${f.emoji}`, gs.fishing.result === "perfect" ? "#ffd54a" : "#ffffff", gs.fishing.result === "perfect" ? 19 : 15)
+      pushFloater(gs, tileCenterWorldX(c), tileCenterWorldY(r) - 20, `+${catchN} ${f.emoji}`, gs.fishing.result === "perfect" ? "#ffd54a" : "#ffffff", gs.fishing.result === "perfect" ? 19 : 15)
       if (gs.fishing.result === "perfect") {
-        pushSparks(gs, tileCX(c), tileCY(r), "#ffd54a", 12)
+        pushSparks(gs, tileCenterWorldX(c), tileCenterWorldY(r), "#ffd54a", 12)
         gs.flashMsg = "¡Pesca perfecta! ×2"
         gs.flashT = 1.4
       }
@@ -837,9 +955,8 @@ export function buyExpansion(gs: GS) {
   if (s.coins < cost) { flash(gs, "No tienes suficientes monedas"); return }
   s.coins -= cost
   const newRow: TileState[] = []
-  for (let c = 0; c < s.tiles[0].length; c++) newRow.push({ kind: "soil" })
+  for (let c = 0; c < s.tiles[0].length; c++) newRow.push({ kind: "grass" })
   s.tiles.push(newRow)
-  pushFloater(gs, 240, 300, `+1 fila de tierra`, "#7cff5a", 16)
   flash(gs, "¡Granja expandida!")
   persist(gs)
 }
@@ -867,8 +984,8 @@ export function sellProduct(gs: GS, productId: string) {
   s.stats.sold += qty
   s.stats.earned += finalTotal
   s.fame += finalTotal
-  pushFloater(gs, 240, 280, `🪙 +$${finalTotal}`, "#ffd54a", 18)
-  pushSparks(gs, 240, 280, "#ffd54a", 12)
+  pushFloater(gs, W / 2, 260, `🪙 +$${finalTotal}`, "#ffd54a", 18)
+  pushSparks(gs, W / 2, 260, "#ffd54a", 12)
   flash(gs, `Vendiste ${qty} por $${finalTotal}`)
   persist(gs)
 }
@@ -905,7 +1022,7 @@ export function hireStaff(gs: GS, id: string) {
   if (gs.save.coins < st.wage * 2) { flash(gs, "Necesitas 2 días de salario"); return }
   gs.save.coins -= st.wage * 2
   gs.save.ownedStaff.push(id)
-  flash(gs, `${st.name} contratad${st.id === "contador" ? "o" : "o"} ✔`)
+  flash(gs, `${st.name} contratado ✔`)
   persist(gs)
 }
 
@@ -923,7 +1040,6 @@ export function payTaxes(gs: GS) {
   if (s.coins < s.taxesOwed) { flash(gs, "No tienes suficiente para pagar"); return }
   s.coins -= s.taxesOwed
   s.taxesOwed = 0
-  pushFloater(gs, 240, 260, `🏛️ Impuestos pagados`, "#ffffff", 16)
   gs.modal = "none"
   flash(gs, "¡Deuda liquidada!")
   persist(gs)
@@ -931,59 +1047,23 @@ export function payTaxes(gs: GS) {
 
 export function resetFarm(gs: GS) {
   gs.save = loadEcoSave()
-  closeSheet(gs)
+  gs.sheet = "none"
+  gs.menuTile = null
   gs.modal = "none"
   gs.dayTime = 0
+  gs.pending = null
+  const rows = gs.save.tiles.length
+  const cols = gs.save.tiles[0]?.length ?? COLS
+  const px = tileCenterWorldX(Math.min(3, cols - 1))
+  const py = tileCenterWorldY(Math.min(3, rows - 1))
+  gs.player = makePlayer(px, py)
   persist(gs)
 }
 
-// ---------------------------------------------------------------------------
-// Utilidades de pantalla
-// ---------------------------------------------------------------------------
+// --- utilidades de pantalla ---
 
-export function maxScroll(gs: GS): number {
-  const rows = gs.save.tiles.length
-  const farmH = FARM_BOTTOM - FARM_TOP
-  const gridH = rows * (CELL + CELL_GAP) - CELL_GAP
-  return Math.max(0, gridH - farmH)
-}
-
-export function clampScroll(gs: GS): number {
-  return Math.max(0, Math.min(gs.scroll, maxScroll(gs)))
-}
-
-export function tileX(c: number): number {
-  return GRID_MARGIN_X + c * (CELL + CELL_GAP)
-}
-
-export function tileY(r: number, scroll: number): number {
-  return FARM_TOP + r * (CELL + CELL_GAP) - scroll
-}
-
-export function tileCX(c: number): number {
-  return tileX(c) + CELL / 2
-}
-
-export function tileCY(r: number, scroll = 0): number {
-  return tileY(r, scroll) + CELL / 2
-}
-
-export function tileAt(gs: GS, x: number, y: number): { r: number; c: number } | null {
-  if (x < tileX(0) - 6 || x > tileX(0) + COLS * (CELL + CELL_GAP) + 4) return null
-  for (let r = 0; r < gs.save.tiles.length; r++) {
-    const ty = tileY(r, gs.scroll)
-    if (y >= ty && y < ty + CELL) {
-      for (let c = 0; c < COLS; c++) {
-        const tx = tileX(c)
-        if (x >= tx && x < tx + CELL) return { r, c }
-      }
-      return null
-    }
-  }
-  return null
-}
-
-export function flash(gs: GS, msg: string) {
-  gs.flashMsg = msg
-  gs.flashT = 1.6
+export function closeSheet(gs: GS) {
+  gs.sheet = "none"
+  gs.menuTile = null
+  gs.breedTarget = null
 }
