@@ -364,24 +364,50 @@ export function drawBullets(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): 
     if (sx < -120 || sx > W + 120 || sy < -120 || sy > H + 120) continue
     if (b.fromPlayer) {
       if (b.kind === "laser") {
-        // Láser largo: haz alargado en la dirección del viaje
-        const wKey = b.weapon ? bulletSprite(b.weapon) : "laser_x1"
+        // Láser: línea brillante con glow en la dirección del viaje
         const ang = Math.atan2(b.vy, b.vx)
-        const len = b.radius * 16
-        const wid = b.radius * 5
+        const spd = Math.hypot(b.vx, b.vy)
+        const len = Math.max(b.radius * 14, b.radius * 2 + spd * 0.02)
+        const hx = Math.cos(ang) * len
+        const hy = Math.sin(ang) * len
+        const color = b.color
+
+        // Halo exterior
         ctx.save()
-        ctx.translate(sx, sy)
-        ctx.rotate(dirToAngle(ang))
-        ctx.drawImage(imgs[wKey], -len / 2, -wid / 2, len, wid)
-        // Núcleo brillante
-        ctx.globalAlpha = 0.9
-        ctx.fillStyle = b.color
-        ctx.shadowColor = b.color
-        ctx.shadowBlur = 10
+        ctx.strokeStyle = color
+        ctx.globalAlpha = 0.18
+        ctx.lineWidth = b.radius * 5
+        ctx.lineCap = "round"
         ctx.beginPath()
-        ctx.arc(0, 0, b.radius * 2.4, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.shadowBlur = 0
+        ctx.moveTo(sx - hx, sy - hy)
+        ctx.lineTo(sx + hx, sy + hy)
+        ctx.stroke()
+        ctx.restore()
+
+        // Cuerpo del haz
+        ctx.save()
+        ctx.strokeStyle = color
+        ctx.globalAlpha = 0.75
+        ctx.shadowColor = color
+        ctx.shadowBlur = 14
+        ctx.lineWidth = b.radius * 2.4
+        ctx.lineCap = "round"
+        ctx.beginPath()
+        ctx.moveTo(sx - hx, sy - hy)
+        ctx.lineTo(sx + hx, sy + hy)
+        ctx.stroke()
+        ctx.restore()
+
+        // Núcleo blanco (centro de la línea)
+        ctx.save()
+        ctx.strokeStyle = "#ffffff"
+        ctx.globalAlpha = 0.95
+        ctx.lineWidth = b.radius * 1.1
+        ctx.lineCap = "round"
+        ctx.beginPath()
+        ctx.moveTo(sx - hx * 0.6, sy - hy * 0.6)
+        ctx.lineTo(sx + hx, sy + hy)
+        ctx.stroke()
         ctx.restore()
       } else {
         const wKey = b.weapon ? bulletSprite(b.weapon) : "missile_a"
