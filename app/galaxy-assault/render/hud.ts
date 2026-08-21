@@ -1,8 +1,8 @@
-// HUD: barra rápida de munición (cuadros abajo-centro), botón de disparo, reparar y joystick.
+// HUD: barra rápida de munición (cuadros abajo-centro), botón de disparo y joystick.
 import type { GS } from "../core/types"
-import { W, H, FIRE_BTN, REPAIR_BTN, AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y } from "../core/constants"
+import { W, H, FIRE_BTN, AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, JOY_PAD_X, JOY_PAD_Y, JOY_PAD_SIZE, JOY_RADIUS } from "../core/constants"
 import { weaponDef, AMMO_ORDER } from "../data/ammo"
-import { font, rgba, roundRectPath, drawButton } from "../../lib/gameKit"
+import { font, rgba, roundRectPath } from "../../lib/gameKit"
 import { drawSprite, type SpriteKey } from "../core/sprites"
 import { getPressedAmmo } from "../input"
 
@@ -11,7 +11,6 @@ type Imgs = Record<string, HTMLImageElement>
 export function drawHUD(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {
   drawAmmoBar(ctx, gs, imgs)
   drawFireButton(ctx, gs)
-  drawRepairButton(ctx, gs, imgs)
   drawJoystick(ctx, gs)
   drawFlash(ctx, gs)
 }
@@ -140,26 +139,45 @@ function drawFireButton(ctx: CanvasRenderingContext2D, gs: GS): void {
   ctx.textBaseline = "alphabetic"
 }
 
-function drawRepairButton(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {
-  const b = REPAIR_BTN
-  const has = gs.save.repairBots > 0
-  drawButton(ctx, b.x + b.w / 2, b.y + b.h / 2, b.w, b.h, `🤖 REPARAR ×${gs.save.repairBots}`, { color: has ? "#33aaff" : "#445566", fontSize: 15 })
-  drawSprite(ctx, imgs, "repair_bot", b.x + b.w + 24, b.y + b.h / 2, 30)
-}
-
 function drawJoystick(ctx: CanvasRenderingContext2D, gs: GS): void {
+  // Pad fijo del joystick (área izquierda donde se puede reposicionar)
+  const padCx = JOY_PAD_X + JOY_PAD_SIZE / 2
+  const padCy = JOY_PAD_Y + JOY_PAD_SIZE / 2
+  ctx.strokeStyle = "rgba(0,229,255,0.16)"
+  ctx.lineWidth = 2
+  ctx.setLineDash([6, 10])
+  ctx.beginPath()
+  ctx.arc(padCx, padCy, JOY_PAD_SIZE / 2, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.fillStyle = "rgba(0,229,255,0.05)"
+  ctx.beginPath()
+  ctx.arc(padCx, padCy, JOY_PAD_SIZE / 2, 0, Math.PI * 2)
+  ctx.fill()
+
   if (!gs.joystick.active) return
   const { baseX, baseY, dx, dy } = gs.joystick
-  const R = 56
-  ctx.strokeStyle = "rgba(255,255,255,0.25)"
-  ctx.lineWidth = 2
+  const R = JOY_RADIUS
+  // Base del joystick en su posición actual (reposicionable dentro del pad)
+  ctx.strokeStyle = "rgba(255,255,255,0.45)"
+  ctx.lineWidth = 3
   ctx.beginPath()
   ctx.arc(baseX, baseY, R, 0, Math.PI * 2)
   ctx.stroke()
-  ctx.fillStyle = "rgba(255,255,255,0.1)"
+  ctx.fillStyle = "rgba(0,229,255,0.14)"
   ctx.beginPath()
-  ctx.arc(baseX + dx * R, baseY + dy * R, 24, 0, Math.PI * 2)
+  ctx.arc(baseX, baseY, R, 0, Math.PI * 2)
   ctx.fill()
+  // Thumb
+  ctx.fillStyle = "rgba(0,229,255,0.55)"
+  ctx.beginPath()
+  ctx.arc(baseX + dx * R, baseY + dy * R, 30, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = "rgba(0,229,255,0.8)"
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(baseX + dx * R, baseY + dy * R, 30, 0, Math.PI * 2)
+  ctx.stroke()
 }
 
 function drawFlash(ctx: CanvasRenderingContext2D, gs: GS): void {

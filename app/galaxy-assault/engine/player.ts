@@ -38,18 +38,24 @@ export function updatePlayer(gs: GS, dt: number): void {
   let nx = p.x + p.vx * dt
   let ny = p.y + p.vy * dt
 
-  // Colisión con asteroides (empuje: sale del círculo por el camino más corto)
-  for (const a of gs.asteroids) {
-    if (!collideShipAsteroid(p.x, p.y, a)) continue
-    const dx = p.x - a.x
-    const dy = p.y - a.y
-    const d = Math.hypot(dx, dy) || 1
-    const pushDist = PLAYER_RADIUS + a.radius - d
-    nx = p.x + (dx / d) * pushDist
-    ny = p.y + (dy / d) * pushDist
-  }
+  // Límites del área jugable primero
+  nx = clamp(nx, PLAYABLE_MIN, PLAYABLE_MAX)
+  ny = clamp(ny, PLAYABLE_MIN, PLAYABLE_MAX)
 
-  // Límites del área jugable
+  // Colisión con asteroides (empuje iterativo contra la posición actual para
+  // deslizar por el borde en lugar de quedar atrapado entre el anillo y el límite)
+  for (let pass = 0; pass < 2; pass++) {
+    for (const a of gs.asteroids) {
+      if (!collideShipAsteroid(nx, ny, a)) continue
+      const dx = nx - a.x
+      const dy = ny - a.y
+      const d = Math.hypot(dx, dy) || 1
+      const pushDist = PLAYER_RADIUS + a.radius - d
+      nx += (dx / d) * pushDist
+      ny += (dy / d) * pushDist
+    }
+  }
+  // Re-clamp tras el empuje para que nunca quede fuera del mapa ni atrapado
   p.x = clamp(nx, PLAYABLE_MIN, PLAYABLE_MAX)
   p.y = clamp(ny, PLAYABLE_MIN, PLAYABLE_MAX)
 

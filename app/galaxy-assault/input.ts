@@ -1,11 +1,11 @@
-// Input: joystick floating + tap para elegir objetivo + botón disparo + barra de munición.
+// Input: joystick en pad fijo + tap para elegir objetivo + botón disparo + barra de munición.
 import type { GS } from "./core/types"
 import {
-  W, H, JOY_RADIUS, JOY_ZONE_X, MUTE_BTN, MINIMAP_BTN, FIRE_BTN, REPAIR_BTN,
+  W, H, JOY_RADIUS, JOY_PAD_X, JOY_PAD_Y, JOY_PAD_SIZE, MUTE_BTN, MINIMAP_BTN, FIRE_BTN,
   AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, CONFIG, inRect,
 } from "./core/constants"
 import { startRun, saveProgress } from "./engine"
-import { repairShip, enemyAtScreen, setTarget } from "./engine/combat"
+import { enemyAtScreen, setTarget } from "./engine/combat"
 import { joystickInput } from "./engine/player"
 import { AMMO_ORDER, weaponDef } from "./data/ammo"
 import { toggleMute, unlockAudio, sfx } from "../lib/sound"
@@ -26,6 +26,16 @@ export function getPressedAmmo(): number {
 function clearPressedAmmo(): void {
   pressedAmmo = -1
   pressedAmmoTouchId = null
+}
+
+/** Rectángulo del pad del joystick (zona fija izquierda). */
+export function joystickPadRect(): { x: number; y: number; w: number; h: number } {
+  return { x: JOY_PAD_X, y: JOY_PAD_Y, w: JOY_PAD_SIZE, h: JOY_PAD_SIZE }
+}
+
+function inJoystickPad(x: number, y: number): boolean {
+  const p = joystickPadRect()
+  return x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h
 }
 
 export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
@@ -84,13 +94,6 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
     return
   }
 
-  // Robot de reparación
-  if (inRect(REPAIR_BTN, x, y)) {
-    repairShip(gs)
-    saveProgress(gs)
-    return
-  }
-
   // Abrir menú de base
   if (gs.inSafeZone && gs.phase === "playing" && baseBtn(gs, x, y)) {
     gs.phase = "base-menu"
@@ -102,9 +105,10 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   // Zonas muertas del HUD: no joystick
   if (isUiDeadZone(x, y)) return
 
-  // Joystick solo en la zona izquierda; en la derecha un tap selecciona objetivo (sin joystick)
+  // Joystick solo dentro del pad fijo (reposicionable al tocar dentro de él);
+  // fuera del pad, un tap selecciona objetivo (sin joystick)
   if (!touchRole.has(id)) {
-    if (x < JOY_ZONE_X) {
+    if (inJoystickPad(x, y)) {
       touchRole.set(id, "joystick")
       tapStart.set(id, { x, y })
       gs.joystick.active = true
@@ -211,7 +215,6 @@ export function resetTouch(): void {
 
 // Zonas de UI donde el toque NO inicia el joystick (HUD)
 function isUiDeadZone(x: number, y: number): boolean {
-  if (inRect(REPAIR_BTN, x, y)) return true
   if (inRect(FIRE_BTN, x, y)) return true
   // Panel del minimapa (arriba-izquierda)
   const mm = CONFIG.minimap
@@ -244,10 +247,6 @@ export function onKeyDown(gs: GS, e: KeyboardEvent): void {
       gs.flashT = 1.2
       sfx.click()
     }
-  }
-  if (e.key === "r" || e.key === "R") {
-    repairShip(gs)
-    saveProgress(gs)
   }
   if (e.key === "m" || e.key === "M") {
     gs.minimapHidden = !gs.minimapHidden

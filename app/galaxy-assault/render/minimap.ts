@@ -1,6 +1,6 @@
 // Minimapa: arriba-derecha, muestra mundo, base, jugador, enemigos, jefes y cajas.
 import type { GS } from "../core/types"
-import { CONFIG } from "../core/constants"
+import { CONFIG, CELL } from "../core/constants"
 import { minimapData } from "../engine/crates"
 import { roundRectPath, font } from "../../lib/gameKit"
 
@@ -95,6 +95,17 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
   ctx.fillText(CONFIG.map.name, r.x + size / 2, r.y + size + 12)
+  ctx.textAlign = "left"
+  ctx.textBaseline = "alphabetic"
+
+  // Coordenadas del jugador (celda del mapa) abajo-centro
+  const gx = Math.floor(data.playerX / CELL)
+  const gy = Math.floor(data.playerY / CELL)
+  ctx.fillStyle = "rgba(0,229,255,0.9)"
+  ctx.font = font(13, 900)
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.fillText(`x:${gx}  y:${gy}`, r.x + size / 2, r.y + size + 32)
   ctx.textAlign = "left"
   ctx.textBaseline = "alphabetic"
 }

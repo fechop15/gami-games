@@ -85,6 +85,7 @@ interface GameConfig {
     border: { enabled: boolean; belt: number; radiusMin: number; radiusMax: number; spacing: number; jitter: number }
   }
   minimap: { size: number; offsetX: number; offsetY: number; showEnemiesCap: number; showCrates: boolean; showBosses: boolean }
+  joystick: { padX: number; padY: number; padSize: number; radius: number }
   player: {
     speed: number
     accel: number
@@ -150,15 +151,16 @@ export const REGEN_SAFE_SHIELD_PER_SEC = CONFIG.player.regen.safeShieldPerSec
 export const REGEN_SAFE_HP_PER_SEC = CONFIG.player.regen.safeHpPerSec
 export const MAX_NPCS_ON_MAP = CONFIG.balance.maxNpcsOnMap
 
-// ── Joystick (zona izquierda fija) ──
-export const JOY_RADIUS = 70
+// ── Joystick (pad fijo en la izquierda, reposicionable al tocar dentro) ──
+export const JOY_RADIUS = CONFIG.joystick.radius
 export const JOY_DEADZONE = 12
-export const JOY_ZONE_X = W * 0.5
+export const JOY_PAD_X = CONFIG.joystick.padX
+export const JOY_PAD_Y = CONFIG.joystick.padY
+export const JOY_PAD_SIZE = CONFIG.joystick.padSize
 
 // ── Zonas táctiles del HUD ──
 export const MUTE_BTN: BtnRect = { x: W - 54, y: 8, w: 44, h: 44 }
 export const MINIMAP_BTN: BtnRect = { x: W - 54, y: 60, w: 44, h: 44 }
-export const REPAIR_BTN: BtnRect = { x: 16, y: H - 78, w: 170, h: 58 }
 export const FIRE_BTN: BtnRect = { x: W - 200, y: H - 170, w: 150, h: 150 }
 
 // ── Barra rápida de munición (cuadros abajo-centro) ──

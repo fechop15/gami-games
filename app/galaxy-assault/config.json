@@ -16,6 +16,12 @@
     "showCrates": true,
     "showBosses": true
   },
+  "joystick": {
+    "padX": 150,
+    "padY": 500,
+    "padSize": 240,
+    "radius": 68
+  },
   "player": {
     "speed": 280,
     "accel": 8,

@@ -6,6 +6,14 @@ export type AmmoType = "x1" | "x2" | "x3" | "missile_a" | "missile_b"
 export type WeaponKind = "laser" | "missile"
 export type DropId = "scrap" | "energy" | "core" | "repairBot"
 export type EnemyKind = "npc" | "boss"
+export type HudPanelId = "vitals" | "stats" | "events" | "minimap"
+
+export interface HudPanelState {
+  x: number
+  y: number
+  minimized: boolean
+  orientation: "vertical" | "horizontal"
+}
 
 export interface BtnArea { x: number; y: number; w: number; h: number }
 
