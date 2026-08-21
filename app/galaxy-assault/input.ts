@@ -289,9 +289,11 @@ export function resetTouch(): void {
 function isUiDeadZone(gs: GS, x: number, y: number): boolean {
   // Botón de disparo (posición del HUD)
   if (x >= gs.hud.fire.x && x <= gs.hud.fire.x + 150 && y >= gs.hud.fire.y && y <= gs.hud.fire.y + 150) return true
-  // Barra de munición (posición del HUD)
-  const ammoStart = gs.hud.ammo.x
-  if (x >= ammoStart && x <= ammoStart + AMMO_TOTAL && y >= gs.hud.ammo.y && y <= gs.hud.ammo.y + AMMO_SQUARE) return true
+  // Barra de munición (posición del HUD, respeta orientación)
+  const ammoVert = gs.hud.ammo.orientation === "vertical"
+  const aw = ammoVert ? AMMO_SQUARE : AMMO_TOTAL
+  const ah = ammoVert ? AMMO_TOTAL : AMMO_SQUARE
+  if (x >= gs.hud.ammo.x && x <= gs.hud.ammo.x + aw && y >= gs.hud.ammo.y && y <= gs.hud.ammo.y + ah) return true
   return false
 }
 
@@ -299,16 +301,17 @@ function isUiDeadZone(gs: GS, x: number, y: number): boolean {
 function panelAt(gs: GS, x: number, y: number): { id: HudPanelId; isMin: boolean; isOrient: boolean } | null {
   const ids: HudPanelId[] = ["vitals", "stats", "events", "minimap", "joystick", "fire", "ammo"]
   for (const id of ids) {
+    const ammoVert = gs.hud.ammo.orientation === "vertical"
     const r = id === "minimap" ? minimapRectFromHud(gs)
       : id === "joystick" ? { x: gs.hud.joystick.x, y: gs.hud.joystick.y, w: JOY_PAD_SIZE, h: JOY_PAD_SIZE }
       : id === "fire" ? { x: gs.hud.fire.x, y: gs.hud.fire.y, w: 150, h: 150 }
-      : id === "ammo" ? { x: gs.hud.ammo.x, y: gs.hud.ammo.y, w: AMMO_TOTAL, h: AMMO_SQUARE }
+      : id === "ammo" ? { x: gs.hud.ammo.x, y: gs.hud.ammo.y, w: ammoVert ? AMMO_SQUARE : AMMO_TOTAL, h: ammoVert ? AMMO_TOTAL : AMMO_SQUARE }
       : panelRect(id, gs)
     // Cabecera del panel
     const header = id === "minimap" ? { x: r.x, y: r.y - PANEL_HEADER_H - 2, w: r.w, h: PANEL_HEADER_H } : { x: r.x, y: r.y, w: r.w, h: PANEL_HEADER_H }
     if (inRect(header, x, y)) {
       const isMin = x >= header.x + header.w - PANEL_MIN_BTN_W - 14 && x <= header.x + header.w
-      const isOrient = (id === "vitals" || id === "stats") && x >= header.x + header.w - PANEL_MIN_BTN_W - 40 && x <= header.x + header.w - PANEL_MIN_BTN_W - 12
+      const isOrient = (id === "vitals" || id === "stats" || id === "ammo") && x >= header.x + header.w - PANEL_MIN_BTN_W - 40 && x <= header.x + header.w - PANEL_MIN_BTN_W - 12
       return { id, isMin, isOrient }
     }
     if (inRect({ x: r.x, y: r.y + (id === "minimap" ? 0 : PANEL_HEADER_H), w: r.w, h: 200 }, x, y)) {
@@ -323,6 +326,15 @@ function minimapRectFromHud(gs: GS) {
 }
 
 function ammoSquareAt(gs: GS, x: number, y: number): number {
+  const vertical = gs.hud.ammo.orientation === "vertical"
+  if (vertical) {
+    if (x < gs.hud.ammo.x || x > gs.hud.ammo.x + AMMO_SQUARE) return -1
+    for (let i = 0; i < AMMO_COUNT; i++) {
+      const sy = gs.hud.ammo.y + i * (AMMO_SQUARE + AMMO_GAP)
+      if (y >= sy && y <= sy + AMMO_SQUARE) return i
+    }
+    return -1
+  }
   if (y < gs.hud.ammo.y || y > gs.hud.ammo.y + AMMO_SQUARE) return -1
   const start = gs.hud.ammo.x
   for (let i = 0; i < AMMO_COUNT; i++) {

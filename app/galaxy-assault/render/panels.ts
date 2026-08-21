@@ -19,8 +19,8 @@ export function panelRect(id: HudPanelId, gs: GS): PanelRect {
   const p = gs.hud[id]
   if (id === "vitals") {
     const vertical = p.orientation === "vertical"
-    const w = vertical ? 120 : 250
-    const h = vertical ? 170 : 78
+    const w = vertical ? 150 : 250
+    const h = vertical ? 170 : 96
     const bodyH = p.minimized ? 0 : h
     return { x: p.x, y: p.y, w, h: PANEL_HEADER_H + bodyH, header: { x: p.x, y: p.y, w, h: PANEL_HEADER_H } }
   }
@@ -122,33 +122,38 @@ function drawVitals(ctx: CanvasRenderingContext2D, gs: GS, r: PanelRect, time: n
   const vertical = gs.hud.vitals.orientation === "vertical"
   if (gs.hud.vitals.minimized) return
   const bodyY = r.y + PANEL_HEADER_H
-  const bw = r.w - 16
-  const bh = 16
+  const bodyH = r.h - PANEL_HEADER_H
   const hpPct = Math.max(0, p.hp / p.maxHp)
   const shPct = p.shieldHp / p.shieldMaxHp
 
+  drawBody(ctx, r.x, bodyY, r.w, bodyH, "#44aaff")
+
   if (vertical) {
-    drawBody(ctx, r.x, bodyY, r.w, r.h - PANEL_HEADER_H, "#44aaff")
-    // Barras verticales
-    barV(ctx, r.x + 18, bodyY + 12, 26, r.h - PANEL_HEADER_H - 24, hpPct, "#7CFF5A", "#22aa44")
-    barV(ctx, r.x + 64, bodyY + 12, 26, r.h - PANEL_HEADER_H - 24, shPct, "#44aaff", "#0066cc")
+    // 2 filas con barras verticales (vida y escudo apilados)
+    const rowH = bodyH / 2
+    // Fila 1: Vida
+    barV(ctx, r.x + 16, bodyY + 14, 20, rowH - 28, hpPct, "#7CFF5A", "#22aa44")
     ctx.fillStyle = "#ffffff"
-    ctx.font = font(13, 900)
-    ctx.textAlign = "center"
-    ctx.fillText("❤", r.x + 31, bodyY + 10)
-    ctx.fillText("🛡", r.x + 77, bodyY + 10)
-    ctx.fillText(`${Math.ceil(p.hp)}`, r.x + 31, bodyY + r.h - PANEL_HEADER_H + 2)
-    ctx.fillText(`${Math.round(p.shieldHp)}`, r.x + 77, bodyY + r.h - PANEL_HEADER_H + 2)
+    ctx.font = font(12, 900)
+    ctx.textAlign = "left"
+    ctx.fillText(`❤ ${Math.ceil(p.hp)}/${p.maxHp}`, r.x + 46, bodyY + rowH * 0.5)
+    // Fila 2: Escudo
+    barV(ctx, r.x + 16, bodyY + rowH + 14, 20, rowH - 28, shPct, "#44aaff", "#0066cc")
+    ctx.fillText(`🛡 ${Math.round(p.shieldHp)}/${p.shieldMaxHp}`, r.x + 46, bodyY + rowH + rowH * 0.5)
     ctx.textAlign = "left"
   } else {
-    drawBody(ctx, r.x, bodyY, r.w, r.h - PANEL_HEADER_H, "#44aaff")
-    barH(ctx, r.x + 8, bodyY + 10, bw, bh, hpPct, "#7CFF5A", "#22aa44")
-    barH(ctx, r.x + 8, bodyY + 34, bw, bh, shPct, "#44aaff", "#0066cc")
+    // 2 filas con barras horizontales (vida y escudo apilados)
+    const rowH = bodyH / 2
+    const bw = r.w - 16
+    // Fila 1: Vida
     ctx.fillStyle = "#ffffff"
     ctx.font = font(12, 800)
     ctx.textAlign = "left"
-    ctx.fillText(`❤ ${Math.ceil(p.hp)}/${p.maxHp}`, r.x + 10, bodyY + 8)
-    ctx.fillText(`🛡 ${Math.round(p.shieldHp)}/${p.shieldMaxHp} (${Math.round(SHIELD_ABSORB * 100)}%)`, r.x + 10, bodyY + 32)
+    ctx.fillText(`❤ ${Math.ceil(p.hp)}/${p.maxHp}`, r.x + 10, bodyY + 12)
+    barH(ctx, r.x + 8, bodyY + 18, bw, 12, hpPct, "#7CFF5A", "#22aa44")
+    // Fila 2: Escudo
+    ctx.fillText(`🛡 ${Math.round(p.shieldHp)}/${p.shieldMaxHp} (${Math.round(SHIELD_ABSORB * 100)}%)`, r.x + 10, bodyY + rowH + 12)
+    barH(ctx, r.x + 8, bodyY + rowH + 18, bw, 12, shPct, "#44aaff", "#0066cc")
     ctx.textAlign = "left"
     void time
   }

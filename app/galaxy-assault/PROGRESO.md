@@ -103,6 +103,11 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Fondo mejorado: nebulosas con parallax según la cámara + estrellas con destello
 - [x] Escudo tipo malla hexagonal girando (con halo y efecto de impacto/regen)
 
+## Fase 19 — Vida/escudo en 2 filas y munición giratoria (v2.0)
+- [x] Panel vida/escudo con 2 filas (vida y escudo apilados) en ambas orientaciones
+- [x] Barra de munición con orientación vertical/horizontal (botón ⇅/⇄ en modo edición)
+- [x] Hit-test y tooltip de munición adaptados a la orientación
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable
