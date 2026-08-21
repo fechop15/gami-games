@@ -1,6 +1,6 @@
 // Orquesta el render por fase: mundo → HUD → minimapa → overlays.
 import type { GS } from "../core/types"
-import { W, H } from "../core/constants"
+import { W, H, CAM_ZOOM } from "../core/constants"
 import { drawBackground, drawGrid, drawAsteroidBelt, drawBase, drawPlayer, drawEnemies, drawTargetReticle, drawBullets, drawCrates, drawDrops, drawBossLaser, drawEdgeArrows, drawEffects } from "./world"
 import { drawMinimap } from "./minimap"
 import { drawHUD } from "./hud"
@@ -28,8 +28,13 @@ export function drawScreen(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
   // Fases de juego (playing / dead)
   drawWorldBackground(ctx, gs, imgs, time)
 
-  // Screen shake
+  // Zoom de cámara: escala el mundo alrededor del centro (la nave está centrada)
   ctx.save()
+  ctx.translate(W / 2, H / 2)
+  ctx.scale(CAM_ZOOM, CAM_ZOOM)
+  ctx.translate(-W / 2, -H / 2)
+
+  // Screen shake
   if (gs.shake > 0) {
     ctx.translate((Math.random() - 0.5) * gs.shake, (Math.random() - 0.5) * gs.shake)
   }

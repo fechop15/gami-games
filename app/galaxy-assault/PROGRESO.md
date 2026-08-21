@@ -94,6 +94,15 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Panel de estadísticas en layout 2×2 (Nivel+XP, monedas, bajas, jefes) con orientación vertical/horizontal
 - [x] Precio de x1 bajado (🪙40) y tienda ampliada: también comprar misiles A/B (config ammoShop)
 
+## Fase 18 — Pulido visual y balance (v1.9)
+- [x] Alcance de disparo limitado: las balas viajan solo hasta FIRE_RANGE (vida calculada por velocidad)
+- [x] Láseres más largos: se dibujan como haces alargados con núcleo brillante
+- [x] Misiles en forma de U: flanquean saliendo hacia la derecha/izquierda alternando y luego persiguen
+- [x] Cámara acercada (zoom 1.12 configurable con CAM_ZOOM)
+- [x] Precio x1 a 🪙25 (config ammoShop)
+- [x] Fondo mejorado: nebulosas con parallax según la cámara + estrellas con destello
+- [x] Escudo tipo malla hexagonal girando (con halo y efecto de impacto/regen)
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable

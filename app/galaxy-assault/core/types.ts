@@ -88,6 +88,8 @@ export interface Bullet {
   homing?: boolean
   turn?: number
   targetId?: number
+  arcSide?: 1 | -1
+  arcT?: number
   life: number
 }
 

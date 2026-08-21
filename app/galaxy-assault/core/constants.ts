@@ -152,6 +152,7 @@ export const REGEN_SAFE_SHIELD_PER_SEC = CONFIG.player.regen.safeShieldPerSec
 export const REGEN_SAFE_HP_PER_SEC = CONFIG.player.regen.safeHpPerSec
 export const MAX_NPCS_ON_MAP = CONFIG.balance.maxNpcsOnMap
 export const AMMO_SHOP = CONFIG.ammoShop
+export const CAM_ZOOM = 1.12
 
 // ── Joystick (pad fijo en la izquierda, reposicionable al tocar dentro) ──
 export const JOY_RADIUS = CONFIG.joystick.radius

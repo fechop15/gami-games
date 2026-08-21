@@ -93,7 +93,7 @@
   },
   "repairBot": { "healPct": 0.4 },
   "ammoShop": {
-    "x1": { "price": 40, "amount": 25 },
+    "x1": { "price": 25, "amount": 25 },
     "x2": { "price": 90, "amount": 15 },
     "x3": { "price": 120, "amount": 10 },
     "missile_a": { "price": 160, "amount": 5 },

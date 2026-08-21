@@ -2,7 +2,7 @@
 // daño (evasión → escudo → casco).
 import type { GS, Enemy, DropId, AmmoType } from "../core/types"
 import {
-  SHIELD_ABSORB, PLAYER_RADIUS, INVULN_AFTER_HIT, CONFIG,
+  SHIELD_ABSORB, PLAYER_RADIUS, INVULN_AFTER_HIT, CONFIG, FIRE_RANGE,
   REGEN_IDLE_TIME, REGEN_SHIELD_PER_SEC, REGEN_HP_PER_SEC,
   REGEN_SAFE_SHIELD_PER_SEC, REGEN_SAFE_HP_PER_SEC,
 } from "../core/constants"
@@ -84,7 +84,7 @@ export function updateManualFire(gs: GS, dt: number): void {
       id: gs.nextId++, x: p.x, y: p.y,
       vx: Math.cos(a) * w.bulletSpeed, vy: Math.sin(a) * w.bulletSpeed,
       damage, radius: w.bulletRadius, fromPlayer: true, color: w.color,
-      kind: "laser", life: 1.6, weapon: gs.activeWeapon,
+      kind: "laser", life: shotLifetime(w.bulletSpeed), weapon: gs.activeWeapon,
     })
     sfx.slice()
   }
@@ -109,21 +109,44 @@ function spawnMissile(gs: GS, w: ReturnType<typeof weaponDef>, target: Enemy, a:
     id: gs.nextId++, x: p.x, y: p.y,
     vx: Math.cos(a) * w.bulletSpeed, vy: Math.sin(a) * w.bulletSpeed,
     damage, radius: w.bulletRadius, fromPlayer: true, color: w.color,
-    kind: "missile", life: 3.5, weapon: w.id as AmmoType,
+    kind: "missile", life: shotLifetime(w.bulletSpeed) * 1.4, weapon: w.id as AmmoType,
     homing: w.homing ?? false, turn: w.turn ?? 0, aoe: w.aoe ?? 0,
     targetId: target.id,
+    arcSide: w.homing ? (missileArcFlip = missileArcFlip === 1 ? -1 : 1) : undefined,
+    arcT: 0,
   })
 }
 
+let missileArcFlip: 1 | -1 = 1
+
+// Vida del proyectil según el alcance de disparo (FIRE_RANGE) y la velocidad
+function shotLifetime(speed: number): number {
+  return Math.max(0.4, FIRE_RANGE / speed)
+}
+
 export function updateBullets(gs: GS, dt: number): void {
-  // Mover balas (misiles homing)
+  // Mover balas (misiles homing con arco en U)
   for (const b of gs.bullets) {
     b.life -= dt
     if (b.homing && b.fromPlayer) {
       const t = gs.enemies.find(e => e.id === b.targetId && e.alive)
+      const cur = Math.atan2(b.vy, b.vx)
       if (t) {
         const a = Math.atan2(t.y - b.y, t.x - b.x)
-        const cur = Math.atan2(b.vy, b.vx)
+        if (b.arcSide) {
+          b.arcT = (b.arcT ?? 0) + dt
+          if (b.arcT < 0.45) {
+            // Fase de flanqueo: vira hacia su lado para hacer la U
+            const next = turnToward(cur, a + b.arcSide * Math.PI / 2, (b.turn ?? 4) * dt)
+            const sp = Math.hypot(b.vx, b.vy)
+            b.vx = Math.cos(next) * sp
+            b.vy = Math.sin(next) * sp
+            b.x += b.vx * dt
+            b.y += b.vy * dt
+            continue
+          }
+          b.arcSide = undefined
+        }
         const next = turnToward(cur, a, (b.turn ?? 4) * dt)
         const sp = Math.hypot(b.vx, b.vy)
         b.vx = Math.cos(next) * sp

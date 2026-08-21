@@ -19,14 +19,48 @@ export function drawBackground(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs
     ctx.fillRect(0, 0, W, H)
   }
 
+  // Nebulosas con parallax sutil según la cámara
+  const par = 0.08
+  const ox = gs.camX * par
+  const oy = gs.camY * par
+  const nebulas: Array<[number, number, number, string]> = [
+    [0.12, 0.15, 220, "rgba(122,42,255,0.10)"],
+    [0.55, 0.3, 260, "rgba(0,196,221,0.09)"],
+    [0.85, 0.62, 200, "rgba(255,51,136,0.08)"],
+    [0.35, 0.75, 240, "rgba(40,120,255,0.07)"],
+  ]
+  for (const [nx, ny, r, c] of nebulas) {
+    const cx = ((nx * W - ox) % (W + r * 2) + W + r * 2) % (W + r * 2) - r
+    const cy = ((ny * H - oy) % (H + r * 2) + H + r * 2) % (H + r * 2) - r
+    const g = ctx.createRadialGradient(cx, cy, 10, cx, cy, r)
+    g.addColorStop(0, c)
+    g.addColorStop(1, "rgba(0,0,0,0)")
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
   // Estrellas de fondo (parallax simple, siempre en pantalla)
   for (const s of gs.stars) {
     const alpha = s.bright * (0.6 + 0.4 * Math.sin(time * 2 + s.tw))
     ctx.globalAlpha = alpha
-    ctx.fillStyle = "#ffffff"
+    ctx.fillStyle = s.r > 1.4 ? "#cfe8ff" : "#ffffff"
     ctx.beginPath()
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
     ctx.fill()
+    // Destello en estrellas grandes
+    if (s.r > 1.5 && Math.sin(time * 3 + s.tw) > 0.7) {
+      ctx.globalAlpha = alpha * 0.5
+      ctx.beginPath()
+      ctx.moveTo(s.x - 5, s.y)
+      ctx.lineTo(s.x + 5, s.y)
+      ctx.moveTo(s.x, s.y - 5)
+      ctx.lineTo(s.x, s.y + 5)
+      ctx.lineWidth = 1
+      ctx.strokeStyle = "#cfe8ff"
+      ctx.stroke()
+    }
   }
   ctx.globalAlpha = 1
 }
@@ -126,33 +160,68 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
     ctx.globalAlpha = 1
   }
 
-  // Escudo visual (procedural)
+  // Escudo visual (malla hexagonal girando)
   if (p.shieldHp > 0) {
-    const base = 0.45 + 0.15 * Math.sin(time * 3)
+    const base = 0.5 + 0.12 * Math.sin(time * 3)
     const flashing = gs.shieldFlashT > 0
     const flashA = flashing ? Math.min(1, gs.shieldFlashT * 3.5) : 0
-    // Burbuja base con gradiente radial
     const R = 46
+    const rot = time * 0.9
+
+    // Halo tenue
     ctx.save()
-    ctx.globalAlpha = base
+    ctx.globalAlpha = base * 0.5
     const g = ctx.createRadialGradient(sx - 8, sy - 8, 6, sx, sy, R)
-    g.addColorStop(0, "rgba(220,255,255,0.35)")
-    g.addColorStop(0.5, "rgba(80,180,255,0.22)")
-    g.addColorStop(1, "rgba(0,120,220,0.08)")
+    g.addColorStop(0, "rgba(220,255,255,0.3)")
+    g.addColorStop(1, "rgba(0,120,220,0.05)")
     ctx.fillStyle = g
     ctx.beginPath()
     ctx.arc(sx, sy, R, 0, Math.PI * 2)
     ctx.fill()
-    ctx.strokeStyle = "rgba(140,220,255,0.5)"
+    ctx.restore()
+
+    // Malla: hexágono exterior girando
+    ctx.save()
+    ctx.translate(sx, sy)
+    ctx.rotate(rot)
+    ctx.globalAlpha = 0.75
+    ctx.strokeStyle = "rgba(140,220,255,0.8)"
     ctx.lineWidth = 2
+    ctx.shadowColor = "rgba(120,200,255,0.9)"
+    ctx.shadowBlur = 12
     ctx.beginPath()
-    ctx.arc(sx, sy, R, 0, Math.PI * 2)
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2
+      const px = Math.cos(a) * R
+      const py = Math.sin(a) * R
+      if (i === 0) ctx.moveTo(px, py)
+      else ctx.lineTo(px, py)
+    }
+    ctx.closePath()
     ctx.stroke()
-    // Reflejo
-    ctx.fillStyle = "rgba(255,255,255,0.18)"
+    // Hexágono interior (contrarotación)
+    ctx.rotate(-rot * 2)
+    ctx.globalAlpha = 0.5
+    ctx.strokeStyle = "rgba(180,240,255,0.6)"
     ctx.beginPath()
-    ctx.ellipse(sx - 14, sy - 18, 10, 6, -0.6, 0, Math.PI * 2)
-    ctx.fill()
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.4
+      const px = Math.cos(a) * (R - 12)
+      const py = Math.sin(a) * (R - 12)
+      if (i === 0) ctx.moveTo(px, py)
+      else ctx.lineTo(px, py)
+    }
+    ctx.closePath()
+    ctx.stroke()
+    // Radios de la malla
+    ctx.globalAlpha = 0.35
+    ctx.beginPath()
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2
+      ctx.moveTo(0, 0)
+      ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R)
+    }
+    ctx.stroke()
     ctx.restore()
 
     // Efecto al recibir ataque: destello blanco/cian que crece y se apaga
@@ -292,10 +361,32 @@ export function drawBullets(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): 
   for (const b of gs.bullets) {
     const sx = b.x - gs.camX
     const sy = b.y - gs.camY
-    if (sx < -60 || sx > W + 60 || sy < -60 || sy > H + 60) continue
+    if (sx < -120 || sx > W + 120 || sy < -120 || sy > H + 120) continue
     if (b.fromPlayer) {
-      const wKey = b.weapon ? bulletSprite(b.weapon) : "laser_x1"
-      drawSprite(ctx, imgs, wKey as SpriteKey, sx, sy, b.radius * 6, dirToAngle(Math.atan2(b.vy, b.vx)))
+      if (b.kind === "laser") {
+        // Láser largo: haz alargado en la dirección del viaje
+        const wKey = b.weapon ? bulletSprite(b.weapon) : "laser_x1"
+        const ang = Math.atan2(b.vy, b.vx)
+        const len = b.radius * 16
+        const wid = b.radius * 5
+        ctx.save()
+        ctx.translate(sx, sy)
+        ctx.rotate(dirToAngle(ang))
+        ctx.drawImage(imgs[wKey], -len / 2, -wid / 2, len, wid)
+        // Núcleo brillante
+        ctx.globalAlpha = 0.9
+        ctx.fillStyle = b.color
+        ctx.shadowColor = b.color
+        ctx.shadowBlur = 10
+        ctx.beginPath()
+        ctx.arc(0, 0, b.radius * 2.4, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.shadowBlur = 0
+        ctx.restore()
+      } else {
+        const wKey = b.weapon ? bulletSprite(b.weapon) : "missile_a"
+        drawSprite(ctx, imgs, wKey as SpriteKey, sx, sy, b.radius * 7, dirToAngle(Math.atan2(b.vy, b.vx)))
+      }
     } else {
       ctx.fillStyle = b.color
       ctx.shadowColor = b.color
