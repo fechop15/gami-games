@@ -1,6 +1,6 @@
 // Render del mundo: fondo, grid, cinturón de asteroides, base, entidades y marcadores.
 import type { GS } from "../core/types"
-import { W, H, CONFIG, BASE_X, BASE_Y, SAFE_RADIUS } from "../core/constants"
+import { W, H, CONFIG, BASE_X, BASE_Y, SAFE_RADIUS, REGEN_IDLE_TIME } from "../core/constants"
 import { drawSprite, dirToAngle, type SpriteKey } from "../core/sprites"
 import { bulletSprite } from "../data/ammo"
 import { shipSprite } from "../data/ships"
@@ -169,10 +169,11 @@ function drawShipBars(ctx: CanvasRenderingContext2D, gs: GS, sx: number, sy: num
     ctx.fillStyle = "#44aaff"
     roundRectPath(ctx, sx - w / 2 + 1, shY + 1, Math.max(4, (w - 2) * shPct), 4, 2)
     ctx.fill()
-  } else if (p.shieldCooldown > 0) {
-    const cdPct = 1 - p.shieldCooldown / p.shieldCdMax
+  } else {
+    // Progreso hacia la regeneración: en zona segura ya repone; fuera, espera el idle
+    const idlePct = Math.min(1, (gs.time - gs.lastHitT) / REGEN_IDLE_TIME)
     ctx.fillStyle = "rgba(68,170,255,0.35)"
-    roundRectPath(ctx, sx - w / 2 + 1, shY + 1, Math.max(4, (w - 2) * cdPct), 4, 2)
+    roundRectPath(ctx, sx - w / 2 + 1, shY + 1, Math.max(4, (w - 2) * idlePct), 4, 2)
     ctx.fill()
   }
 }
@@ -226,6 +227,32 @@ export function drawTargetReticle(ctx: CanvasRenderingContext2D, gs: GS, imgs: I
   const sy = t.y - gs.camY
   const pulse = 1 + Math.sin(time * 6) * 0.06
   drawSprite(ctx, imgs, "reticle", sx, sy, t.size * 2.1 * pulse, time * 1.5)
+
+  // Aro rojo pulsante alrededor del objetivo seleccionado
+  const ring = t.size * (0.8 + Math.sin(time * 5) * 0.07)
+  ctx.save()
+  ctx.strokeStyle = "rgba(255,60,60,0.95)"
+  ctx.lineWidth = 3.5
+  ctx.shadowColor = "rgba(255,60,60,0.9)"
+  ctx.shadowBlur = 12
+  ctx.beginPath()
+  ctx.arc(sx, sy, ring, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.restore()
+  // Segmento rotatorio para que se note que está seleccionado
+  ctx.save()
+  ctx.strokeStyle = "rgba(255,255,255,0.85)"
+  ctx.lineWidth = 3
+  ctx.translate(sx, sy)
+  ctx.rotate(time * 2.2)
+  ctx.beginPath()
+  ctx.arc(0, 0, ring, -0.5, 0.5)
+  ctx.stroke()
+  ctx.rotate(Math.PI)
+  ctx.beginPath()
+  ctx.arc(0, 0, ring, -0.5, 0.5)
+  ctx.stroke()
+  ctx.restore()
 }
 
 export function drawBullets(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {

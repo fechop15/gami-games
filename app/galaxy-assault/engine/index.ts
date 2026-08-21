@@ -80,6 +80,7 @@ export function makeGS(): GS {
     kills: 0,
     isTouching: false,
     respawnT: 0,
+    lastHitT: 0,
   }
 }
 
@@ -134,7 +135,7 @@ export function update(gs: GS, dt: number): void {
     updateDrops(gs, dt)
     updateManualFire(gs, dt)
     updateBullets(gs, dt)
-    rechargeShield(gs)
+    rechargeShield(gs, dt)
 
     // Láser de jefe golpea al jugador
     if (laserHitsPlayer(gs)) applyDamageToPlayer(gs, 10 * dt * 4)

@@ -195,4 +195,5 @@ export interface GS {
   kills: number
   isTouching: boolean
   respawnT: number
+  lastHitT: number
 }

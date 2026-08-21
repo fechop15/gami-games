@@ -3,6 +3,8 @@
 import type { GS, Enemy, Bullet, DropId } from "../core/types"
 import {
   SHIELD_ABSORB, PLAYER_RADIUS, INVULN_AFTER_HIT, CONFIG,
+  REGEN_IDLE_TIME, REGEN_SHIELD_PER_SEC, REGEN_HP_PER_SEC,
+  REGEN_SAFE_SHIELD_PER_SEC, REGEN_SAFE_HP_PER_SEC,
 } from "../core/constants"
 import { weaponDef, weaponDamageForShip, defaultAmmo } from "../data/ammo"
 import { shipBaseDamage } from "../data/ships"
@@ -168,6 +170,8 @@ export function applyDamageToPlayer(gs: GS, raw: number): void {
   const p = gs.player
   if (p.invulnT > 0 || gs.inSafeZone) return
 
+  gs.lastHitT = gs.time
+
   // 1. Evasión por movimiento
   if (chance(evasionChance(gs))) {
     pushFloater(gs, p.x, p.y - 40, "EVADIDO", "#7CFF5A", 15)
@@ -293,12 +297,25 @@ export function repairShip(gs: GS): void {
   gs.shake = 4
 }
 
-/** Recarga el escudo si su cooldown terminó. */
-export function rechargeShield(gs: GS): void {
+/** Regeneración progresiva del escudo y del casco.
+ * Solo repara si el jugador está en zona segura O lleva REGEN_IDLE_TIME segundos
+ * sin recibir daño. En zona segura repara más rápido. */
+export function rechargeShield(gs: GS, dt: number): void {
   const p = gs.player
-  if (p.shieldHp <= 0 && p.shieldCooldown <= 0) {
-    p.shieldHp = p.shieldMaxHp
-    sfx.powerup()
+  if (p.hp >= p.maxHp && p.shieldHp >= p.shieldMaxHp) return
+  if (gs.phase !== "playing") return
+
+  const safe = gs.inSafeZone
+  const idle = gs.time - gs.lastHitT >= REGEN_IDLE_TIME
+  if (!safe && !idle) return
+
+  // Escudo progresivo
+  if (p.shieldHp < p.shieldMaxHp) {
+    p.shieldHp = Math.min(p.shieldMaxHp, p.shieldHp + (safe ? REGEN_SAFE_SHIELD_PER_SEC : REGEN_SHIELD_PER_SEC) * dt)
+  }
+  // Casco progresivo (solo repara si el escudo está completo, para que el escudo se priorice)
+  if (p.shieldHp >= p.shieldMaxHp && p.hp < p.maxHp) {
+    p.hp = Math.min(p.maxHp, p.hp + (safe ? REGEN_SAFE_HP_PER_SEC : REGEN_HP_PER_SEC) * dt)
   }
 }
 

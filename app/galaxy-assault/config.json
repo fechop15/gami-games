@@ -26,7 +26,14 @@
     "shieldCooldown": 8,
     "evasionCap": 0.25,
     "fireRange": 520,
-    "invulnAfterHit": 1.2
+    "invulnAfterHit": 1.2,
+    "regen": {
+      "idleTime": 60,
+      "shieldPerSec": 12,
+      "hpPerSec": 6,
+      "safeShieldPerSec": 30,
+      "safeHpPerSec": 15
+    }
   },
   "ships": [
     { "id": "star", "name": "Estrella", "desc": "Nave de combate equilibrada.", "baseDamage": 10, "speedMult": 1, "hpMult": 1, "sprite": "player", "price": 0, "unlocked": true }

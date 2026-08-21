@@ -57,9 +57,14 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 ## Fase 12 — Combate manual y HUD nuevo (v1.3)
 - [x] Barra rápida de munición en cuadros abajo-centro (toca para elegir arma, teclas 1-5)
 - [x] Barra de vida y escudo sobre la nave del jugador; barra de HP sobre todos los enemigos
-- [x] Ataque manual: tap en enemigo = elegir objetivo; botón 🔫 DISPARAR (mantener) = disparar hacia él
+- [x] Ataque manual: tap en enemigo = elegir objetivo (aro rojo pulsante + retícula); botón 🔫 DISPARAR (mantener) = disparar hacia él
 - [x] La nave apunta con el frente al objetivo mientras dispara (prioridad sobre el movimiento)
 - [x] Multitouch: joystick y disparo a la vez con dos dedos
+
+## Fase 13 — Regeneración automática progresiva (v1.4)
+- [x] Escudo y casco se reparan solos de forma progresiva solo en zona segura O tras 60s sin recibir daño (regen configurable en config.json)
+- [x] El casco repara cuando el escudo está completo (el escudo se prioriza)
+- [x] Barra de escudo sobre la nave muestra el progreso hacia la regeneración
 
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar

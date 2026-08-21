@@ -15,6 +15,19 @@ type Role = "joystick" | "fire" | "none"
 const touchRole = new Map<number, Role>()
 const tapStart = new Map<number, { x: number; y: number }>()
 
+// Cuadro de munición presionado (para el globo de nombre en el HUD)
+let pressedAmmo = -1
+let pressedAmmoTouchId: number | null = null
+
+export function getPressedAmmo(): number {
+  return pressedAmmo
+}
+
+function clearPressedAmmo(): void {
+  pressedAmmo = -1
+  pressedAmmoTouchId = null
+}
+
 export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   unlockAudio()
   gs.isTouching = true
@@ -58,9 +71,8 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   const ammoIdx = ammoSquareAt(x, y)
   if (ammoIdx !== -1) {
     gs.activeWeapon = AMMO_ORDER[ammoIdx]
-    const w = weaponDef(gs.activeWeapon)
-    gs.flashMsg = w.name + (gs.ammo[gs.activeWeapon] <= 0 ? " (sin munición)" : "")
-    gs.flashT = 1.2
+    pressedAmmo = ammoIdx
+    pressedAmmoTouchId = id
     sfx.click()
     return
   }
@@ -124,17 +136,22 @@ export function onTouchMove(gs: GS, id: number, x: number, y: number): void {
 export function onTouchEnd(gs: GS, id: number, x: number, y: number): void {
   const role = touchRole.get(id)
   touchRole.delete(id)
-  tapStart.delete(id)
+
+  // Soltar el dedo del cuadro de munición → ocultar el globo de nombre
+  if (pressedAmmoTouchId === id) clearPressedAmmo()
 
   if (role === "fire") {
     gs.firing = false
+    tapStart.delete(id)
     return
   }
 
   if (role === "joystick") {
-    // Si fue un tap (sin arrastre): elegir o soltar objetivo
+    // Leer el punto de inicio ANTES de borrarlo (para detectar tap vs arrastre)
     const start = tapStart.get(id)
-    if (start && Math.abs(x - start.x) <= 12 && Math.abs(y - start.y) <= 12) {
+    tapStart.delete(id)
+    // Si fue un tap (sin arrastre): elegir o soltar objetivo
+    if (start && Math.abs(x - start.x) <= 14 && Math.abs(y - start.y) <= 14) {
       const target = enemyAtScreen(gs, x, y, 70)
       setTarget(gs, target)
       if (target) {
@@ -157,6 +174,7 @@ export function onTouchEnd(gs: GS, id: number, x: number, y: number): void {
 export function resetTouch(): void {
   touchRole.clear()
   tapStart.clear()
+  clearPressedAmmo()
 }
 
 // Zonas de UI donde el toque NO inicia el joystick (HUD)

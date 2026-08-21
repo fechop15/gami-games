@@ -4,6 +4,7 @@ import { W, H, FIRE_BTN, REPAIR_BTN, AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR
 import { weaponDef, AMMO_ORDER } from "../data/ammo"
 import { font, rgba, roundRectPath, drawButton } from "../../lib/gameKit"
 import { drawSprite, type SpriteKey } from "../core/sprites"
+import { getPressedAmmo } from "../input"
 
 type Imgs = Record<string, HTMLImageElement>
 
@@ -18,6 +19,7 @@ export function drawHUD(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void
 function drawAmmoBar(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {
   const total = AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
   const start = W / 2 - total / 2
+  const pressed = getPressedAmmo()
   for (let i = 0; i < AMMO_COUNT; i++) {
     const id = AMMO_ORDER[i]
     const w = weaponDef(id)
@@ -45,23 +47,58 @@ function drawAmmoBar(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {
     // Sprite del arma
     drawSprite(ctx, imgs, w.sprite as SpriteKey, x + AMMO_SQUARE / 2, AMMO_BAR_Y + 22, 34)
 
-    // Nombre corto
-    ctx.fillStyle = "rgba(255,255,255,0.75)"
-    ctx.font = font(11, 700)
-    ctx.textAlign = "center"
-    ctx.textBaseline = "middle"
-    ctx.fillText(w.name, x + AMMO_SQUARE / 2, AMMO_BAR_Y + 46)
-    ctx.textBaseline = "alphabetic"
-
-    // Contador
+    // Contador (sin texto de nombre)
     ctx.fillStyle = empty ? "#ff5533" : active ? w.color : "rgba(255,255,255,0.6)"
-    ctx.font = font(13, 900)
+    ctx.font = font(14, 900)
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
-    ctx.fillText(`${ammo}`, x + AMMO_SQUARE / 2, AMMO_BAR_Y + AMMO_SQUARE - 9)
+    ctx.fillText(`${ammo}`, x + AMMO_SQUARE / 2, AMMO_BAR_Y + AMMO_SQUARE - 8)
     ctx.textBaseline = "alphabetic"
     ctx.textAlign = "left"
   }
+
+  // Globo con el nombre completo del arma presionada
+  if (pressed >= 0 && pressed < AMMO_ORDER.length) {
+    drawAmmoTooltip(ctx, gs, pressed, start)
+  }
+}
+
+// Globo (tooltip) con el nombre completo sobre el cuadro presionado
+function drawAmmoTooltip(ctx: CanvasRenderingContext2D, gs: GS, idx: number, barStart: number): void {
+  const id = AMMO_ORDER[idx]
+  const w = weaponDef(id)
+  const cx = barStart + idx * (AMMO_SQUARE + AMMO_GAP) + AMMO_SQUARE / 2
+  const y = AMMO_BAR_Y - 44
+
+  ctx.save()
+  ctx.shadowColor = rgba(w.color, 0.8)
+  ctx.shadowBlur = 16
+  ctx.fillStyle = "rgba(8,10,20,0.92)"
+  roundRectPath(ctx, cx - 90, y, 180, 34, 12)
+  ctx.fill()
+  ctx.restore()
+  ctx.strokeStyle = w.color
+  ctx.lineWidth = 2
+  roundRectPath(ctx, cx - 90, y, 180, 34, 12)
+  ctx.stroke()
+
+  // Punta del globo
+  ctx.fillStyle = "rgba(8,10,20,0.92)"
+  ctx.beginPath()
+  ctx.moveTo(cx - 8, y + 34)
+  ctx.lineTo(cx + 8, y + 34)
+  ctx.lineTo(cx, y + 44)
+  ctx.closePath()
+  ctx.fill()
+
+  const empty = gs.ammo[id] <= 0
+  ctx.fillStyle = empty ? "#ff5533" : "#ffffff"
+  ctx.font = font(16, 900)
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.fillText(empty ? `${w.name} · sin munición` : w.name, cx, y + 17)
+  ctx.textAlign = "left"
+  ctx.textBaseline = "alphabetic"
 }
 
 function drawFireButton(ctx: CanvasRenderingContext2D, gs: GS): void {

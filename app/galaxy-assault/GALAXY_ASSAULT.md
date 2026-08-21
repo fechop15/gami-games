@@ -84,10 +84,17 @@ El componente React es delgado: monta el canvas de **1280×720** (lógico, lands
 
 Orden de resolución del daño al jugador:
 1. **Evasión por movimiento** — probabilidad escala con la velocidad de la nave (parado = 0%, a tope = `evasionCap` 25%). Muestra "EVADIDO".
-2. **Escudo absorbente** — absorbe un **% del daño entrante** (`shieldAbsorb` 60%); el resto va al casco. HP propio + cooldown de recarga.
+2. **Escudo absorbente** — absorbe un **% del daño entrante** (`shieldAbsorb` 60%); el resto va al casco.
 3. **Casco** — HP de la nave; a 0 → muerte → **respawn en la base** con HP lleno.
 
-**Robots de reparación** 🤖 (item de un solo uso, botón `🤖 REPARAR` o tecla R): reparan `healPct` (40%) del HP máximo.
+### Regeneración automática y progresiva
+El **escudo** y el **casco** se reparan solos de forma progresiva (valores por segundo en `config.json`) SOLO si:
+- Estás en **zona segura** (repara más rápido), o
+- Llevas **`regen.idleTime` (60 s)** sin recibir daño.
+
+El casco repara solo cuando el escudo ya está completo (el escudo se prioriza). La barra de escudo sobre la nave muestra el progreso hacia la regeneración (llenado azul tenue).
+
+**Robots de reparación** 🤖 (item de un solo uso, botón `🤖 REPARAR` o tecla R): reparan `healPct` (40%) del HP máximo al instante.
 
 ---
 

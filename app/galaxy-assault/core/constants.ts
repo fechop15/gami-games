@@ -96,6 +96,13 @@ interface GameConfig {
     evasionCap: number
     fireRange: number
     invulnAfterHit: number
+    regen: {
+      idleTime: number
+      shieldPerSec: number
+      hpPerSec: number
+      safeShieldPerSec: number
+      safeHpPerSec: number
+    }
   }
   ships: CfgShip[]
   weapons: CfgWeapon[]
@@ -136,6 +143,11 @@ export const SHIELD_COOLDOWN = CONFIG.player.shieldCooldown
 export const EVASION_CAP = CONFIG.player.evasionCap
 export const FIRE_RANGE = CONFIG.player.fireRange
 export const INVULN_AFTER_HIT = CONFIG.player.invulnAfterHit
+export const REGEN_IDLE_TIME = CONFIG.player.regen.idleTime
+export const REGEN_SHIELD_PER_SEC = CONFIG.player.regen.shieldPerSec
+export const REGEN_HP_PER_SEC = CONFIG.player.regen.hpPerSec
+export const REGEN_SAFE_SHIELD_PER_SEC = CONFIG.player.regen.safeShieldPerSec
+export const REGEN_SAFE_HP_PER_SEC = CONFIG.player.regen.safeHpPerSec
 
 // ── Joystick ──
 export const JOY_RADIUS = 70
