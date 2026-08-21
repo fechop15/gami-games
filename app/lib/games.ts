@@ -161,4 +161,14 @@ export const GAMES: Game[] = [
     tags: ["Puzzle", "Física", "Mobile"],
     icon: "/games/gravity-ball/icon.svg",
   },
+  {
+    id: "015",
+    slug: "eco-granja",
+    title: "EcoGranja",
+    description: "Siembra, cría y pesca para vender en el mercado. Impuestos, empleados, clima y fauna dinámica que afecta tu granja viva.",
+    route: "/eco-granja",
+    gradient: "linear-gradient(180deg, #3a7a27 0%, #1b5e20 45%, #0f3d14 100%)",
+    accentColor: "#7cff5a",
+    tags: ["Simulación", "Granja", "Mobile"],
+  },
 ];

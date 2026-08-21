@@ -1,0 +1,113 @@
+{
+  "balance": {
+    "dayLength": 40,
+    "taxInterval": 7,
+    "taxBase": 25,
+    "taxPerTile": 2,
+    "taxPerAnimal": 5,
+    "taxPerStaff": 8,
+    "taxInterest": 0.04,
+    "storageBase": 60,
+    "initialCoins": 30,
+    "initialRows": 5,
+    "cols": 5,
+    "maxRows": 12,
+    "rowCostBase": 100,
+    "rowCostPer": 40,
+    "pondDigCost": 60,
+    "pasturePrepCost": 80,
+    "backToSoilCost": 0,
+    "fishRegenPerDay": 1,
+    "fishMaxStock": 5,
+    "animalQualityMax": 5,
+    "cropQualityMax": 5,
+    "qualityPriceMult": 0.35,
+    "breedCostBase": 40,
+    "breedChanceBase": 0.55,
+    "breedChancePerQuality": 0.06,
+    "pesticideDays": 3,
+    "fishing": {
+      "dur": 2.4,
+      "zoneW": 0.16,
+      "missChanceWeatherMult": 0.5
+    }
+  },
+  "crops": [
+    { "id": "trigo",      "name": "Trigo",      "emoji": "🌾", "unlockFame": 0,     "buy": 10,  "growDays": 2,  "yield": 3, "price": 8,   "water": 1 },
+    { "id": "zanahoria",  "name": "Zanahoria",  "emoji": "🥕", "unlockFame": 200,  "buy": 20,  "growDays": 3,  "yield": 4, "price": 11,  "water": 1 },
+    { "id": "maiz",       "name": "Maíz",       "emoji": "🌽", "unlockFame": 600,  "buy": 35,  "growDays": 4,  "yield": 4, "price": 16,  "water": 1 },
+    { "id": "tomate",     "name": "Tomate",     "emoji": "🍅", "unlockFame": 1500, "buy": 55,  "growDays": 5,  "yield": 5, "price": 22,  "water": 1 },
+    { "id": "fresa",      "name": "Fresa",      "emoji": "🍓", "unlockFame": 3500, "buy": 90,  "growDays": 6,  "yield": 6, "price": 32,  "water": 1 },
+    { "id": "cafe",       "name": "Café",       "emoji": "☕", "unlockFame": 8000, "buy": 200, "growDays": 8,  "yield": 6, "price": 55,  "water": 1 },
+    { "id": "trufa",      "name": "Trufa",      "emoji": "🍄", "unlockFame": 18000, "buy": 600, "growDays": 10, "yield": 4, "price": 140, "water": 1 }
+  ],
+  "animals": [
+    { "id": "gallina", "name": "Gallina", "emoji": "🐔", "unlockFame": 0,     "buy": 60,  "sell": 35,  "product": "huevo",    "productEmoji": "🥚", "produceDays": 2, "feed": 5,  "desc": "Pone huevos cada 2 días." },
+    { "id": "oveja",   "name": "Oveja",   "emoji": "🐑", "unlockFame": 400,  "buy": 150, "sell": 100, "product": "lana",     "productEmoji": "🧶", "produceDays": 4, "feed": 8,  "desc": "Da lana cada 4 días." },
+    { "id": "conejo",  "name": "Conejo",  "emoji": "🐇", "unlockFame": 900,  "buy": 220, "sell": 140, "product": "piel",     "productEmoji": "🧵", "produceDays": 3, "feed": 6,  "desc": "Suelta piel cada 3 días." },
+    { "id": "cabra",   "name": "Cabra",   "emoji": "🐐", "unlockFame": 2000, "buy": 300, "sell": 190, "product": "lecheCab", "productEmoji": "🥛", "produceDays": 3, "feed": 10, "desc": "Produce leche de cabra." },
+    { "id": "vaca",    "name": "Vaca",    "emoji": "🐄", "unlockFame": 6000, "buy": 550, "sell": 340, "product": "leche",    "productEmoji": "🥛", "produceDays": 3, "feed": 15, "desc": "Leche premium cada 3 días." },
+    { "id": "cerdo",   "name": "Cerdo",   "emoji": "🐖", "unlockFame": 12000, "buy": 700, "sell": 450, "product": "carne",    "productEmoji": "🥓", "produceDays": 5, "feed": 12, "desc": "Corte de carne cada 5 días." }
+  ],
+  "products": [
+    { "id": "huevo",    "name": "Huevo",         "emoji": "🥚", "basePrice": 12 },
+    { "id": "lana",     "name": "Lana",          "emoji": "🧶", "basePrice": 22 },
+    { "id": "piel",     "name": "Piel",          "emoji": "🧵", "basePrice": 18 },
+    { "id": "lecheCab", "name": "Leche de Cabra", "emoji": "🥛", "basePrice": 20 },
+    { "id": "leche",    "name": "Leche",         "emoji": "🥛", "basePrice": 28 },
+    { "id": "carne",    "name": "Carne",         "emoji": "🥓", "basePrice": 40 },
+    { "id": "sardina",  "name": "Sardina",       "emoji": "🐟", "basePrice": 10 },
+    { "id": "trucha",   "name": "Trucha",        "emoji": "🐠", "basePrice": 22 },
+    { "id": "salmon",   "name": "Salmón",        "emoji": "🐟", "basePrice": 40 },
+    { "id": "dorado",   "name": "Dorado",        "emoji": "🐠", "basePrice": 90 },
+    { "id": "trigo",    "name": "Trigo",         "emoji": "🌾", "basePrice": 8 },
+    { "id": "zanahoria", "name": "Zanahoria",    "emoji": "🥕", "basePrice": 11 },
+    { "id": "maiz",     "name": "Maíz",          "emoji": "🌽", "basePrice": 16 },
+    { "id": "tomate",   "name": "Tomate",        "emoji": "🍅", "basePrice": 22 },
+    { "id": "fresa",    "name": "Fresa",         "emoji": "🍓", "basePrice": 32 },
+    { "id": "cafe",     "name": "Café",          "emoji": "☕", "basePrice": 55 },
+    { "id": "trufa",    "name": "Trufa",         "emoji": "🍄", "basePrice": 140 }
+  ],
+  "fish": [
+    { "id": "sardina", "name": "Sardina", "emoji": "🐟", "unlockFame": 0,     "fryCost": 15,  "catchPrice": 10 },
+    { "id": "trucha",  "name": "Trucha",  "emoji": "🐠", "unlockFame": 500,  "fryCost": 30,  "catchPrice": 22 },
+    { "id": "salmon",  "name": "Salmón",  "emoji": "🐟", "unlockFame": 2500, "fryCost": 60,  "catchPrice": 40 },
+    { "id": "dorado",  "name": "Dorado",  "emoji": "🐠", "unlockFame": 9000, "fryCost": 150, "catchPrice": 90 }
+  ],
+  "weather": [
+    { "id": "soleado", "name": "Soleado", "emoji": "☀️", "growth": 1.0,  "fishMult": 1.0, "desc": "Crecimiento normal." },
+    { "id": "lluvia",  "name": "Lluvia",  "emoji": "🌧️", "growth": 1.3,  "fishMult": 1.1, "desc": "Riega gratis y acelera el crecimiento." },
+    { "id": "tormenta", "name": "Tormenta", "emoji": "⛈️", "growth": 0.75, "fishMult": 0.6, "desc": "Riega, pero puede dañar cultivos." },
+    { "id": "sequia",  "name": "Sequía",  "emoji": "🏜️", "growth": 0.55, "fishMult": 0.9, "desc": "Sin regar, los cultivos crecen lento." },
+    { "id": "calor",   "name": "Ola de Calor", "emoji": "🌡️", "growth": 0.7, "fishMult": 0.8, "desc": "Los cultivos necesitan más agua." },
+    { "id": "helada",  "name": "Helada",  "emoji": "❄️", "growth": 0.5,  "fishMult": 0.7, "desc": "Cultivos sin regar pueden helarse." }
+  ],
+  "wildlife": [
+    { "id": "abeja",     "name": "Abeja",     "emoji": "🐝", "kind": "benefit", "desc": "+15% de rendimiento en cosechas.", "source": "Colmena" },
+    { "id": "mariquita", "name": "Mariquita", "emoji": "🐞", "kind": "benefit", "desc": "Reduce el riesgo de plagas.", "source": "Flores" },
+    { "id": "lombriz",   "name": "Lombriz",   "emoji": "🪱", "kind": "benefit", "desc": "+10% de velocidad de crecimiento.", "source": "Composta" },
+    { "id": "zorro",     "name": "Zorro",     "emoji": "🦊", "kind": "harm",    "desc": "Roba huevos y asusta a las gallinas.", "source": "Cercas lo ahuyentan" },
+    { "id": "jabali",    "name": "Jabalí",    "emoji": "🐗", "kind": "harm",    "desc": "Destruye cultivos si no hay espantapájaros.", "source": "Espantapájaros" },
+    { "id": "plaga",     "name": "Plaga",     "emoji": "🦗", "kind": "harm",    "desc": "Daña los cultivos sin protección.", "source": "Mariquitas o repelente" }
+  ],
+  "decorations": [
+    { "id": "espantapajaros", "name": "Espantapájaros", "emoji": "🧙", "cost": 80,  "effect": "Ahuyenta jabalíes.", "slot": "harm" },
+    { "id": "cerco",          "name": "Cerco",          "emoji": "🚧", "cost": 100, "effect": "Protege de zorros.", "slot": "harm" },
+    { "id": "colmena",        "name": "Colmena",        "emoji": "🐝", "cost": 150, "effect": "Atrae abejas: +15% cosechas.", "slot": "boost" },
+    { "id": "flores",         "name": "Flores",         "emoji": "🌻", "cost": 120, "effect": "Atrae mariquitas y alegra animales.", "slot": "boost" },
+    { "id": "composta",       "name": "Composta",       "emoji": "🪵", "cost": 140, "effect": "Atrae lombrices: +10% crecimiento.", "slot": "boost" },
+    { "id": "molino",         "name": "Molino",         "emoji": "🎡", "cost": 400, "effect": "+10% de ingresos en el mercado.", "slot": "income" },
+    { "id": "granero",        "name": "Granero",        "emoji": "🏠", "cost": 600, "effect": "+40 de almacén.", "slot": "storage" },
+    { "id": "letrero",        "name": "Letrero",        "emoji": "🪧", "cost": 50,  "effect": "Decorativo.", "slot": "decor" }
+  ],
+  "staff": [
+    { "id": "peon",     "name": "Peón",     "emoji": "🧑‍🌾", "wage": 15, "desc": "Cosecha cultivos maduros automáticamente." },
+    { "id": "pescador", "name": "Pescador", "emoji": "🎣", "wage": 15, "desc": "Pesca en estanques automáticamente." },
+    { "id": "cuidador", "name": "Cuidador", "emoji": "🧑‍🤝‍🧑", "wage": 22, "desc": "Alimenta a los animales y reduce su gasto 50%." },
+    { "id": "contador", "name": "Contador", "emoji": "🧮", "wage": 30, "desc": "Reduce los impuestos un 20%." }
+  ],
+  "extras": [
+    { "id": "abono",    "name": "Abono",   "emoji": "💩", "cost": 25, "effect": "Mejora la calidad de una cosecha (+1)." },
+    { "id": "repelente", "name": "Repelente", "emoji": "🧴", "cost": 40, "effect": "Sin plagas durante 3 días." }
+  ]
+}
