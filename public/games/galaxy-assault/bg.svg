@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2560 1440" width="2560" height="1440">
+  <defs>
+    <linearGradient id="space" x1="0" y1="0" x2="2560" y2="1440">
+      <stop offset="0%" stop-color="#020208"/>
+      <stop offset="45%" stop-color="#0a0a24"/>
+      <stop offset="100%" stop-color="#040410"/>
+    </linearGradient>
+    <radialGradient id="nebula1" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#7a2aff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#7a2aff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebula2" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#00c4dd" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#00c4dd" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebula3" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#ff3388" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#ff3388" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="star" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="2560" height="1440" fill="url(#space)"/>
+  <ellipse cx="720" cy="420" rx="520" ry="300" fill="url(#nebula1)"/>
+  <ellipse cx="1900" cy="1050" rx="560" ry="320" fill="url(#nebula2)"/>
+  <ellipse cx="1500" cy="260" rx="380" ry="240" fill="url(#nebula3)"/>
+  <circle cx="340" cy="210" r="14" fill="url(#star)"/>
+  <circle cx="820" cy="120" r="9" fill="url(#star)"/>
+  <circle cx="1280" cy="90" r="12" fill="url(#star)"/>
+  <circle cx="1720" cy="160" r="7" fill="url(#star)"/>
+  <circle cx="2260" cy="120" r="10" fill="url(#star)"/>
+  <circle cx="2400" cy="380" r="6" fill="url(#star)"/>
+  <circle cx="120" cy="700" r="8" fill="url(#star)"/>
+  <circle cx="420" cy="980" r="11" fill="url(#star)"/>
+  <circle cx="980" cy="620" r="6" fill="url(#star)"/>
+  <circle cx="1500" cy="760" r="9" fill="url(#star)"/>
+  <circle cx="2100" cy="660" r="13" fill="url(#star)"/>
+  <circle cx="2480" cy="900" r="8" fill="url(#star)"/>
+  <circle cx="600" cy="1330" r="7" fill="url(#star)"/>
+  <circle cx="1180" cy="1100" r="10" fill="url(#star)"/>
+  <circle cx="2380" cy="1240" r="9" fill="url(#star)"/>
+  <circle cx="1620" cy="1320" r="6" fill="url(#star)"/>
+  <path d="M480 350 l6 14 14 6 -14 6 -6 14 -6 -14 -14 -6 14 -6 Z" fill="#ffffff" opacity="0.9"/>
+  <path d="M2050 210 l5 12 12 5 -12 5 -5 12 -5 -12 -12 -5 12 -5 Z" fill="#ffffff" opacity="0.8"/>
+  <path d="M1100 1380 l4 10 10 4 -10 4 -4 10 -4 -10 -10 -4 10 -4 Z" fill="#aacfff" opacity="0.8"/>
+  <path d="M240 1180 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4 Z" fill="#ffddee" opacity="0.7"/>
+</svg>

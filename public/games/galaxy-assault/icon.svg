@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="256" y1="0" x2="256" y2="512">
+      <stop offset="0%" stop-color="#0a0a24"/>
+      <stop offset="55%" stop-color="#06060f"/>
+      <stop offset="100%" stop-color="#02020a"/>
+    </linearGradient>
+    <radialGradient id="neb" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#7a2aff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#7a2aff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hull" x1="256" y1="130" x2="256" y2="380">
+      <stop offset="0%" stop-color="#aaf0ff"/>
+      <stop offset="45%" stop-color="#00e5ff"/>
+      <stop offset="100%" stop-color="#006699"/>
+    </linearGradient>
+    <linearGradient id="wingL" x1="220" y1="220" x2="100" y2="360">
+      <stop offset="0%" stop-color="#00c4dd"/>
+      <stop offset="100%" stop-color="#004466"/>
+    </linearGradient>
+    <linearGradient id="wingR" x1="292" y1="220" x2="412" y2="360">
+      <stop offset="0%" stop-color="#00c4dd"/>
+      <stop offset="100%" stop-color="#004466"/>
+    </linearGradient>
+    <radialGradient id="cockpit" cx="50%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#9ef6ff"/>
+      <stop offset="100%" stop-color="#0077aa"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="240" fill="url(#neb)"/>
+  <circle cx="256" cy="256" r="196" fill="none" stroke="#00e5ff" stroke-width="3" stroke-dasharray="6 18" opacity="0.5"/>
+  <circle cx="96" cy="96" r="8" fill="#ffffff" opacity="0.85"/>
+  <circle cx="420" cy="120" r="6" fill="#ffffff" opacity="0.7"/>
+  <circle cx="420" cy="400" r="9" fill="#ffffff" opacity="0.8"/>
+  <circle cx="90" cy="420" r="5" fill="#ffffff" opacity="0.6"/>
+  <path d="M256 170 L320 310 L256 310 L192 310 Z" fill="url(#hull)" stroke="#00e5ff" stroke-width="3"/>
+  <path d="M192 250 L96 360 L160 310 L192 310 Z" fill="url(#wingL)" stroke="#00aacc" stroke-width="2.5"/>
+  <path d="M320 250 L416 360 L352 310 L320 310 Z" fill="url(#wingR)" stroke="#00aacc" stroke-width="2.5"/>
+  <ellipse cx="256" cy="236" rx="36" ry="52" fill="url(#cockpit)" stroke="#00e5ff" stroke-width="3"/>
+  <path d="M246 374 L266 374" stroke="#66d9ff" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="246" cy="392" rx="12" ry="20" fill="#00c4dd" opacity="0.9"/>
+  <ellipse cx="266" cy="392" rx="12" ry="20" fill="#00c4dd" opacity="0.9"/>
+  <circle cx="256" cy="220" r="7" fill="#ffffff" opacity="0.9"/>
+</svg>

@@ -171,4 +171,15 @@ export const GAMES: Game[] = [
     accentColor: "#7cff5a",
     tags: ["Simulación", "Granja", "Mobile"],
   },
+  {
+    id: "016",
+    slug: "galaxy-assault",
+    title: "Galaxy Assault",
+    description: "Mapa abierto espacial en horizontal: explora la galaxia, derrota enemigos y jefes, recoge munición y mejora tu nave. Base segura con inventario.",
+    route: "/galaxy-assault",
+    gradient: "linear-gradient(180deg, #02020a 0%, #0a0a24 45%, #003366 100%)",
+    accentColor: "#00e5ff",
+    tags: ["Shooter", "Mapa Abierto", "Mobile"],
+    icon: "/games/galaxy-assault/icon.svg",
+  },
 ];

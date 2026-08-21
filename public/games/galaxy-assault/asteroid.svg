@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="rock" cx="42%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#d8cfc0"/>
+      <stop offset="50%" stop-color="#9c8f7a"/>
+      <stop offset="100%" stop-color="#4a4234"/>
+    </radialGradient>
+    <radialGradient id="shadow" cx="65%" cy="70%" r="55%">
+      <stop offset="0%" stop-color="#241f18" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#241f18" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M128 18 L178 44 L196 92 L176 140 L196 196 L146 222 L96 204 L66 156 L76 96 L92 50 Z" fill="url(#rock)" stroke="#2e2a20" stroke-width="4"/>
+  <path d="M128 18 L178 44 L196 92 L176 140 L196 196 L146 222 L96 204 L66 156 L76 96 L92 50 Z" fill="url(#shadow)"/>
+  <path d="M92 50 L76 96 L128 90 L128 18 Z" fill="#b3a890" opacity="0.55"/>
+  <path d="M96 204 L66 156 L112 168 L146 222 Z" fill="#5c5240" opacity="0.5"/>
+  <circle cx="120" cy="80" r="8" fill="#f0e8d8" opacity="0.6"/>
+  <circle cx="160" cy="150" r="6" fill="#f0e8d8" opacity="0.45"/>
+  <circle cx="100" cy="160" r="5" fill="#f0e8d8" opacity="0.5"/>
+  <path d="M92 50 L108 60 M76 96 L92 96 M176 140 L192 142 M146 222 L136 208" stroke="#f0e8d8" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+</svg>

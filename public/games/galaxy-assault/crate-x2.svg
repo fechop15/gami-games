@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="box" x1="128" y1="60" x2="128" y2="200">
+      <stop offset="0%" stop-color="#eafff5"/>
+      <stop offset="50%" stop-color="#44cc66"/>
+      <stop offset="100%" stop-color="#1a6633"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7CFF5A" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#7CFF5A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="104" fill="url(#glow)"/>
+  <rect x="52" y="66" width="152" height="124" rx="16" fill="url(#box)" stroke="#7CFF5A" stroke-width="4"/>
+  <rect x="62" y="76" width="132" height="104" rx="10" fill="#2e8b45" opacity="0.6"/>
+  <rect x="96" y="92" width="14" height="56" rx="6" fill="#ffffff" opacity="0.95"/>
+  <rect x="146" y="92" width="14" height="56" rx="6" fill="#ffffff" opacity="0.95"/>
+  <rect x="82" y="66" width="14" height="124" rx="6" fill="#7CFF5A" opacity="0.6"/>
+  <rect x="160" y="66" width="14" height="124" rx="6" fill="#7CFF5A" opacity="0.6"/>
+  <path d="M128 66 L128 190" stroke="#d9ffe8" stroke-width="3" stroke-dasharray="6 8" opacity="0.8"/>
+</svg>

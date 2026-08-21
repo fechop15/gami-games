@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#ff5533" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="40" fill="url(#core)"/>
+  <circle cx="128" cy="128" r="58" fill="none" stroke="#ff5533" stroke-width="5"/>
+  <circle cx="128" cy="128" r="82" fill="none" stroke="#ff5533" stroke-width="3" stroke-dasharray="12 14"/>
+  <path d="M128 14 L122 30 M128 14 L134 30" stroke="#ff5533" stroke-width="6" stroke-linecap="round"/>
+  <path d="M128 242 L122 226 M128 242 L134 226" stroke="#ff5533" stroke-width="6" stroke-linecap="round"/>
+  <path d="M14 128 L30 122 M14 128 L30 134" stroke="#ff5533" stroke-width="6" stroke-linecap="round"/>
+  <path d="M242 128 L226 122 M242 128 L226 134" stroke="#ff5533" stroke-width="6" stroke-linecap="round"/>
+  <path d="M34 34 L46 46 M34 34 L46 34 L34 46" stroke="#ffaa88" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <path d="M222 34 L210 46 M222 34 L210 34 L222 46" stroke="#ffaa88" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <path d="M34 222 L46 210 M34 222 L34 210 L46 222" stroke="#ffaa88" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <path d="M222 222 L210 210 M222 222 L210 222 L222 210" stroke="#ffaa88" stroke-width="5" stroke-linecap="round" fill="none"/>
+</svg>
