@@ -96,7 +96,7 @@ export function makeGS(): GS {
 // Layout del HUD: defaults según la posición guardada (o posición por defecto)
 function defaultHud(save: { hud: Record<string, { x: number; y: number; minimized: boolean; orientation: "vertical" | "horizontal" }> }): Record<HudPanelId, HudPanelState> {
   const out = {} as Record<HudPanelId, HudPanelState>
-  const ids: HudPanelId[] = ["vitals", "stats", "events", "minimap"]
+  const ids: HudPanelId[] = ["vitals", "stats", "events", "minimap", "joystick", "fire", "ammo"]
   for (const id of ids) {
     const saved = save.hud[id]
     const def = PANEL_DEFAULT[id]

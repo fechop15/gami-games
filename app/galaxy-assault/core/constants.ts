@@ -166,6 +166,19 @@ export const MINIMAP_BTN: BtnRect = { x: W - 54, y: 60, w: 44, h: 44 }
 export const FIRE_BTN: BtnRect = { x: W - 200, y: H - 170, w: 150, h: 150 }
 export const EDIT_BTN: BtnRect = { x: W - 54, y: 112, w: 44, h: 44 }
 
+// ── Barra rápida de munición (cuadros abajo-centro) ──
+export const AMMO_SQUARE = 62
+export const AMMO_GAP = 10
+export const AMMO_BAR_Y = H - 78
+export const AMMO_COUNT = 5
+export const AMMO_TOTAL = AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
+export function ammoBarX(i: number): number {
+  return W / 2 - AMMO_TOTAL / 2 + i * (AMMO_SQUARE + AMMO_GAP)
+}
+export function ammoRect(i: number): BtnRect {
+  return { x: ammoBarX(i), y: AMMO_BAR_Y, w: AMMO_SQUARE, h: AMMO_SQUARE }
+}
+
 // ── Paneles HUD personalizables ──
 export const PANEL_HEADER_H = 24
 export const PANEL_MIN_BTN_W = 22
@@ -174,19 +187,9 @@ export const PANEL_DEFAULT: Record<string, { x: number; y: number }> = {
   stats: { x: 16, y: 16 },
   events: { x: 16, y: 250 },
   minimap: { x: 16, y: 16 },
-}
-
-// ── Barra rápida de munición (cuadros abajo-centro) ──
-export const AMMO_SQUARE = 62
-export const AMMO_GAP = 10
-export const AMMO_BAR_Y = H - 78
-export const AMMO_COUNT = 5
-export function ammoBarX(i: number): number {
-  const total = AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
-  return W / 2 - total / 2 + i * (AMMO_SQUARE + AMMO_GAP)
-}
-export function ammoRect(i: number): BtnRect {
-  return { x: ammoBarX(i), y: AMMO_BAR_Y, w: AMMO_SQUARE, h: AMMO_SQUARE }
+  joystick: { x: JOY_PAD_X, y: JOY_PAD_Y },
+  fire: { x: FIRE_BTN.x, y: FIRE_BTN.y },
+  ammo: { x: W / 2 - AMMO_TOTAL / 2, y: AMMO_BAR_Y },
 }
 
 export interface BtnRect { x: number; y: number; w: number; h: number }

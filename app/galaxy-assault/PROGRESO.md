@@ -88,6 +88,11 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Barra de munición distingue láser activo (➤) y misil paralelo (⇄); teclas 1-3 láser, 4-5 misil
 - [x] Tienda de munición en la base: comprar x1/x2/x3 con monedas (config ammoShop)
 
+## Fase 17 — Controles movibles y stats 2x2 (v1.8)
+- [x] El pad del joystick, el botón de disparo y la barra de munición ahora son paneles movibles en modo edición (⚙)
+- [x] Se guardan sus posiciones en localStorage como el resto de paneles
+- [x] Panel de estadísticas en layout 2×2 (Nivel+XP, monedas, bajas, jefes) con orientación vertical/horizontal
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable

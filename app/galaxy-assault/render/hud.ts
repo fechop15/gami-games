@@ -1,6 +1,6 @@
 // HUD: barra rápida de munición (cuadros abajo-centro), botón de disparo y joystick.
 import type { GS } from "../core/types"
-import { W, H, FIRE_BTN, AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, JOY_PAD_X, JOY_PAD_Y, JOY_PAD_SIZE, JOY_RADIUS } from "../core/constants"
+import { W, H, AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_TOTAL, JOY_RADIUS, JOY_PAD_SIZE, PANEL_HEADER_H } from "../core/constants"
 import { weaponDef, AMMO_ORDER } from "../data/ammo"
 import { font, rgba, roundRectPath } from "../../lib/gameKit"
 import { drawSprite, type SpriteKey } from "../core/sprites"
@@ -12,12 +12,14 @@ export function drawHUD(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void
   drawAmmoBar(ctx, gs, imgs)
   drawFireButton(ctx, gs)
   drawJoystick(ctx, gs)
+  drawControlsEdit(ctx, gs)
   drawFlash(ctx, gs)
 }
 
 function drawAmmoBar(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {
-  const total = AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
-  const start = W / 2 - total / 2
+  const barX = gs.hud.ammo.x
+  const barY = gs.hud.ammo.y
+  const start = barX
   const pressed = getPressedAmmo()
   for (let i = 0; i < AMMO_COUNT; i++) {
     const id = AMMO_ORDER[i]
@@ -35,13 +37,13 @@ function drawAmmoBar(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {
       ctx.shadowBlur = 18
     }
     ctx.fillStyle = active ? rgba(w.color, 0.25) : "rgba(8,10,20,0.7)"
-    roundRectPath(ctx, x, AMMO_BAR_Y, AMMO_SQUARE, AMMO_SQUARE, 12)
+    roundRectPath(ctx, x, barY, AMMO_SQUARE, AMMO_SQUARE, 12)
     ctx.fill()
     ctx.restore()
 
     ctx.strokeStyle = active ? w.color : empty ? "rgba(255,85,51,0.6)" : "rgba(255,255,255,0.25)"
     ctx.lineWidth = active ? 3 : 1.5
-    roundRectPath(ctx, x, AMMO_BAR_Y, AMMO_SQUARE, AMMO_SQUARE, 12)
+    roundRectPath(ctx, x, barY, AMMO_SQUARE, AMMO_SQUARE, 12)
     ctx.stroke()
 
     // Indicador pequeño del láser activo (1-3) o misil paralelo (4-5)
@@ -49,18 +51,18 @@ function drawAmmoBar(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): void {
     ctx.font = font(9, 800)
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
-    ctx.fillText(isMissile ? "⇄" : "➤", x + AMMO_SQUARE / 2, AMMO_BAR_Y + 6)
+    ctx.fillText(isMissile ? "⇄" : "➤", x + AMMO_SQUARE / 2, barY + 6)
     ctx.textBaseline = "alphabetic"
 
     // Sprite del arma
-    drawSprite(ctx, imgs, w.sprite as SpriteKey, x + AMMO_SQUARE / 2, AMMO_BAR_Y + 24, 32)
+    drawSprite(ctx, imgs, w.sprite as SpriteKey, x + AMMO_SQUARE / 2, barY + 24, 32)
 
     // Contador (sin texto de nombre)
     ctx.fillStyle = empty ? "#ff5533" : active ? w.color : "rgba(255,255,255,0.6)"
     ctx.font = font(14, 900)
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
-    ctx.fillText(`${ammo}`, x + AMMO_SQUARE / 2, AMMO_BAR_Y + AMMO_SQUARE - 8)
+    ctx.fillText(`${ammo}`, x + AMMO_SQUARE / 2, barY + AMMO_SQUARE - 8)
     ctx.textBaseline = "alphabetic"
     ctx.textAlign = "left"
   }
@@ -76,7 +78,7 @@ function drawAmmoTooltip(ctx: CanvasRenderingContext2D, gs: GS, idx: number, bar
   const id = AMMO_ORDER[idx]
   const w = weaponDef(id)
   const cx = barStart + idx * (AMMO_SQUARE + AMMO_GAP) + AMMO_SQUARE / 2
-  const y = AMMO_BAR_Y - 44
+  const y = gs.hud.ammo.y - 44
 
   ctx.save()
   ctx.shadowColor = rgba(w.color, 0.8)
@@ -110,15 +112,15 @@ function drawAmmoTooltip(ctx: CanvasRenderingContext2D, gs: GS, idx: number, bar
 }
 
 function drawFireButton(ctx: CanvasRenderingContext2D, gs: GS): void {
-  const b = FIRE_BTN
+  const b = gs.hud.fire
   const hasTarget = gs.targetId !== null
   const hasAmmo = gs.ammo[gs.activeWeapon] > 0
   const active = gs.firing
   const w = weaponDef(gs.activeWeapon)
 
-  const cx = b.x + b.w / 2
-  const cy = b.y + b.h / 2
-  const R = b.w / 2
+  const cx = b.x + 75
+  const cy = b.y + 75
+  const R = 75
 
   ctx.save()
   if (active) {
@@ -150,8 +152,10 @@ function drawFireButton(ctx: CanvasRenderingContext2D, gs: GS): void {
 
 function drawJoystick(ctx: CanvasRenderingContext2D, gs: GS): void {
   // Pad fijo del joystick (área izquierda donde se puede reposicionar)
-  const padCx = JOY_PAD_X + JOY_PAD_SIZE / 2
-  const padCy = JOY_PAD_Y + JOY_PAD_SIZE / 2
+  const padX = gs.hud.joystick.x
+  const padY = gs.hud.joystick.y
+  const padCx = padX + JOY_PAD_SIZE / 2
+  const padCy = padY + JOY_PAD_SIZE / 2
   ctx.strokeStyle = "rgba(0,229,255,0.16)"
   ctx.lineWidth = 2
   ctx.setLineDash([6, 10])
@@ -187,6 +191,40 @@ function drawJoystick(ctx: CanvasRenderingContext2D, gs: GS): void {
   ctx.beginPath()
   ctx.arc(baseX + dx * R, baseY + dy * R, 30, 0, Math.PI * 2)
   ctx.stroke()
+}
+
+// En modo edición: cabeceras/bordes para joystick, disparo y munición
+function drawControlsEdit(ctx: CanvasRenderingContext2D, gs: GS): void {
+  if (!gs.editMode) return
+  const items: Array<{ id: "joystick" | "fire" | "ammo"; x: number; y: number; w: number; h: number; title: string }> = []
+  items.push({ id: "joystick", x: gs.hud.joystick.x, y: gs.hud.joystick.y, w: JOY_PAD_SIZE, h: JOY_PAD_SIZE, title: "🕹 Joystick" })
+  items.push({ id: "fire", x: gs.hud.fire.x, y: gs.hud.fire.y, w: 150, h: 150, title: "🔫 Disparo" })
+  items.push({ id: "ammo", x: gs.hud.ammo.x, y: gs.hud.ammo.y, w: AMMO_TOTAL, h: AMMO_SQUARE, title: "🧨 Munición" })
+
+  for (const it of items) {
+    const hy = it.y - PANEL_HEADER_H - 2
+    ctx.fillStyle = "rgba(12,16,32,0.9)"
+    roundRectPath(ctx, it.x, hy, it.w, PANEL_HEADER_H, 8)
+    ctx.fill()
+    ctx.strokeStyle = "rgba(0,229,255,0.5)"
+    ctx.lineWidth = 1.5
+    roundRectPath(ctx, it.x, hy, it.w, PANEL_HEADER_H, 8)
+    ctx.stroke()
+    ctx.fillStyle = "#ffffff"
+    ctx.font = font(13, 800)
+    ctx.textAlign = "left"
+    ctx.textBaseline = "middle"
+    ctx.fillText(it.title, it.x + 8, hy + PANEL_HEADER_H / 2 + 1)
+    ctx.textAlign = "left"
+    ctx.textBaseline = "alphabetic"
+    // Borde punteado del área
+    ctx.strokeStyle = "rgba(0,229,255,0.9)"
+    ctx.lineWidth = 2
+    ctx.setLineDash([6, 6])
+    roundRectPath(ctx, it.x - 2, it.y - 2, it.w + 4, it.h + 4, 10)
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
 }
 
 function drawFlash(ctx: CanvasRenderingContext2D, gs: GS): void {

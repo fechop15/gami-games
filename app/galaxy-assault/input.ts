@@ -1,8 +1,8 @@
 // Input: joystick en pad fijo + tap para elegir objetivo + botón disparo + barra de munición.
 import type { GS, HudPanelId } from "./core/types"
 import {
-  W, H, JOY_RADIUS, JOY_PAD_X, JOY_PAD_Y, JOY_PAD_SIZE, MUTE_BTN, MINIMAP_BTN, FIRE_BTN, EDIT_BTN,
-  AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_BAR_Y, PANEL_HEADER_H, PANEL_MIN_BTN_W, CONFIG, AMMO_SHOP, inRect,
+  W, H, JOY_RADIUS, JOY_PAD_SIZE, MUTE_BTN, MINIMAP_BTN, EDIT_BTN,
+  AMMO_SQUARE, AMMO_GAP, AMMO_COUNT, AMMO_TOTAL, PANEL_HEADER_H, PANEL_MIN_BTN_W, CONFIG, AMMO_SHOP, inRect,
 } from "./core/constants"
 import { startRun, saveProgress, saveHudLayout } from "./engine"
 import { enemyAtScreen, setTarget } from "./engine/combat"
@@ -30,13 +30,13 @@ function clearPressedAmmo(): void {
   pressedAmmoTouchId = null
 }
 
-/** Rectángulo del pad del joystick (zona fija izquierda). */
-export function joystickPadRect(): { x: number; y: number; w: number; h: number } {
-  return { x: JOY_PAD_X, y: JOY_PAD_Y, w: JOY_PAD_SIZE, h: JOY_PAD_SIZE }
+/** Rectángulo del pad del joystick (posición configurable del HUD). */
+export function joystickPadRect(gs: GS): { x: number; y: number; w: number; h: number } {
+  return { x: gs.hud.joystick.x, y: gs.hud.joystick.y, w: JOY_PAD_SIZE, h: JOY_PAD_SIZE }
 }
 
-function inJoystickPad(x: number, y: number): boolean {
-  const p = joystickPadRect()
+function inJoystickPad(gs: GS, x: number, y: number): boolean {
+  const p = joystickPadRect(gs)
   return x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h
 }
 
@@ -129,7 +129,7 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   }
 
   // Barra rápida de munición (cuadros abajo-centro)
-  const ammoIdx = ammoSquareAt(x, y)
+  const ammoIdx = ammoSquareAt(gs, x, y)
   if (ammoIdx !== -1) {
     const ammo = AMMO_ORDER[ammoIdx]
     if (ammo === "missile_a" || ammo === "missile_b") {
@@ -145,7 +145,7 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   }
 
   // Botón de disparo (mantener)
-  if (inRect(FIRE_BTN, x, y)) {
+  if (x >= gs.hud.fire.x && x <= gs.hud.fire.x + 150 && y >= gs.hud.fire.y && y <= gs.hud.fire.y + 150) {
     gs.firing = true
     touchRole.set(id, "fire")
     return
@@ -160,12 +160,12 @@ export function onTouchStart(gs: GS, id: number, x: number, y: number): void {
   }
 
   // Zonas muertas del HUD: no joystick
-  if (isUiDeadZone(x, y)) return
+  if (isUiDeadZone(gs, x, y)) return
 
   // Joystick solo dentro del pad fijo (reposicionable al tocar dentro de él);
   // fuera del pad, un tap selecciona objetivo (sin joystick)
   if (!touchRole.has(id)) {
-    if (inJoystickPad(x, y)) {
+    if (inJoystickPad(gs, x, y)) {
       touchRole.set(id, "joystick")
       tapStart.set(id, { x, y })
       gs.joystick.active = true
@@ -286,28 +286,29 @@ export function resetTouch(): void {
 }
 
 // Zonas de UI donde el toque NO inicia el joystick (HUD)
-function isUiDeadZone(x: number, y: number): boolean {
-  if (inRect(FIRE_BTN, x, y)) return true
-  // Panel del minimapa (arriba-izquierda)
-  const mm = CONFIG.minimap
-  if (x >= mm.offsetX && x <= mm.offsetX + mm.size && y >= mm.offsetY && y <= mm.offsetY + mm.size) return true
-  // Barra de munición
-  const ammoStart = W / 2 - (AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP) / 2
-  if (x >= ammoStart && x <= ammoStart + AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
-      && y >= AMMO_BAR_Y && y <= AMMO_BAR_Y + AMMO_SQUARE) return true
+function isUiDeadZone(gs: GS, x: number, y: number): boolean {
+  // Botón de disparo (posición del HUD)
+  if (x >= gs.hud.fire.x && x <= gs.hud.fire.x + 150 && y >= gs.hud.fire.y && y <= gs.hud.fire.y + 150) return true
+  // Barra de munición (posición del HUD)
+  const ammoStart = gs.hud.ammo.x
+  if (x >= ammoStart && x <= ammoStart + AMMO_TOTAL && y >= gs.hud.ammo.y && y <= gs.hud.ammo.y + AMMO_SQUARE) return true
   return false
 }
 
 // Hit-test de los paneles del HUD (para mover/minimizar/orientar en modo edición)
 function panelAt(gs: GS, x: number, y: number): { id: HudPanelId; isMin: boolean; isOrient: boolean } | null {
-  const ids: HudPanelId[] = ["vitals", "stats", "events", "minimap"]
+  const ids: HudPanelId[] = ["vitals", "stats", "events", "minimap", "joystick", "fire", "ammo"]
   for (const id of ids) {
-    const r = id === "minimap" ? minimapRectFromHud(gs) : panelRect(id, gs)
+    const r = id === "minimap" ? minimapRectFromHud(gs)
+      : id === "joystick" ? { x: gs.hud.joystick.x, y: gs.hud.joystick.y, w: JOY_PAD_SIZE, h: JOY_PAD_SIZE }
+      : id === "fire" ? { x: gs.hud.fire.x, y: gs.hud.fire.y, w: 150, h: 150 }
+      : id === "ammo" ? { x: gs.hud.ammo.x, y: gs.hud.ammo.y, w: AMMO_TOTAL, h: AMMO_SQUARE }
+      : panelRect(id, gs)
     // Cabecera del panel
     const header = id === "minimap" ? { x: r.x, y: r.y - PANEL_HEADER_H - 2, w: r.w, h: PANEL_HEADER_H } : { x: r.x, y: r.y, w: r.w, h: PANEL_HEADER_H }
     if (inRect(header, x, y)) {
       const isMin = x >= header.x + header.w - PANEL_MIN_BTN_W - 14 && x <= header.x + header.w
-      const isOrient = id === "vitals" && x >= header.x + header.w - PANEL_MIN_BTN_W - 40 && x <= header.x + header.w - PANEL_MIN_BTN_W - 12
+      const isOrient = (id === "vitals" || id === "stats") && x >= header.x + header.w - PANEL_MIN_BTN_W - 40 && x <= header.x + header.w - PANEL_MIN_BTN_W - 12
       return { id, isMin, isOrient }
     }
     if (inRect({ x: r.x, y: r.y + (id === "minimap" ? 0 : PANEL_HEADER_H), w: r.w, h: 200 }, x, y)) {
@@ -321,10 +322,9 @@ function minimapRectFromHud(gs: GS) {
   return { x: gs.hud.minimap.x, y: gs.hud.minimap.y, w: CONFIG.minimap.size, h: CONFIG.minimap.size }
 }
 
-function ammoSquareAt(x: number, y: number): number {
-  if (y < AMMO_BAR_Y || y > AMMO_BAR_Y + AMMO_SQUARE) return -1
-  const total = AMMO_COUNT * AMMO_SQUARE + (AMMO_COUNT - 1) * AMMO_GAP
-  const start = W / 2 - total / 2
+function ammoSquareAt(gs: GS, x: number, y: number): number {
+  if (y < gs.hud.ammo.y || y > gs.hud.ammo.y + AMMO_SQUARE) return -1
+  const start = gs.hud.ammo.x
   for (let i = 0; i < AMMO_COUNT; i++) {
     const sx = start + i * (AMMO_SQUARE + AMMO_GAP)
     if (x >= sx && x <= sx + AMMO_SQUARE) return i

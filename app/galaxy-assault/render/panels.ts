@@ -25,8 +25,8 @@ export function panelRect(id: HudPanelId, gs: GS): PanelRect {
     return { x: p.x, y: p.y, w, h: PANEL_HEADER_H + bodyH, header: { x: p.x, y: p.y, w, h: PANEL_HEADER_H } }
   }
   if (id === "stats") {
-    const w = 250
-    const h = 100
+    const w = 260
+    const h = 96
     const bodyH = p.minimized ? 0 : h
     return { x: p.x, y: p.y, w, h: PANEL_HEADER_H + bodyH, header: { x: p.x, y: p.y, w, h: PANEL_HEADER_H } }
   }
@@ -62,7 +62,7 @@ function drawHeader(ctx: CanvasRenderingContext2D, id: HudPanelId, r: PanelRect,
     ctx.fillStyle = "#ffffff"
     ctx.font = font(12, 800)
     ctx.fillText(p.minimized ? "▾" : "▴", bx + PANEL_MIN_BTN_W / 2, h.y + h.h / 2 + 1)
-    if (id === "vitals") {
+    if (id === "vitals" || id === "stats") {
       const ox = bx - 26
       ctx.fillStyle = "rgba(255,255,255,0.2)"
       ctx.beginPath()
@@ -101,8 +101,10 @@ export function drawPanel(
   if (id === "vitals") drawVitals(ctx, gs, r, time)
   else if (id === "stats") drawStats(ctx, gs, r)
   else if (id === "events") drawEvents(ctx, gs, r)
+  else return
 
-  drawHeader(ctx, id, r, { vitals: "Vida / Escudo", stats: "Estadísticas", events: "Acontecimientos", minimap: "Mapa" }[id], accent, gs)
+  const titles: Record<"vitals" | "stats" | "events", string> = { vitals: "Vida / Escudo", stats: "Estadísticas", events: "Acontecimientos" }
+  drawHeader(ctx, id, r, titles[id], accent, gs)
 
   if (gs.editMode) {
     ctx.strokeStyle = rgba(accent, 0.9)
@@ -176,43 +178,85 @@ function barV(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h:
 function drawStats(ctx: CanvasRenderingContext2D, gs: GS, r: PanelRect): void {
   if (gs.hud.stats.minimized) return
   const bodyY = r.y + PANEL_HEADER_H
-  drawBody(ctx, r.x, bodyY, r.w, r.h - PANEL_HEADER_H, "#ffd54a")
+  const bodyH = r.h - PANEL_HEADER_H
+  drawBody(ctx, r.x, bodyY, r.w, bodyH, "#ffd54a")
   const s = gs.save
-  // Nivel + barra XP
   const need = xpForNextLevel(s.level)
   const xpPct = Math.max(0, Math.min(1, s.xp / need))
-  ctx.fillStyle = "#00e5ff"
-  ctx.font = font(16, 900)
-  ctx.textAlign = "left"
-  ctx.fillText(`⭐ Nivel ${s.level}`, r.x + 12, bodyY + 20)
-  ctx.textAlign = "left"
-  // Barra XP
-  const bx = r.x + 12
-  const by = bodyY + 30
-  const bw = r.w - 24
-  const bh = 9
-  ctx.fillStyle = "rgba(0,0,0,0.6)"
-  roundRectPath(ctx, bx, by, bw, bh, bh / 2)
-  ctx.fill()
-  ctx.fillStyle = "#00e5ff"
-  roundRectPath(ctx, bx + 1, by + 1, Math.max(4, (bw - 2) * xpPct), bh - 2, (bh - 2) / 2)
-  ctx.fill()
-  ctx.fillStyle = "rgba(255,255,255,0.75)"
-  ctx.font = font(10, 700)
-  ctx.textAlign = "right"
-  ctx.fillText(`${s.xp}/${need} xp`, bx + bw, by + bh / 2)
-  ctx.textAlign = "left"
-
-  ctx.fillStyle = "#ffd54a"
-  ctx.font = font(15, 900)
-  ctx.fillText(`🪙 ${s.coins.toLocaleString()}`, r.x + 12, bodyY + 56)
-  ctx.fillStyle = "#ffffff"
-  ctx.font = font(13, 800)
-  ctx.fillText(`💀 Bajas: ${s.kills}`, r.x + 12, bodyY + 76)
   const bossCount = Object.values(s.bossKills).reduce((a, b) => a + b, 0)
-  ctx.fillStyle = "#ffdd88"
-  ctx.fillText(`👑 Jefes: ${bossCount}`, r.x + 12, bodyY + 94)
+  ctx.textBaseline = "middle"
+
+  if (gs.hud.stats.orientation === "vertical") {
+    // Layout vertical: Nivel+XP · Monedas · Bajas · Jefes apilados
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#00e5ff"
+    ctx.font = font(14, 900)
+    ctx.fillText(`⭐ Nivel ${s.level}`, r.x + r.w / 2, bodyY + 16)
+    const bx = r.x + 10
+    const bw = r.w - 20
+    const by = bodyY + 24
+    const bh = 6
+    ctx.fillStyle = "rgba(0,0,0,0.6)"
+    roundRectPath(ctx, bx, by, bw, bh, bh / 2)
+    ctx.fill()
+    ctx.fillStyle = "#00e5ff"
+    roundRectPath(ctx, bx + 1, by + 1, Math.max(4, (bw - 2) * xpPct), bh - 2, (bh - 2) / 2)
+    ctx.fill()
+    ctx.fillStyle = "rgba(255,255,255,0.7)"
+    ctx.font = font(9, 700)
+    ctx.fillText(`${s.xp}/${need}`, r.x + r.w / 2, by + 10)
+    ctx.fillStyle = "#ffd54a"
+    ctx.font = font(15, 900)
+    ctx.fillText(`🪙 ${s.coins.toLocaleString()}`, r.x + r.w / 2, bodyY + 48)
+    ctx.fillStyle = "#ffffff"
+    ctx.font = font(14, 800)
+    ctx.fillText(`💀 ${s.kills} bajas`, r.x + r.w / 2, bodyY + 72)
+    ctx.fillStyle = "#ffdd88"
+    ctx.fillText(`👑 ${bossCount} jefes`, r.x + r.w / 2, bodyY + 94)
+  } else {
+    // Grid 2×2: Nivel/XP · Monedas · Bajas · Jefes
+    const colW = r.w / 2
+    const rowH = bodyH / 2
+    ctx.textAlign = "center"
+
+    ctx.fillStyle = "#00e5ff"
+    ctx.font = font(15, 900)
+    ctx.fillText(`⭐ Nivel ${s.level}`, r.x + colW / 2, bodyY + rowH * 0.38)
+    const bx = r.x + 10
+    const bw = colW - 20
+    const by = bodyY + rowH * 0.72
+    const bh = 7
+    ctx.fillStyle = "rgba(0,0,0,0.6)"
+    roundRectPath(ctx, bx, by, bw, bh, bh / 2)
+    ctx.fill()
+    ctx.fillStyle = "#00e5ff"
+    roundRectPath(ctx, bx + 1, by + 1, Math.max(4, (bw - 2) * xpPct), bh - 2, (bh - 2) / 2)
+    ctx.fill()
+    ctx.fillStyle = "rgba(255,255,255,0.75)"
+    ctx.font = font(9, 700)
+    ctx.fillText(`${s.xp}/${need}`, r.x + colW / 2, by + bh + 10)
+
+    ctx.fillStyle = "#ffd54a"
+    ctx.font = font(15, 900)
+    ctx.fillText(`🪙 ${s.coins.toLocaleString()}`, r.x + colW * 1.5, bodyY + rowH * 0.5)
+
+    ctx.fillStyle = "#ffffff"
+    ctx.font = font(14, 800)
+    ctx.fillText(`💀 ${s.kills}`, r.x + colW / 2, bodyY + rowH * 1.5)
+    ctx.fillStyle = "rgba(255,255,255,0.6)"
+    ctx.font = font(10, 700)
+    ctx.fillText("bajas", r.x + colW / 2, bodyY + rowH * 1.5 + 14)
+
+    ctx.fillStyle = "#ffdd88"
+    ctx.font = font(14, 800)
+    ctx.fillText(`👑 ${bossCount}`, r.x + colW * 1.5, bodyY + rowH * 1.5)
+    ctx.fillStyle = "rgba(255,255,255,0.6)"
+    ctx.font = font(10, 700)
+    ctx.fillText("jefes", r.x + colW * 1.5, bodyY + rowH * 1.5 + 14)
+  }
+
   ctx.textAlign = "left"
+  ctx.textBaseline = "alphabetic"
 }
 
 function drawEvents(ctx: CanvasRenderingContext2D, gs: GS, r: PanelRect): void {

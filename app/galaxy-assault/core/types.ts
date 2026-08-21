@@ -6,7 +6,7 @@ export type AmmoType = "x1" | "x2" | "x3" | "missile_a" | "missile_b"
 export type WeaponKind = "laser" | "missile"
 export type DropId = "scrap" | "energy" | "core" | "repairBot"
 export type EnemyKind = "npc" | "boss"
-export type HudPanelId = "vitals" | "stats" | "events" | "minimap"
+export type HudPanelId = "vitals" | "stats" | "events" | "minimap" | "joystick" | "fire" | "ammo"
 
 export interface HudPanelState {
   x: number
