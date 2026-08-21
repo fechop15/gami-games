@@ -125,29 +125,32 @@ export function drawBaseMenu(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs):
   const close = drawButton(ctx, W / 2, py + ph - 70, 240, 50, "SALIR AL MAPA", { color: "#7CFF5A", fontSize: 17 })
   gs.btns.push({ x: close.x, y: close.y, w: close.w, h: close.h })
 
-  // ── Tienda de munición (x1/x2/x3) ──
+  // ── Tienda de munición (x1/x2/x3 + misiles) ──
   ctx.fillStyle = "rgba(255,255,255,0.85)"
   ctx.font = font(18, 800)
   ctx.textAlign = "left"
   ctx.textBaseline = "middle"
-  ctx.fillText("🛒 Tienda de munición", px + 40, py + 340)
+  ctx.fillText("🛒 Tienda de munición", px + 40, py + 330)
   ctx.textBaseline = "alphabetic"
 
   const shop = AMMO_SHOP
-  const ammoBtns: Array<{ id: "x1" | "x2" | "x3" }> = [{ id: "x1" }, { id: "x2" }, { id: "x3" }]
-  ammoBtns.forEach((ab, idx) => {
-    const def = shop[ab.id]
-    const w = weaponDef(ab.id)
-    const cx = px + 60 + idx * 210
-    const cy = py + 380
-    const btn = drawButton(ctx, cx, cy, 190, 46, `${w.name} · ${def.amount} 🪙${def.price}`, { color: w.color, fontSize: 14 })
-    gs.shopBtns.push({ x: btn.x, y: btn.y, w: btn.w, h: btn.h, ammo: ab.id })
-    drawSprite(ctx, imgs, w.sprite as SpriteKey, cx - 82, cy, 26)
+  const ammoBtns: Array<"x1" | "x2" | "x3" | "missile_a" | "missile_b"> = ["x1", "x2", "x3", "missile_a", "missile_b"]
+  const perRow = 3
+  ammoBtns.forEach((id, idx) => {
+    const def = shop[id]
+    const w = weaponDef(id)
+    const col = idx % perRow
+    const row = Math.floor(idx / perRow)
+    const cx = px + 60 + col * 210
+    const cy = py + 368 + row * 60
+    const btn = drawButton(ctx, cx, cy, 190, 44, `${w.name} · ${def.amount} 🪙${def.price}`, { color: w.color, fontSize: 13 })
+    gs.shopBtns.push({ x: btn.x, y: btn.y, w: btn.w, h: btn.h, ammo: id })
+    drawSprite(ctx, imgs, w.sprite as SpriteKey, cx - 80, cy, 24)
     ctx.fillStyle = "rgba(255,255,255,0.6)"
-    ctx.font = font(12, 700)
+    ctx.font = font(11, 700)
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
-    ctx.fillText(`Tienes: ${gs.ammo[ab.id]}`, cx, cy + 34)
+    ctx.fillText(`Tienes: ${gs.ammo[id]}`, cx, cy + 30)
     ctx.textBaseline = "alphabetic"
   })
 
@@ -156,7 +159,7 @@ export function drawBaseMenu(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs):
   ctx.font = font(12, 600)
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
-  ctx.fillText("🚀 Naves (próximamente)", px + 340, py + 455)
+  ctx.fillText("🚀 Naves (próximamente)", px + 340, py + 495)
   ctx.textBaseline = "alphabetic"
 }
 

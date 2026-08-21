@@ -92,6 +92,7 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] El pad del joystick, el botón de disparo y la barra de munición ahora son paneles movibles en modo edición (⚙)
 - [x] Se guardan sus posiciones en localStorage como el resto de paneles
 - [x] Panel de estadísticas en layout 2×2 (Nivel+XP, monedas, bajas, jefes) con orientación vertical/horizontal
+- [x] Precio de x1 bajado (🪙40) y tienda ampliada: también comprar misiles A/B (config ammoShop)
 
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
