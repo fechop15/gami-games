@@ -125,7 +125,7 @@ function shotLifetime(speed: number): number {
 }
 
 export function updateBullets(gs: GS, dt: number): void {
-  // Mover balas (misiles homing con arco en U)
+  // Mover balas (misiles homing con arco que converge al objetivo)
   for (const b of gs.bullets) {
     b.life -= dt
     if (b.homing && b.fromPlayer) {
@@ -133,24 +133,29 @@ export function updateBullets(gs: GS, dt: number): void {
       const cur = Math.atan2(b.vy, b.vx)
       if (t) {
         const a = Math.atan2(t.y - b.y, t.x - b.x)
+        const distT = Math.hypot(t.x - b.x, t.y - b.y)
         if (b.arcSide) {
+          // Arco: offset lateral que decae hasta alinear con el objetivo
           b.arcT = (b.arcT ?? 0) + dt
-          if (b.arcT < 0.45) {
-            // Fase de flanqueo: vira hacia su lado para hacer la U
-            const next = turnToward(cur, a + b.arcSide * Math.PI / 2, (b.turn ?? 4) * dt)
-            const sp = Math.hypot(b.vx, b.vy)
-            b.vx = Math.cos(next) * sp
-            b.vy = Math.sin(next) * sp
-            b.x += b.vx * dt
-            b.y += b.vy * dt
-            continue
-          }
-          b.arcSide = undefined
+          const arcDur = 0.7
+          const progress = Math.min(1, b.arcT / arcDur)
+          // Empieza ~1.0 rad desviado y converge a 0 (sin volver a la perpendicular)
+          const offset = b.arcSide * 1.0 * (1 - progress)
+          const targetAng = a + offset
+          const maxTurn = (b.turn ?? 4) * dt * 0.6
+          const next = turnToward(cur, targetAng, maxTurn)
+          const sp = Math.hypot(b.vx, b.vy)
+          b.vx = Math.cos(next) * sp
+          b.vy = Math.sin(next) * sp
+          if (progress >= 1) b.arcSide = undefined
+        } else {
+          // Persecución: giro suave solo mientras esté lejos; cerca sigue recto
+          const maxTurn = distT < 60 ? 0 : (b.turn ?? 4) * dt
+          const next = turnToward(cur, a, maxTurn)
+          const sp = Math.hypot(b.vx, b.vy)
+          b.vx = Math.cos(next) * sp
+          b.vy = Math.sin(next) * sp
         }
-        const next = turnToward(cur, a, (b.turn ?? 4) * dt)
-        const sp = Math.hypot(b.vx, b.vy)
-        b.vx = Math.cos(next) * sp
-        b.vy = Math.sin(next) * sp
       }
     }
     b.x += b.vx * dt

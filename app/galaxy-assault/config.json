@@ -48,7 +48,7 @@
     { "id": "x1", "kind": "laser", "name": "Láser X1", "dmgMult": 1.0, "fireRateMs": 220, "maxAmmo": 80, "bulletSpeed": 760, "bulletRadius": 4, "color": "#00e5ff", "sprite": "laser_x1", "crateAmount": 22, "crateChance": 34 },
     { "id": "x2", "kind": "laser", "name": "Láser X2", "dmgMult": 1.35, "fireRateMs": 300, "maxAmmo": 50, "bulletSpeed": 720, "bulletRadius": 5, "color": "#7CFF5A", "sprite": "laser_x2", "crateAmount": 14, "crateChance": 24 },
     { "id": "x3", "kind": "laser", "name": "Láser X3", "dmgMult": 1.8, "fireRateMs": 420, "maxAmmo": 30, "bulletSpeed": 680, "bulletRadius": 6, "color": "#FF44FF", "sprite": "laser_x3", "crateAmount": 8, "crateChance": 15 },
-    { "id": "missile_a", "kind": "missile", "name": "Misil Teledirigido", "dmgMult": 2.5, "fireRateMs": 900, "maxAmmo": 12, "bulletSpeed": 460, "bulletRadius": 6, "color": "#44ffcc", "sprite": "missile_a", "homing": true, "turn": 4.5, "crateAmount": 4, "crateChance": 14 },
+    { "id": "missile_a", "kind": "missile", "name": "Misil Teledirigido", "dmgMult": 2.5, "fireRateMs": 900, "maxAmmo": 12, "bulletSpeed": 460, "bulletRadius": 6, "color": "#44ffcc", "sprite": "missile_a", "homing": true, "turn": 3.2, "crateAmount": 4, "crateChance": 14 },
     { "id": "missile_b", "kind": "missile", "name": "Misil Pesado", "dmgMult": 3.2, "fireRateMs": 1400, "maxAmmo": 6, "bulletSpeed": 420, "bulletRadius": 9, "color": "#ff8844", "sprite": "missile_b", "aoe": 95, "crateAmount": 2, "crateChance": 8 }
   ],
   "npcs": {
