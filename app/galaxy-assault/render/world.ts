@@ -367,7 +367,7 @@ export function drawBullets(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): 
         // Láser: línea brillante con glow en la dirección del viaje
         const ang = Math.atan2(b.vy, b.vx)
         const spd = Math.hypot(b.vx, b.vy)
-        const len = Math.max(b.radius * 14, b.radius * 2 + spd * 0.02)
+        const len = Math.max(b.radius * 8, b.radius * 2 + spd * 0.012)
         const hx = Math.cos(ang) * len
         const hy = Math.sin(ang) * len
         const color = b.color

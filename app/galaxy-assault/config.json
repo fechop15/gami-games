@@ -87,9 +87,9 @@
     "minDistFromBase": 220
   },
   "drops": {
-    "scrap": { "chance": 0.35, "coins": 5 },
-    "energy": { "chance": 0.2, "coins": 10 },
-    "core": { "chance": 0.06, "coins": 25 },
+    "scrap": { "chance": 0.35, "coins": 12 },
+    "energy": { "chance": 0.2, "coins": 22 },
+    "core": { "chance": 0.06, "coins": 50 },
     "repairBot": { "chance": 0.03 }
   },
   "repairBot": { "healPct": 0.4 },
@@ -101,7 +101,7 @@
     "missile_b": { "price": 220, "amount": 3 }
   },
   "balance": {
-    "coinsPerKill": 2,
+    "coinsPerKill": 10,
     "coinsPerBossKill": 60,
     "bossKillsToUnlockNext": 3,
     "maxNpcsOnMap": 26

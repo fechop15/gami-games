@@ -114,6 +114,10 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Fix botón de orientación de munición: el hit-test usaba la posición equivocada de la cabecera; ahora coincide con el dibujo
 - [x] Zonas de toque ampliadas para minimizar/orientar en los paneles (más fáciles de tocar)
 
+## Fase 21 — Ajustes de balance (v2.2)
+- [x] Láseres más cortos (longitud ~0.57x de antes)
+- [x] Recompensas de NPCs aumentadas: coinsPerKill 2→10, drops chatarra/energía/núcleo +2.5x
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable
