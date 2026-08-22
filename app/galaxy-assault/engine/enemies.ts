@@ -46,7 +46,18 @@ export function makeEnemy(gs: GS, type: string, kind: "npc" | "boss", cfg: CfgNp
     respawnT: 0,
     color: isBoss ? "#ff5533" : cfg === CONFIG.npcs.tank ? "#ffaa33" : "#ff5533",
     accent: isBoss ? "#ffaa66" : cfg === CONFIG.npcs.tank ? "#ffcc66" : "#ff8866",
+    bobPhase: rand(0, Math.PI * 2),
+    spawnT: 0,
+    strafeDir: chance() ? 1 : -1,
+    strafeTimer: rand(0.6, 2),
+    orbitDir: chance() ? 1 : -1,
+    orbitDist: cfg.aggroRange * 0.55,
+    enginePhase: rand(0, Math.PI * 2),
   }
+}
+
+function chance(p = 0.5): boolean {
+  return Math.random() < p
 }
 
 function spawnPosition(gs: GS, minDistFromBase: number, minDistFromPlayer: number, isBoss: boolean): { x: number; y: number } {
@@ -100,6 +111,9 @@ export function updateEnemies(gs: GS, dt: number): void {
 
 function updateEnemy(gs: GS, e: Enemy, dt: number): void {
   if (e.hitFlash > 0) e.hitFlash -= dt
+  e.spawnT += dt
+  e.bobPhase += dt * 2
+  e.enginePhase += dt * 8
   const p = gs.player
   const d = dist(e.x, e.y, p.x, p.y)
 
@@ -111,9 +125,32 @@ function updateEnemy(gs: GS, e: Enemy, dt: number): void {
   // Movimiento
   if (e.aggro && !playerSafe) {
     const a = angleTo(e.x, e.y, p.x, p.y)
-    e.x += Math.cos(a) * e.speed * dt
-    e.y += Math.sin(a) * e.speed * dt
-    e.angle = a
+    const tank = e.type === "tank"
+    if (tank) {
+      // Tank: orbita a distancia manteniendo el frente al jugador
+      e.orbitDist = Math.max(160, Math.min(e.aggroRange * 0.6, e.orbitDist + (d > e.aggroRange * 0.7 ? 60 : d < 180 ? -60 : 0) * dt))
+      const orbA = a + e.orbitDir * Math.PI / 2
+      e.x += Math.cos(orbA) * e.speed * 0.7 * dt
+      e.y += Math.sin(orbA) * e.speed * 0.7 * dt
+      // Alejarse/acercarse a la distancia óptima
+      const toward = d > e.orbitDist ? a : a + Math.PI
+      e.x += Math.cos(toward) * e.speed * 0.5 * dt
+      e.y += Math.sin(toward) * e.speed * 0.5 * dt
+      e.angle = angleLerp(e.angle, a, Math.min(1, dt * 4))
+    } else {
+      // Scout: avanza con strafe lateral (zigzag) para no venir en línea recta
+      e.strafeTimer -= dt
+      if (e.strafeTimer <= 0) {
+        e.strafeTimer = rand(0.6, 2)
+        e.strafeDir *= -1
+      }
+      const perp = a + e.strafeDir * Math.PI / 2
+      e.x += Math.cos(a) * e.speed * 0.8 * dt
+      e.y += Math.sin(a) * e.speed * 0.8 * dt
+      e.x += Math.cos(perp) * e.speed * 0.5 * dt
+      e.y += Math.sin(perp) * e.speed * 0.5 * dt
+      e.angle = angleLerp(e.angle, a, Math.min(1, dt * 5))
+    }
   } else {
     // Patrulla errática, pero no entra a la zona segura
     e.wanderT -= dt
@@ -136,12 +173,12 @@ function updateEnemy(gs: GS, e: Enemy, dt: number): void {
   e.x = clamp(e.x, PLAYABLE_MIN + e.size / 2, PLAYABLE_MAX - e.size / 2)
   e.y = clamp(e.y, PLAYABLE_MIN + e.size / 2, PLAYABLE_MAX - e.size / 2)
 
-  // Disparo (NPC)
+  // Disparo (NPC) — con lead: apunta a la posición futura del jugador
   if (e.kind === "npc" && e.aggro && !playerSafe) {
     e.fireTimer -= dt * 1000
     if (e.fireTimer <= 0) {
       e.fireTimer = e.fireRate
-      const a = angleTo(e.x, e.y, p.x, p.y)
+      const a = leadAngle(e, p)
       gs.bullets.push({
         id: gs.nextId++, x: e.x, y: e.y,
         vx: Math.cos(a) * e.bulletSpeed, vy: Math.sin(a) * e.bulletSpeed,
@@ -155,12 +192,41 @@ function updateEnemy(gs: GS, e: Enemy, dt: number): void {
   if (e.kind === "boss") bossMechanics(gs, e, dt)
 }
 
+// Ángulo con predicción del movimiento del jugador (mejor IA de disparo)
+function leadAngle(e: Enemy, p: GS["player"]): number {
+  const d = dist(e.x, e.y, p.x, p.y)
+  const t = Math.min(1, d / e.bulletSpeed)
+  const tx = p.x + p.vx * t
+  const ty = p.y + p.vy * t
+  return angleTo(e.x, e.y, tx, ty)
+}
+
 function bossMechanics(gs: GS, e: Enemy, dt: number): void {
   // Fase 2 al 50% HP
   if (e.phase === 1 && e.hp <= e.maxHp * e.phase2At) {
     e.phase = 2
     e.fireRate = Math.max(350, e.fireRate * 0.65)
   }
+  // Movimiento lento del jefe hacia el jugador (mantiene distancia)
+  const p = gs.player
+  const d = dist(e.x, e.y, p.x, p.y)
+  const a = angleTo(e.x, e.y, p.x, p.y)
+  const keep = e.mechanic === "minions+laser" ? 300 : 260
+  if (d > keep) {
+    e.x += Math.cos(a) * e.speed * dt
+    e.y += Math.sin(a) * e.speed * dt
+  } else if (d < keep - 60) {
+    e.x += Math.cos(a + Math.PI) * e.speed * dt
+    e.y += Math.sin(a + Math.PI) * e.speed * dt
+  }
+  // Orbita suavemente alrededor
+  const orbA = a + e.orbitDir * Math.PI / 2
+  e.x += Math.cos(orbA) * e.speed * 0.35 * dt
+  e.y += Math.sin(orbA) * e.speed * 0.35 * dt
+  e.x = clamp(e.x, PLAYABLE_MIN + e.size / 2, PLAYABLE_MAX - e.size / 2)
+  e.y = clamp(e.y, PLAYABLE_MIN + e.size / 2, PLAYABLE_MAX - e.size / 2)
+  e.angle = angleLerp(e.angle, a, Math.min(1, dt * 3))
+
   e.attackTimer -= dt * 1000
   if (e.attackTimer <= 0) {
     e.attackTimer = e.phase === 2 ? 1500 : 2400
@@ -172,7 +238,7 @@ function bossMechanics(gs: GS, e: Enemy, dt: number): void {
 }
 
 function bossCone(gs: GS, e: Enemy): void {
-  const a = angleTo(e.x, e.y, gs.player.x, gs.player.y)
+  const a = leadAngle(e, gs.player)
   const shots = e.phase === 2 ? 5 : 3
   for (let i = 0; i < shots; i++) {
     const off = (i - (shots - 1) / 2) * 0.22

@@ -32,6 +32,7 @@ export interface PlayerState {
   shieldCdMax: number
   invulnT: number
   fireTimer: number
+  enginePhase: number
 }
 
 export interface Enemy {
@@ -70,6 +71,15 @@ export interface Enemy {
   respawnT: number
   color: string
   accent: string
+  // Animación
+  bobPhase: number
+  spawnT: number
+  // IA
+  strafeDir: number
+  strafeTimer: number
+  orbitDir: number
+  orbitDist: number
+  enginePhase: number
 }
 
 export interface Bullet {

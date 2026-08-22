@@ -126,6 +126,13 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Evasión por movimiento eliminada (daño directo: escudo → casco)
 - [x] Cinturón de asteroides con 2 hileras por borde para rodear todo el mapa de forma densa
 
+## Fase 24 — Mejora gráfica y IA (v3.0)
+- [x] Nave del jugador: motor con llama de 2 capas (glow + núcleo), banking al girar, cañones láser visibles
+- [x] Enemigos: animación de spawn (escala ease-out-back), flotación bob, motor con glow pulsante
+- [x] Rediseño de SVGs: player-ship, enemy-scout, enemy-tank, boss-1, boss-2 con más detalle (paneles, núcleos, cañones)
+- [x] IA enemigos: scout con strafe lateral (zigzag), tank orbita manteniendo distancia, disparo con lead (predice el movimiento del jugador)
+- [x] Jefes: se acercan/mantienen distancia, orbitan y apuntan con lead
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable

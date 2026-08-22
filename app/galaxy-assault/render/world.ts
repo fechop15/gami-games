@@ -136,22 +136,49 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs, ti
   const sx = W / 2
   const sy = H / 2
 
-  // Motor (llama) según velocidad
-  const flame = 10 + p.speed * 0.05 + Math.sin(time * 20) * 3
+  // Banking: la nave se inclina según el giro (delta de ángulo vs velocidad)
+  const turn = p.angle - Math.atan2(p.vy, p.vx)
+  let normTurn = turn % (Math.PI * 2)
+  if (normTurn > Math.PI) normTurn -= Math.PI * 2
+  if (normTurn < -Math.PI) normTurn += Math.PI * 2
+  const bank = Math.max(-0.35, Math.min(0.35, normTurn * 0.8))
+
+  // Motor (llama) con 2 capas: llama exterior + núcleo
+  const flame = 12 + p.speed * 0.06 + Math.sin(time * 22) * 4
+  const enginePhase = p.enginePhase
   ctx.save()
   ctx.translate(sx, sy)
   ctx.rotate(dirToAngle(p.angle))
-  ctx.fillStyle = "rgba(0,229,255,0.5)"
+  // Glow exterior
+  ctx.save()
+  ctx.fillStyle = "rgba(0,200,255,0.35)"
+  ctx.shadowColor = "rgba(0,229,255,0.9)"
+  ctx.shadowBlur = 14
   ctx.beginPath()
-  ctx.moveTo(-10, 14)
-  ctx.lineTo(0, 14 + flame)
-  ctx.lineTo(10, 14)
+  ctx.moveTo(-12, 12)
+  ctx.lineTo(0, 12 + flame + Math.sin(enginePhase) * 3)
+  ctx.lineTo(12, 12)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+  // Núcleo de la llama
+  ctx.fillStyle = "rgba(255,255,255,0.85)"
+  ctx.beginPath()
+  ctx.moveTo(-6, 12)
+  ctx.lineTo(0, 12 + flame * 0.55 + Math.sin(enginePhase + 1) * 2)
+  ctx.lineTo(6, 12)
   ctx.closePath()
   ctx.fill()
   ctx.restore()
 
-  // Cuerpo
-  drawSprite(ctx, imgs, shipSprite(gs.save) as SpriteKey, sx, sy, 58, dirToAngle(p.angle))
+  // Cuerpo con banking (rotación extra en Z simulada con escala)
+  ctx.save()
+  ctx.translate(sx, sy)
+  ctx.rotate(dirToAngle(p.angle))
+  ctx.scale(1 + Math.abs(bank) * 0.15, 1 - Math.abs(bank) * 0.1)
+  ctx.globalAlpha = 1
+  drawSprite(ctx, imgs, shipSprite(gs.save) as SpriteKey, 0, 0, 58, 0)
+  ctx.restore()
 
   // Parpadeo de inmunidad
   if (p.invulnT > 0 && Math.floor(time * 12) % 2 === 0) {
@@ -287,15 +314,39 @@ export function drawEnemies(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): 
     const sy = e.y - gs.camY
     if (sx < -120 || sx > W + 120 || sy < -120 || sy > H + 120) continue
     const key = enemySprite(e.type) as SpriteKey
-    const size = e.size * 1.6
-    drawSprite(ctx, imgs, key, sx, sy, size, dirToAngle(e.angle))
+    const baseSize = e.size * 1.6
+    // Animación de spawn: escala de 0.2 → 1 en los primeros 0.4s
+    const spawnPct = Math.min(1, e.spawnT / 0.4)
+    const spawnScale = 0.2 + 0.8 * easeOutBack(spawnPct)
+    const size = baseSize * spawnScale
+    // Flotación (bob) sutil
+    const bobY = Math.sin(e.bobPhase) * 3
+    const sy2 = sy + bobY
+
+    // Motor con glow (trasero)
+    const engineA = e.angle + Math.PI
+    const ex = sx + Math.cos(engineA) * size * 0.4
+    const ey = sy2 + Math.sin(engineA) * size * 0.4
+    const pulse = 4 + Math.sin(e.enginePhase) * 2
+    ctx.save()
+    ctx.fillStyle = e.accent
+    ctx.globalAlpha = 0.55
+    ctx.shadowColor = e.accent
+    ctx.shadowBlur = 12
+    ctx.beginPath()
+    ctx.arc(ex, ey, 5 + pulse * 0.3, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+
+    // Cuerpo
+    drawSprite(ctx, imgs, key, sx, sy2, size, dirToAngle(e.angle))
 
     // Hit flash
     if (e.hitFlash > 0) {
       ctx.globalAlpha = e.hitFlash * 6
       ctx.fillStyle = "#ffffff"
       ctx.beginPath()
-      ctx.arc(sx, sy, size / 2, 0, Math.PI * 2)
+      ctx.arc(sx, sy2, size / 2, 0, Math.PI * 2)
       ctx.fill()
       ctx.globalAlpha = 1
     }
@@ -304,7 +355,7 @@ export function drawEnemies(ctx: CanvasRenderingContext2D, gs: GS, imgs: Imgs): 
     const isTarget = gs.targetId === e.id
     const bw = e.kind === "boss" ? 70 : 44
     const bx = sx - bw / 2
-    const by = sy - size / 2 - 12
+    const by = sy2 - size / 2 - 12
     ctx.fillStyle = "rgba(0,0,0,0.55)"
     roundRectPath(ctx, bx, by, bw, 6, 3)
     ctx.fill()
@@ -580,4 +631,11 @@ export function drawEffects(ctx: CanvasRenderingContext2D, gs: GS): void {
     ctx.arc(s.x - gs.camX, s.y - gs.camY, s.r, 0, Math.PI * 2)
     ctx.stroke()
   }
+}
+
+// Ease-out-back para la animación de spawn (escala 0.2 → 1)
+function easeOutBack(t: number): number {
+  const c1 = 1.70158
+  const c3 = c1 + 1
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2)
 }

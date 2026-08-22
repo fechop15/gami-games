@@ -1,35 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <defs>
-    <linearGradient id="body" x1="128" y1="20" x2="128" y2="236">
-      <stop offset="0%" stop-color="#ffb3a0"/>
-      <stop offset="45%" stop-color="#ff5533"/>
-      <stop offset="100%" stop-color="#881111"/>
+    <linearGradient id="body" x1="128" y1="18" x2="128" y2="238">
+      <stop offset="0%" stop-color="#ffd6c8"/>
+      <stop offset="40%" stop-color="#ff5a3c"/>
+      <stop offset="100%" stop-color="#7a0d0d"/>
     </linearGradient>
-    <linearGradient id="wingL" x1="100" y1="120" x2="20" y2="210">
-      <stop offset="0%" stop-color="#ff4422"/>
-      <stop offset="100%" stop-color="#660a0a"/>
+    <linearGradient id="wingL" x1="100" y1="120" x2="16" y2="214">
+      <stop offset="0%" stop-color="#ff4a2a"/>
+      <stop offset="100%" stop-color="#4d0707"/>
     </linearGradient>
-    <linearGradient id="wingR" x1="156" y1="120" x2="236" y2="210">
-      <stop offset="0%" stop-color="#ff4422"/>
-      <stop offset="100%" stop-color="#660a0a"/>
+    <linearGradient id="wingR" x1="156" y1="120" x2="240" y2="214">
+      <stop offset="0%" stop-color="#ff4a2a"/>
+      <stop offset="100%" stop-color="#4d0707"/>
     </linearGradient>
-    <radialGradient id="eye" cx="50%" cy="40%" r="55%">
+    <radialGradient id="eye" cx="50%" cy="38%" r="60%">
       <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="60%" stop-color="#ffcc33"/>
-      <stop offset="100%" stop-color="#992200"/>
+      <stop offset="55%" stop-color="#ffcf3a"/>
+      <stop offset="100%" stop-color="#7a1a00"/>
     </radialGradient>
   </defs>
-  <ellipse cx="128" cy="238" rx="56" ry="10" fill="#000000" opacity="0.3"/>
-  <path d="M128 24 L168 140 L128 140 L88 140 Z" fill="url(#body)" stroke="#ff5533" stroke-width="3"/>
-  <path d="M88 120 L16 196 L80 168 L88 140 Z" fill="url(#wingL)" stroke="#ff3311" stroke-width="2.5"/>
-  <path d="M168 120 L240 196 L176 168 L168 140 Z" fill="url(#wingR)" stroke="#ff3311" stroke-width="2.5"/>
-  <path d="M16 196 L80 168 L66 210 Z" fill="#cc2200"/>
-  <path d="M240 196 L176 168 L190 210 Z" fill="#cc2200"/>
-  <circle cx="128" cy="100" r="26" fill="url(#eye)"/>
-  <circle cx="128" cy="96" r="7" fill="#330000" opacity="0.85"/>
-  <path d="M118 146 L138 146" stroke="#ff8866" stroke-width="4" stroke-linecap="round"/>
-  <path d="M112 202 L144 202" stroke="#ff6644" stroke-width="4" stroke-linecap="round"/>
-  <path d="M128 176 L128 214" stroke="#ff8866" stroke-width="3" stroke-linecap="round"/>
-  <path d="M128 214 L122 230 L134 230 Z" fill="#ffaa33"/>
-  <path d="M120 226 L136 226 L128 242 Z" fill="#ff8844"/>
+  <ellipse cx="128" cy="240" rx="58" ry="9" fill="#000000" opacity="0.35"/>
+  <path d="M128 18 L170 142 L128 142 L86 142 Z" fill="url(#body)" stroke="#ff5a3c" stroke-width="3"/>
+  <path d="M86 118 L14 198 L82 170 L86 142 Z" fill="url(#wingL)" stroke="#ff4a2a" stroke-width="2.5"/>
+  <path d="M170 118 L242 198 L174 170 L170 142 Z" fill="url(#wingR)" stroke="#ff4a2a" stroke-width="2.5"/>
+  <path d="M14 198 L82 170 L64 216 Z" fill="#b31f0a"/>
+  <path d="M242 198 L174 170 L192 216 Z" fill="#b31f0a"/>
+  <circle cx="128" cy="98" r="27" fill="url(#eye)"/>
+  <circle cx="128" cy="94" r="7" fill="#2a0500" opacity="0.85"/>
+  <path d="M118 144 L138 144" stroke="#ff8a6a" stroke-width="4" stroke-linecap="round"/>
+  <path d="M108 138 L118 144 M148 138 L138 144" stroke="#ff8a6a" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+  <rect x="106" y="70" width="9" height="58" rx="4" fill="#ffb59a" opacity="0.85"/>
+  <rect x="141" y="70" width="9" height="58" rx="4" fill="#ffb59a" opacity="0.85"/>
+  <path d="M112 196 L144 196" stroke="#ff6a4a" stroke-width="5" stroke-linecap="round"/>
+  <path d="M128 168 L128 210" stroke="#ff8a6a" stroke-width="4" stroke-linecap="round"/>
+  <path d="M128 210 L122 226 L134 226 Z" fill="#ffaa33"/>
+  <path d="M120 222 L136 222 L128 238 Z" fill="#ff8844"/>
 </svg>

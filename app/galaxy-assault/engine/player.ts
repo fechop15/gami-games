@@ -59,8 +59,9 @@ export function updatePlayer(gs: GS, dt: number): void {
   p.x = clamp(nx, PLAYABLE_MIN, PLAYABLE_MAX)
   p.y = clamp(ny, PLAYABLE_MIN, PLAYABLE_MAX)
 
-  // Velocidad actual (para evasión)
+  // Velocidad actual (para motor/efectos)
   p.speed = Math.hypot(p.vx, p.vy)
+  p.enginePhase += dt * 9
 
 // Orientación: al disparar, la nave apunta con el frente al objetivo marcado;
   // en ausencia de combate, apunta hacia donde el joystick quiere ir

@@ -42,6 +42,7 @@ export function makeGS(): GS {
     shieldCdMax: SHIELD_COOLDOWN,
     invulnT: 0,
     fireTimer: 0,
+    enginePhase: 0,
   }
   const ammo = defaultAmmo()
   const hud = defaultHud(save)
