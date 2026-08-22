@@ -118,6 +118,10 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Láseres más cortos (longitud ~0.57x de antes)
 - [x] Recompensas de NPCs aumentadas: coinsPerKill 2→10, drops chatarra/energía/núcleo +2.5x
 
+## Fase 22 — Fix minimapa (v2.3)
+- [x] Minimapa vuelve a mostrar el mundo completo (se eliminó la vista recortada MINIMAP_VIEW_WORLD)
+- [x] Recuadro indicador de la vista actual (línea discontinua cian) sobre el mapa completo, centrado en el jugador
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable

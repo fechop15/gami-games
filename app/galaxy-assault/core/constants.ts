@@ -84,7 +84,7 @@ interface GameConfig {
     safeRadius: number
     border: { enabled: boolean; belt: number; radiusMin: number; radiusMax: number; spacing: number; jitter: number }
   }
-  minimap: { size: number; offsetX: number; offsetY: number; showEnemiesCap: number; showCrates: boolean; showBosses: boolean; viewWorld: number }
+  minimap: { size: number; offsetX: number; offsetY: number; showEnemiesCap: number; showCrates: boolean; showBosses: boolean }
   joystick: { padX: number; padY: number; padSize: number; radius: number }
   player: {
     speed: number
@@ -153,7 +153,6 @@ export const REGEN_SAFE_HP_PER_SEC = CONFIG.player.regen.safeHpPerSec
 export const MAX_NPCS_ON_MAP = CONFIG.balance.maxNpcsOnMap
 export const AMMO_SHOP = CONFIG.ammoShop
 export const CAM_ZOOM = 1.12
-export const MINIMAP_VIEW_WORLD = CONFIG.minimap.viewWorld
 
 // ── Joystick (pad fijo en la izquierda, reposicionable al tocar dentro) ──
 export const JOY_RADIUS = CONFIG.joystick.radius

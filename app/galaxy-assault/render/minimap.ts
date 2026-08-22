@@ -1,6 +1,6 @@
-// Minimapa: panel movible del HUD, muestra mundo, base, jugador, enemigos, jefes y cajas.
+// Minimapa: panel movible del HUD, muestra el mundo completo, la vista actual y las entidades.
 import type { GS } from "../core/types"
-import { CONFIG, CELL, PANEL_HEADER_H, PANEL_MIN_BTN_W, MINIMAP_VIEW_WORLD } from "../core/constants"
+import { CONFIG, CELL, W, H, PANEL_HEADER_H, PANEL_MIN_BTN_W, CAM_ZOOM } from "../core/constants"
 import { minimapData } from "../engine/crates"
 import { roundRectPath, font } from "../../lib/gameKit"
 
@@ -16,12 +16,8 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
   const r = minimapRect(gs)
   const size = r.w
 
-  // Escala: mostramos solo MINIMAP_VIEW_WORLD px del mundo, centrado en el jugador
-  const scale = size / MINIMAP_VIEW_WORLD
-  const cx = r.x + size / 2
-  const cy = r.y + size / 2
-  const px = (wx: number) => cx + (wx - data.playerX) * scale
-  const py = (wy: number) => cy + (wy - data.playerY) * scale
+  // Escala: el mundo completo cabe en el minimapa
+  const scale = size / data.worldPx
 
   // Panel
   ctx.save()
@@ -36,29 +32,21 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
   roundRectPath(ctx, r.x, r.y, size, size, 10)
   ctx.stroke()
 
-  // Recuadro del mundo completo (solo su borde visible: indica dónde estás)
-  const worldS = data.worldPx * scale
-  const wx0 = cx + (0 - data.playerX) * scale
-  const wy0 = cy + (0 - data.playerY) * scale
-  ctx.save()
-  roundRectPath(ctx, r.x, r.y, size, size, 10)
-  ctx.clip()
-  ctx.strokeStyle = "rgba(255,255,255,0.4)"
-  ctx.lineWidth = 2
-  ctx.strokeRect(wx0, wy0, worldS, worldS)
-  ctx.restore()
-
-  // Cinturón de asteroides (solo el del borde visible)
+  // Marco del mundo (línea del área jugable)
   const border = CONFIG.map.border.belt * scale
+  ctx.strokeStyle = "rgba(255,255,255,0.25)"
+  ctx.strokeRect(r.x + border, r.y + border, size - border * 2, size - border * 2)
+
+  // Cinturón de asteroides (puntos a lo largo del borde)
   ctx.fillStyle = "rgba(180,170,150,0.5)"
   const step = 26
-  for (let x = border; x <= worldS - border; x += step) {
-    dot(ctx, wx0 + x, wy0 + border)
-    dot(ctx, wx0 + x, wy0 + worldS - border)
+  for (let x = border; x <= size - border; x += step) {
+    dot(ctx, r.x + x, r.y + border)
+    dot(ctx, r.x + x, r.y + size - border)
   }
-  for (let y = border; y <= worldS - border; y += step) {
-    dot(ctx, wx0 + border, wy0 + y)
-    dot(ctx, wx0 + worldS - border, wy0 + y)
+  for (let y = border; y <= size - border; y += step) {
+    dot(ctx, r.x + border, r.y + y)
+    dot(ctx, r.x + size - border, r.y + y)
   }
 
   // Cajas
@@ -66,7 +54,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
     for (const c of data.crates) {
       ctx.fillStyle = "#ffe44d"
       ctx.beginPath()
-      ctx.arc(px(c.x), py(c.y), 2.4, 0, Math.PI * 2)
+      ctx.arc(r.x + c.x * scale, r.y + c.y * scale, 2.4, 0, Math.PI * 2)
       ctx.fill()
     }
   }
@@ -75,18 +63,33 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, gs: GS): void {
   for (const e of data.enemies) {
     ctx.fillStyle = e.boss ? "#ffdd44" : "#ff5533"
     ctx.beginPath()
-    ctx.arc(px(e.x), py(e.y), e.boss ? 4 : 2.2, 0, Math.PI * 2)
+    ctx.arc(r.x + e.x * scale, r.y + e.y * scale, e.boss ? 4 : 2.2, 0, Math.PI * 2)
     ctx.fill()
   }
 
   // Base
   ctx.fillStyle = "#7CFF5A"
-  roundRectPath(ctx, px(data.baseX) - 3.5, py(data.baseY) - 3.5, 7, 7, 2)
+  roundRectPath(ctx, r.x + data.baseX * scale - 3.5, r.y + data.baseY * scale - 3.5, 7, 7, 2)
   ctx.fill()
 
-  // Jugador (triángulo rotado) — siempre al centro
+  // Recuadro indicador de la vista actual (la zona visible en pantalla, con zoom)
+  const vw = (W / CAM_ZOOM) * scale
+  const vh = (H / CAM_ZOOM) * scale
+  const vx = r.x + data.playerX * scale - vw / 2
+  const vy = r.y + data.playerY * scale - vh / 2
   ctx.save()
-  ctx.translate(cx, cy)
+  ctx.strokeStyle = "rgba(0,229,255,0.9)"
+  ctx.lineWidth = 1.5
+  ctx.setLineDash([4, 3])
+  ctx.strokeRect(vx, vy, vw, vh)
+  ctx.setLineDash([])
+  ctx.restore()
+
+  // Jugador (triángulo rotado)
+  const px = r.x + data.playerX * scale
+  const py = r.y + data.playerY * scale
+  ctx.save()
+  ctx.translate(px, py)
   ctx.rotate(data.playerAngle)
   ctx.fillStyle = "#00e5ff"
   ctx.beginPath()

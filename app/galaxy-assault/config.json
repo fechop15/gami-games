@@ -14,8 +14,7 @@
     "offsetY": 16,
     "showEnemiesCap": 30,
     "showCrates": true,
-    "showBosses": true,
-    "viewWorld": 1800
+    "showBosses": true
   },
   "joystick": {
     "padX": 150,
