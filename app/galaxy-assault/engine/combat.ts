@@ -1,5 +1,5 @@
 // Combate: targeting manual (tap para elegir objetivo), disparo al pulsar, balas,
-// daño (evasión → escudo → casco).
+// daño (escudo → casco).
 import type { GS, Enemy, DropId, AmmoType } from "../core/types"
 import {
   SHIELD_ABSORB, PLAYER_RADIUS, INVULN_AFTER_HIT, CONFIG, FIRE_RANGE,
@@ -9,7 +9,6 @@ import {
 import { weaponDef, weaponDamageForShip, defaultAmmo } from "../data/ammo"
 import { shipBaseDamage } from "../data/ships"
 import { angleTo, dist, clamp, chance, rand } from "../../lib/math"
-import { evasionChance } from "./player"
 import { pushEvent } from "./index"
 import { addXp } from "../core/save"
 import { sfx } from "../../lib/sound"
@@ -219,20 +218,14 @@ function turnToward(cur: number, target: number, maxTurn: number): number {
   return cur + step
 }
 
-/** Resuelve daño al jugador: evasión → escudo (%) → casco. */
+/** Resuelve daño al jugador: escudo (%) → casco. */
 export function applyDamageToPlayer(gs: GS, raw: number): void {
   const p = gs.player
   if (p.invulnT > 0 || gs.inSafeZone) return
 
   gs.lastHitT = gs.time
 
-  // 1. Evasión por movimiento
-  if (chance(evasionChance(gs))) {
-    pushFloater(gs, p.x, p.y - 40, "EVADIDO", "#7CFF5A", 15)
-    return
-  }
-
-  // 2. Escudo absorbente
+  // Escudo absorbente
   let remaining = raw
   if (p.shieldHp > 0) {
     const absorbed = Math.min(p.shieldHp, raw * SHIELD_ABSORB)
@@ -246,7 +239,7 @@ export function applyDamageToPlayer(gs: GS, raw: number): void {
     }
   }
 
-  // 3. Casco
+  // Casco
   if (remaining > 0) {
     p.hp -= remaining
     p.invulnT = INVULN_AFTER_HIT

@@ -122,6 +122,10 @@ Registro de avance con checkboxes. Marco `[x]` solo lo verificado (lint/build/te
 - [x] Minimapa vuelve a mostrar el mundo completo (se eliminó la vista recortada MINIMAP_VIEW_WORLD)
 - [x] Recuadro indicador de la vista actual (línea discontinua cian) sobre el mapa completo, centrado en el jugador
 
+## Fase 23 — Ajustes (v2.4)
+- [x] Evasión por movimiento eliminada (daño directo: escudo → casco)
+- [x] Cinturón de asteroides con 2 hileras por borde para rodear todo el mapa de forma densa
+
 ## Checklist de features (checks finos)
 - [x] Minimapa arriba-derecha con botón ocultar
 - [x] Cinturón de asteroides bloquea al jugador (colisión circular) + enemigos clamp al área jugable

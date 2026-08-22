@@ -2,7 +2,7 @@
 import type { GS, Asteroid } from "../core/types"
 import {
   PLAYER_SPEED, PLAYER_ACCEL, PLAYER_RADIUS, PLAYABLE_MIN, PLAYABLE_MAX,
-  JOY_RADIUS, JOY_DEADZONE, BASE_X, BASE_Y, SAFE_RADIUS, EVASION_CAP,
+  JOY_RADIUS, JOY_DEADZONE, BASE_X, BASE_Y, SAFE_RADIUS,
 } from "../core/constants"
 import { shipSpeedMult } from "../data/ships"
 import { circleCollide, clamp, dist, angleLerp } from "../../lib/math"
@@ -88,9 +88,4 @@ export function updatePlayer(gs: GS, dt: number): void {
 
 function collideShipAsteroid(sx: number, sy: number, a: Asteroid): boolean {
   return circleCollide(sx, sy, PLAYER_RADIUS, a.x, a.y, a.radius)
-}
-
-export function evasionChance(gs: GS): number {
-  const t = Math.min(1, gs.player.speed / PLAYER_SPEED)
-  return EVASION_CAP * t
 }

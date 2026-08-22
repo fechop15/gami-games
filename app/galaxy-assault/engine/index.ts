@@ -9,7 +9,7 @@ import { shipMaxHp } from "../data/ships"
 import { defaultAmmo } from "../data/ammo"
 import { currentMap, buildAsteroidBelt } from "../data/maps"
 import { clamp } from "../../lib/math"
-import { updatePlayer, evasionChance } from "./player"
+import { updatePlayer } from "./player"
 import { updateSpawners, updateEnemies, bossLaserStep } from "./enemies"
 import {
   updateManualFire, updateBullets, rechargeShield, laserHitsPlayer, applyDamageToPlayer,
@@ -269,4 +269,4 @@ export function pushEvent(gs: GS, msg: string): void {
   if (gs.eventLog.length > 5) gs.eventLog.shift()
 }
 
-export { evasionChance, pushFloater, pushParticles }
+export { pushFloater, pushParticles }
